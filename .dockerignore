@@ -1,0 +1,57 @@
+# Node.js dependencies
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js build output
+.next/
+**/.next/
+out/
+**/out/
+.vercel
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+storybook-static/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log

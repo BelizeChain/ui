@@ -1,0 +1,184 @@
+name: Maya Wallet CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'maya-wallet/**'
+      - 'shared/**'
+      - 'package.json'
+      - '.github/workflows/maya-wallet.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'maya-wallet/**'
+      - 'shared/**'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+  NEXT_PUBLIC_NODE_ENDPOINT: 'ws://127.0.0.1:9944'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint Maya Wallet
+        run: npm run lint --workspace=maya-wallet
+
+      - name: Type check Maya Wallet
+        run: npm run type-check --workspace=maya-wallet
+
+  build:
+    name: Build Maya Wallet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared library
+        run: npm run build --workspace=shared
+
+      - name: Build Maya Wallet
+        run: npm run build --workspace=maya-wallet
+        env:
+          NEXT_PUBLIC_NODE_ENDPOINT: ${{ env.NEXT_PUBLIC_NODE_ENDPOINT }}
+          NEXT_PUBLIC_DEV_MODE: 'false'
+
+      - name: Check bundle size
+        run: |
+          BUNDLE_SIZE=$(du -sh maya-wallet/.next/standalone | awk '{print $1}')
+          echo "📦 Bundle size: $BUNDLE_SIZE"
+          echo "bundle_size=$BUNDLE_SIZE" >> $GITHUB_OUTPUT
+        id: bundle
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: maya-wallet-build
+          path: |
+            maya-wallet/.next
+            maya-wallet/public
+          retention-days: 7
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: maya-wallet-build
+          path: maya-wallet/
+
+      - name: Run Playwright tests
+        run: npm run test --workspace=maya-wallet
+        env:
+          CI: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: maya-wallet/test-results/
+          retention-days: 30
+
+  deploy-preview:
+    name: Deploy Preview (Vercel)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [lint-and-typecheck, build, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        run: |
+          echo "🚀 Deploying preview to Vercel..."
+          echo "Preview URL would be generated here"
+        # Add Vercel deployment here if VERCEL_TOKEN is configured
+
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [lint-and-typecheck, build, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for production
+        run: npm run build --workspace=maya-wallet
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_NODE_ENDPOINT: ${{ secrets.PROD_NODE_ENDPOINT || 'wss://rpc.belizechain.org' }}
+
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to production..."
+          echo "Production deployment would happen here"
+        # Add production deployment here (Vercel, Netlify, etc.)
+
+  summary:
+    name: Workflow Summary
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, build, test]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "# 📱 Maya Wallet CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint & Type Check | ${{ needs.lint-and-typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY

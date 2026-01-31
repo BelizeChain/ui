@@ -1,0 +1,78 @@
+# Page snapshot
+
+```yaml
+- generic [active]:
+  - generic [ref=e1]:
+    - img [ref=e3]
+    - heading "Wallet Connection Required" [level=3] [ref=e6]
+    - paragraph [ref=e7]: Connect your wallet to view your analytics
+    - button "Connect Wallet" [ref=e8] [cursor=pointer]:
+      - img [ref=e9]
+      - text: Connect Wallet
+    - generic [ref=e13]:
+      - paragraph [ref=e14]: Don't have a wallet?
+      - link "Install Polkadot.js Extension" [ref=e15] [cursor=pointer]:
+        - /url: https://polkadot.js.org/extension/
+        - img [ref=e16]
+        - text: Install Polkadot.js Extension
+  - navigation [ref=e21]:
+    - generic [ref=e24]:
+      - link "Home" [ref=e25] [cursor=pointer]:
+        - /url: /
+        - img [ref=e27]
+        - generic [ref=e30]: Home
+      - link "Community" [ref=e31] [cursor=pointer]:
+        - /url: /community
+        - img [ref=e33]
+        - generic [ref=e39]: Community
+      - link "Trade" [ref=e40] [cursor=pointer]:
+        - /url: /trade
+        - img [ref=e42]
+        - generic [ref=e45]: Trade
+      - link "Messages" [ref=e46] [cursor=pointer]:
+        - /url: /messages
+        - img [ref=e48]
+        - generic [ref=e51]: Messages
+      - link "More" [ref=e52] [cursor=pointer]:
+        - /url: /more
+        - img [ref=e54]
+        - generic [ref=e59]: More
+  - alert [ref=e60]
+  - dialog [ref=e63]:
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - heading "Build Error" [level=1] [ref=e66]
+        - paragraph [ref=e67]: Failed to compile
+        - generic [ref=e68]:
+          - text: Next.js (14.2.33) is outdated
+          - link "(learn more)" [ref=e70] [cursor=pointer]:
+            - /url: https://nextjs.org/docs/messages/version-staleness
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - link "./src/app/belizeid/page.tsx" [ref=e73] [cursor=pointer]:
+            - text: ./src/app/belizeid/page.tsx
+            - img [ref=e74]
+          - generic [ref=e78]:
+            - generic [ref=e79]: "Error:"
+            - text: x
+            - generic [ref=e80]: "Unexpected token `div`. Expected jsx identifier ,-["
+            - text: /home/wicked/belizechain-belizechain/ui/maya-wallet/src/app/belizeid/page.tsx
+            - generic [ref=e81]: :109:1]
+            - text: "109"
+            - generic [ref=e82]: "| const kycBadge = kycStatus ? getKycBadge(kycStatus.level) : getKycBadge('None');"
+            - text: "110"
+            - generic [ref=e83]: "|"
+            - text: "111"
+            - generic [ref=e84]: "| return ("
+            - text: "112"
+            - generic [ref=e85]: "| <div className=\"min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24\"> :"
+            - generic [ref=e86]: ^^^
+            - text: "113"
+            - generic [ref=e87]: "| {/* Header */}"
+            - text: "114"
+            - generic [ref=e88]: "| <div className=\"sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50\">"
+            - text: "115"
+            - generic [ref=e89]: "| <div className=\"flex items-center justify-between p-4\"> `---- Caused by: Syntax Error"
+        - contentinfo [ref=e90]:
+          - paragraph [ref=e91]: This error occurred during the build process and can only be dismissed by fixing the error.
+```

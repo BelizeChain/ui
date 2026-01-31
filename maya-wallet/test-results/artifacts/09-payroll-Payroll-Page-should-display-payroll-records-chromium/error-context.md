@@ -1,0 +1,43 @@
+# Page snapshot
+
+```yaml
+- generic [active]:
+  - alert [ref=e1]
+  - dialog [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - heading "Build Error" [level=1] [ref=e7]
+        - paragraph [ref=e8]: Failed to compile
+        - generic [ref=e9]:
+          - text: Next.js (14.2.33) is outdated
+          - link "(learn more)" [ref=e11] [cursor=pointer]:
+            - /url: https://nextjs.org/docs/messages/version-staleness
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - link "./src/app/belizeid/page.tsx" [ref=e14] [cursor=pointer]:
+            - text: ./src/app/belizeid/page.tsx
+            - img [ref=e15]
+          - generic [ref=e19]:
+            - generic [ref=e20]: "Error:"
+            - text: x
+            - generic [ref=e21]: "Unexpected token `div`. Expected jsx identifier ,-["
+            - text: /home/wicked/belizechain-belizechain/ui/maya-wallet/src/app/belizeid/page.tsx
+            - generic [ref=e22]: :109:1]
+            - text: "109"
+            - generic [ref=e23]: "| const kycBadge = kycStatus ? getKycBadge(kycStatus.level) : getKycBadge('None');"
+            - text: "110"
+            - generic [ref=e24]: "|"
+            - text: "111"
+            - generic [ref=e25]: "| return ("
+            - text: "112"
+            - generic [ref=e26]: "| <div className=\"min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24\"> :"
+            - generic [ref=e27]: ^^^
+            - text: "113"
+            - generic [ref=e28]: "| {/* Header */}"
+            - text: "114"
+            - generic [ref=e29]: "| <div className=\"sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50\">"
+            - text: "115"
+            - generic [ref=e30]: "| <div className=\"flex items-center justify-between p-4\"> `---- Caused by: Syntax Error"
+        - contentinfo [ref=e31]:
+          - paragraph [ref=e32]: This error occurred during the build process and can only be dismissed by fixing the error.
+```

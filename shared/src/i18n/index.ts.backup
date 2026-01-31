@@ -1,0 +1,1691 @@
+/**
+ * BelizeChain Internationalization (i18n)
+ * Support for English, Spanish, and Kriol
+ */
+
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export type Locale = 'en\' | 'es' | \'kri' | 'qek\' | 'gar' | \'mop';
+
+export interface Translations {
+  // Common
+  common: {
+    loading: string;
+    error: string;
+    success: string;
+    cancel: string;
+    confirm: string;
+    save: string;
+    delete: string;
+    edit: string;
+    back: string;
+    next: string;
+    search: string;
+    filter: string;
+    clear: string;
+    close: string;
+    viewAll: string;
+    yes: string;
+    no: string;
+    welcome: string;
+    logout: string;
+    login: string;
+    dashboard: string;
+    profile: string;
+    help: string;
+    about: string;
+    contact: string;
+    language: string;
+  };
+
+  // Navigation
+  nav: {
+    home: string;
+    blocks: string;
+    transactions: string;
+    validators: string;
+    accounts: string;
+    governance: string;
+    staking: string;
+    wallet: string;
+    settings: string;
+    services: string;
+  };
+
+  // Wallet
+  wallet: {
+    connect: string;
+    disconnect: string;
+    balance: string;
+    send: string;
+    receive: string;
+    history: string;
+    connected: string;
+    notConnected: string;
+    connectionError: string;
+    extensionNotFound: string;
+    pleaseInstallExtension: string;
+    installExtension: string;
+    selectProvider: string;
+    browserExtension: string;
+    secureConnection: string;
+    selectAccount: string;
+    currentAccount: string;
+    switchAccount: string;
+    unnamedAccount: string;
+    copyAddress: string;
+    welcomeBack: string;
+    totalBalance: string;
+    balanceHidden: string;
+    recentActivity: string;
+    noTransactions: string;
+    activityWillAppear: string;
+  };
+
+  // Blockchain
+  blockchain: {
+    block: string;
+    blockNumber: string;
+    blockHash: string;
+    timestamp: string;
+    validator: string;
+    extrinsics: string;
+    events: string;
+    finalized: string;
+    pending: string;
+    transaction: string;
+    signature: string;
+    nonce: string;
+    status: string;
+    success: string;
+    failed: string;
+  };
+
+  // Currency
+  currency: {
+    dalla: string;
+    bBZD: string;
+    usd: string;
+    gbp: string;
+    exchangeRate: string;
+    convert: string;
+    tourismRewards: string;
+    earnCashback: string;
+  };
+
+  // Governance
+  governance: {
+    proposals: string;
+    vote: string;
+    referendum: string;
+    council: string;
+    treasury: string;
+    createProposal: string;
+    voteYes: string;
+    voteNo: string;
+    votingPeriod: string;
+    enacted: string;
+    rejected: string;
+  };
+
+  // Staking
+  staking: {
+    stake: string;
+    unstake: string;
+    rewards: string;
+    nominate: string;
+    validators: string;
+    commission: string;
+    totalStake: string;
+    nominators: string;
+    rewardPoints: string;
+  };
+
+  // Identity
+  identity: {
+    citizen: string;
+    business: string;
+    government: string;
+    tourism: string;
+    verified: string;
+    unverified: string;
+    kyc: string;
+    kycRequired: string;
+    documents: string;
+  };
+
+  // Tourism (Blue Hole Portal)
+  tourism: {
+    visitors: string;
+    hotels: string;
+    restaurants: string;
+    tours: string;
+    attractions: string;
+    rewards: string;
+    cashback: string;
+    incentives: string;
+    bookings: string;
+    reviews: string;
+    activities: string;
+    beaches: string;
+    culture: string;
+    heritage: string;
+    wildlife: string;
+  };
+
+  // Government (Blue Hole Portal, Winik)
+  government: {
+    treasury: string;
+    budget: string;
+    spending: string;
+    revenue: string;
+    departments: string;
+    officials: string;
+    policies: string;
+    regulations: string;
+    compliance: string;
+    oversight: string;
+    transparency: string;
+    accountability: string;
+    publicServices: string;
+    infrastructure: string;
+    healthcare: string;
+    education: string;
+    security: string;
+    administration: string;
+  };
+
+  // Business (Pek Business)
+  business: {
+    merchant: string;
+    pointOfSale: string;
+    sales: string;
+    inventory: string;
+    customers: string;
+    invoices: string;
+    payments: string;
+    refunds: string;
+    reports: string;
+    analytics: string;
+    products: string;
+    services: string;
+    discounts: string;
+    promotions: string;
+    taxes: string;
+    receipt: string;
+    cashRegister: string;
+    dailySales: string;
+  };
+
+  // Validator (Gúbida Validator)
+  validator: {
+    node: string;
+    uptime: string;
+    performance: string;
+    era: string;
+    epoch: string;
+    session: string;
+    blocks: string;
+    produced: string;
+    missed: string;
+    points: string;
+    commission: string;
+    delegators: string;
+    activeSet: string;
+    waitingList: string;
+    rotateKeys: string;
+    setBondExtra: string;
+    chill: string;
+    federatedLearning: string;
+    proofOfUsefulWork: string;
+  };
+
+  // Explorer (Kijka Explorer)
+  explorer: {
+    latestBlocks: string;
+    latestTransactions: string;
+    network: string;
+    statistics: string;
+    totalIssuance: string;
+    circulatingSupply: string;
+    blockTime: string;
+    finalizedBlocks: string;
+    peers: string;
+    runtime: string;
+    metadata: string;
+    chainState: string;
+    constants: string;
+    storage: string;
+    extrinsicDetails: string;
+    eventDetails: string;
+  };
+}
+
+// English Translations
+const en: Translations = {
+  common: {
+    loading: 'Loading',
+    error: 'Error',
+    success: 'Success',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    save: 'Save',
+    delete: 'Delete',
+    edit: 'Edit',
+    back: 'Back',
+    next: 'Next',
+    search: 'Search',
+    filter: 'Filter',
+    clear: 'Clear',
+    close: 'Close',
+    viewAll: 'View All',
+    yes: 'Yes',
+    no: 'No',
+    welcome: 'Welcome',
+    logout: 'Logout',
+    login: 'Login',
+    dashboard: 'Dashboard',
+    profile: 'Profile',
+    help: 'Help',
+    about: 'About',
+    contact: 'Contact',
+    language: 'Language',
+  },
+  nav: {
+    home: 'Home',
+    blocks: 'Blocks',
+    transactions: 'Transactions',
+    validators: 'Validators',
+    accounts: 'Accounts',
+    governance: 'Governance',
+    staking: 'Staking',
+    wallet: 'Wallet',
+    settings: 'Settings',
+    services: 'Services',
+  },
+  wallet: {
+    connect: 'Connect Wallet',
+    disconnect: 'Disconnect',
+    balance: 'Balance',
+    send: 'Send',
+    receive: 'Receive',
+    history: 'History',
+    connected: 'Connected',
+    notConnected: 'Not Connected',
+    connectionError: 'Connection Error',
+    extensionNotFound: 'Extension Not Found',
+    pleaseInstallExtension: 'Please install a wallet extension',
+    installExtension: 'Install Extension',
+    selectProvider: 'Select Provider',
+    browserExtension: 'Browser Extension',
+    secureConnection: 'Secure Connection',
+    selectAccount: 'Select Account',
+    currentAccount: 'Current Account',
+    switchAccount: 'Switch Account',
+    unnamedAccount: 'Unnamed Account',
+    copyAddress: 'Copy Address',
+    welcomeBack: 'Welcome Back',
+    totalBalance: 'Total Balance',
+    balanceHidden: 'Balance Hidden',
+    recentActivity: 'Recent Activity',
+    noTransactions: 'No transactions yet',
+    activityWillAppear: 'Your activity will appear here',
+  },
+  blockchain: {
+    block: 'Block',
+    blockNumber: 'Block Number',
+    blockHash: 'Block Hash',
+    timestamp: 'Timestamp',
+    validator: 'Validator',
+    extrinsics: 'Extrinsics',
+    events: 'Events',
+    finalized: 'Finalized',
+    pending: 'Pending',
+    transaction: 'Transaction',
+    signature: 'Signature',
+    nonce: 'Nonce',
+    status: 'Status',
+    success: 'Success',
+    failed: 'Failed',
+  },
+  currency: {
+    dalla: 'DALLA',
+    bBZD: 'bBZD',
+    usd: 'USD',
+    gbp: 'GBP',
+    exchangeRate: 'Exchange Rate',
+    convert: 'Convert',
+    tourismRewards: 'Tourism Rewards',
+    earnCashback: 'Earn Cashback',
+  },
+  governance: {
+    proposals: 'Proposals',
+    vote: 'Vote',
+    referendum: 'Referendum',
+    council: 'Council',
+    treasury: 'Treasury',
+    createProposal: 'Create Proposal',
+    voteYes: 'Vote Yes',
+    voteNo: 'Vote No',
+    votingPeriod: 'Voting Period',
+    enacted: 'Enacted',
+    rejected: 'Rejected',
+  },
+  staking: {
+    stake: 'Stake',
+    unstake: 'Unstake',
+    rewards: 'Rewards',
+    nominate: 'Nominate',
+    validators: 'Validators',
+    commission: 'Commission',
+    totalStake: 'Total Stake',
+    nominators: 'Nominators',
+    rewardPoints: 'Reward Points',
+  },
+  identity: {
+    citizen: 'Citizen',
+    business: 'Business',
+    government: 'Government',
+    tourism: 'Tourism',
+    verified: 'Verified',
+    unverified: 'Unverified',
+    kyc: 'KYC',
+    kycRequired: 'KYC Required',
+    documents: 'Documents',
+  },
+  tourism: {
+    visitors: 'Visitors',
+    hotels: 'Hotels',
+    restaurants: 'Restaurants',
+    tours: 'Tours',
+    attractions: 'Attractions',
+    rewards: 'Rewards',
+    cashback: 'Cashback',
+    incentives: 'Incentives',
+    bookings: 'Bookings',
+    reviews: 'Reviews',
+    activities: 'Activities',
+    beaches: 'Beaches',
+    culture: 'Culture',
+    heritage: 'Heritage',
+    wildlife: 'Wildlife',
+  },
+  government: {
+    treasury: 'Treasury',
+    budget: 'Budget',
+    spending: 'Spending',
+    revenue: 'Revenue',
+    departments: 'Departments',
+    officials: 'Officials',
+    policies: 'Policies',
+    regulations: 'Regulations',
+    compliance: 'Compliance',
+    oversight: 'Oversight',
+    transparency: 'Transparency',
+    accountability: 'Accountability',
+    publicServices: 'Public Services',
+    infrastructure: 'Infrastructure',
+    healthcare: 'Healthcare',
+    education: 'Education',
+    security: 'Security',
+    administration: 'Administration',
+  },
+  business: {
+    merchant: 'Merchant',
+    pointOfSale: 'Point of Sale',
+    sales: 'Sales',
+    inventory: 'Inventory',
+    customers: 'Customers',
+    invoices: 'Invoices',
+    payments: 'Payments',
+    refunds: 'Refunds',
+    reports: 'Reports',
+    analytics: 'Analytics',
+    products: 'Products',
+    services: 'Services',
+    discounts: 'Discounts',
+    promotions: 'Promotions',
+    taxes: 'Taxes',
+    receipt: 'Receipt',
+    cashRegister: 'Cash Register',
+    dailySales: 'Daily Sales',
+  },
+  validator: {
+    node: 'Node',
+    uptime: 'Uptime',
+    performance: 'Performance',
+    era: 'Era',
+    epoch: 'Epoch',
+    session: 'Session',
+    blocks: 'Blocks',
+    produced: 'Produced',
+    missed: 'Missed',
+    points: 'Points',
+    commission: 'Commission',
+    delegators: 'Delegators',
+    activeSet: 'Active Set',
+    waitingList: 'Waiting List',
+    rotateKeys: 'Rotate Keys',
+    setBondExtra: 'Set Bond Extra',
+    chill: 'Chill',
+    federatedLearning: 'Federated Learning',
+    proofOfUsefulWork: 'Proof of Useful Work',
+  },
+  explorer: {
+    latestBlocks: 'Latest Blocks',
+    latestTransactions: 'Latest Transactions',
+    network: 'Network',
+    statistics: 'Statistics',
+    totalIssuance: 'Total Issuance',
+    circulatingSupply: 'Circulating Supply',
+    blockTime: 'Block Time',
+    finalizedBlocks: 'Finalized Blocks',
+    peers: 'Peers',
+    runtime: 'Runtime',
+    metadata: 'Metadata',
+    chainState: 'Chain State',
+    constants: 'Constants',
+    storage: 'Storage',
+    extrinsicDetails: 'Extrinsic Details',
+    eventDetails: 'Event Details',
+  },
+};
+
+// Spanish Translations
+const es: Translations = {
+  common: {
+    loading: 'Cargando',
+    error: 'Error',
+    success: 'Éxito',
+    cancel: 'Cancelar',
+    confirm: 'Confirmar',
+    save: 'Guardar',
+    delete: 'Eliminar',
+    edit: 'Editar',
+    back: 'Atrás',
+    next: 'Siguiente',
+    search: 'Buscar',
+    filter: 'Filtrar',
+    clear: 'Limpiar',
+    close: 'Cerrar',
+    viewAll: 'Ver Todo',
+    yes: 'Sí',
+    no: 'No',
+    welcome: 'Bienvenido',
+    logout: 'Cerrar Sesión',
+    login: 'Iniciar Sesión',
+    dashboard: 'Panel',
+    profile: 'Perfil',
+    help: 'Ayuda',
+    about: 'Acerca de',
+    contact: 'Contacto',
+    language: 'Idioma',
+  },
+  nav: {
+    home: 'Inicio',
+    blocks: 'Bloques',
+    transactions: 'Transacciones',
+    validators: 'Validadores',
+    accounts: 'Cuentas',
+    governance: 'Gobernanza',
+    staking: 'Participación',
+    wallet: 'Cartera',
+    settings: 'Configuración',
+    services: 'Servicios',
+  },
+  wallet: {
+    connect: 'Conectar Cartera',
+    disconnect: 'Desconectar',
+    balance: 'Saldo',
+    send: 'Enviar',
+    receive: 'Recibir',
+    history: 'Historial',
+    connected: 'Conectado',
+    notConnected: 'No Conectado',
+    connectionError: 'Error de Conexión',
+    extensionNotFound: 'Extensión No Encontrada',
+    pleaseInstallExtension: 'Por favor instale una extensión de cartera',
+    installExtension: 'Instalar Extensión',
+    selectProvider: 'Seleccionar Proveedor',
+    browserExtension: 'Extensión del Navegador',
+    secureConnection: 'Conexión Segura',
+    selectAccount: 'Seleccionar Cuenta',
+    currentAccount: 'Cuenta Actual',
+    switchAccount: 'Cambiar Cuenta',
+    unnamedAccount: 'Cuenta Sin Nombre',
+    copyAddress: 'Copiar Dirección',
+    welcomeBack: 'Bienvenido de Nuevo',
+    totalBalance: 'Saldo Total',
+    balanceHidden: 'Saldo Oculto',
+    recentActivity: 'Actividad Reciente',
+    noTransactions: 'Sin transacciones aún',
+    activityWillAppear: 'Tu actividad aparecerá aquí',
+  },
+  blockchain: {
+    block: 'Bloque',
+    blockNumber: 'Número de Bloque',
+    blockHash: 'Hash de Bloque',
+    timestamp: 'Marca de Tiempo',
+    validator: 'Validador',
+    extrinsics: 'Extrínsecos',
+    events: 'Eventos',
+    finalized: 'Finalizado',
+    pending: 'Pendiente',
+    transaction: 'Transacción',
+    signature: 'Firma',
+    nonce: 'Nonce',
+    status: 'Estado',
+    success: 'Éxito',
+    failed: 'Fallido',
+  },
+  currency: {
+    dalla: 'DALLA',
+    bBZD: 'bBZD',
+    usd: 'USD',
+    gbp: 'GBP',
+    exchangeRate: 'Tasa de Cambio',
+    convert: 'Convertir',
+    tourismRewards: 'Recompensas de Turismo',
+    earnCashback: 'Ganar Reembolso',
+  },
+  governance: {
+    proposals: 'Propuestas',
+    vote: 'Votar',
+    referendum: 'Referéndum',
+    council: 'Consejo',
+    treasury: 'Tesorería',
+    createProposal: 'Crear Propuesta',
+    voteYes: 'Votar Sí',
+    voteNo: 'Votar No',
+    votingPeriod: 'Período de Votación',
+    enacted: 'Promulgado',
+    rejected: 'Rechazado',
+  },
+  staking: {
+    stake: 'Participar',
+    unstake: 'Retirar',
+    rewards: 'Recompensas',
+    nominate: 'Nominar',
+    validators: 'Validadores',
+    commission: 'Comisión',
+    totalStake: 'Participación Total',
+    nominators: 'Nominadores',
+    rewardPoints: 'Puntos de Recompensa',
+  },
+  identity: {
+    citizen: 'Ciudadano',
+    business: 'Negocio',
+    government: 'Gobierno',
+    tourism: 'Turismo',
+    verified: 'Verificado',
+    unverified: 'No Verificado',
+    kyc: 'KYC',
+    kycRequired: 'KYC Requerido',
+    documents: 'Documentos',
+  },
+  tourism: {
+    visitors: 'Visitantes',
+    hotels: 'Hoteles',
+    restaurants: 'Restaurantes',
+    tours: 'Tours',
+    attractions: 'Atracciones',
+    rewards: 'Recompensas',
+    cashback: 'Reembolso',
+    incentives: 'Incentivos',
+    bookings: 'Reservas',
+    reviews: 'Reseñas',
+    activities: 'Actividades',
+    beaches: 'Playas',
+    culture: 'Cultura',
+    heritage: 'Patrimonio',
+    wildlife: 'Vida Silvestre',
+  },
+  government: {
+    treasury: 'Tesorería',
+    budget: 'Presupuesto',
+    spending: 'Gastos',
+    revenue: 'Ingresos',
+    departments: 'Departamentos',
+    officials: 'Funcionarios',
+    policies: 'Políticas',
+    regulations: 'Regulaciones',
+    compliance: 'Cumplimiento',
+    oversight: 'Supervisión',
+    transparency: 'Transparencia',
+    accountability: 'Rendición de Cuentas',
+    publicServices: 'Servicios Públicos',
+    infrastructure: 'Infraestructura',
+    healthcare: 'Salud',
+    education: 'Educación',
+    security: 'Seguridad',
+    administration: 'Administración',
+  },
+  business: {
+    merchant: 'Comerciante',
+    pointOfSale: 'Punto de Venta',
+    sales: 'Ventas',
+    inventory: 'Inventario',
+    customers: 'Clientes',
+    invoices: 'Facturas',
+    payments: 'Pagos',
+    refunds: 'Reembolsos',
+    reports: 'Informes',
+    analytics: 'Análisis',
+    products: 'Productos',
+    services: 'Servicios',
+    discounts: 'Descuentos',
+    promotions: 'Promociones',
+    taxes: 'Impuestos',
+    receipt: 'Recibo',
+    cashRegister: 'Caja Registradora',
+    dailySales: 'Ventas Diarias',
+  },
+  validator: {
+    node: 'Nodo',
+    uptime: 'Tiempo Activo',
+    performance: 'Rendimiento',
+    era: 'Era',
+    epoch: 'Época',
+    session: 'Sesión',
+    blocks: 'Bloques',
+    produced: 'Producidos',
+    missed: 'Perdidos',
+    points: 'Puntos',
+    commission: 'Comisión',
+    delegators: 'Delegadores',
+    activeSet: 'Conjunto Activo',
+    waitingList: 'Lista de Espera',
+    rotateKeys: 'Rotar Claves',
+    setBondExtra: 'Fijar Bono Extra',
+    chill: 'Enfriar',
+    federatedLearning: 'Aprendizaje Federado',
+    proofOfUsefulWork: 'Prueba de Trabajo Útil',
+  },
+  explorer: {
+    latestBlocks: 'Bloques Recientes',
+    latestTransactions: 'Transacciones Recientes',
+    network: 'Red',
+    statistics: 'Estadísticas',
+    totalIssuance: 'Emisión Total',
+    circulatingSupply: 'Suministro Circulante',
+    blockTime: 'Tiempo de Bloque',
+    finalizedBlocks: 'Bloques Finalizados',
+    peers: 'Pares',
+    runtime: 'Runtime',
+    metadata: 'Metadatos',
+    chainState: 'Estado de Cadena',
+    constants: 'Constantes',
+    storage: 'Almacenamiento',
+    extrinsicDetails: 'Detalles Extrínsecos',
+    eventDetails: 'Detalles de Eventos',
+  },
+};
+
+// Kriol Translations
+const kri: Translations = {
+  common: {
+    loading: 'Di Lood',
+    error: 'Ehra',
+    success: 'Gud',
+    cancel: 'Kyaansl',
+    confirm: 'Konfohrm',
+    save: 'Sayv',
+    delete: 'Dileet',
+    edit: 'Edit',
+    back: 'Bak',
+    next: 'Neks',
+    search: 'Sohrch',
+    filter: 'Filta',
+    clear: 'Kliyr',
+    close: 'Kloaz',
+    viewAll: 'Si Aal',
+    yes: 'Yes',
+    no: 'No',
+    welcome: 'Welkom',
+    logout: 'Loog Out',
+    login: 'Loog In',
+    dashboard: 'Dashboad',
+    profile: 'Profail',
+    help: 'Help',
+    about: 'Bowt',
+    contact: 'Kontakt',
+    language: 'Langwij',
+  },
+  nav: {
+    home: 'Hoahn',
+    blocks: 'Blaaks',
+    transactions: 'Chraanzakshan',
+    validators: 'Validayta',
+    accounts: 'Akounts',
+    governance: 'Govament',
+    staking: 'Staykin',
+    wallet: 'Walit',
+    settings: 'Setinz',
+    services: 'Sehrvisis',
+  },
+  wallet: {
+    connect: 'Konekt Walit',
+    disconnect: 'Diskonekt',
+    balance: 'Balans',
+    send: 'Send',
+    receive: 'Risiiv',
+    history: 'Histri',
+    connected: 'Konektid',
+    notConnected: 'No Konektid',
+    connectionError: 'Konekshan Eror',
+    extensionNotFound: 'Ekstenshon No Fain',
+    pleaseInstallExtension: 'Pleez instal walit ekstenshon',
+    installExtension: 'Instal Ekstenshon',
+    selectProvider: 'Selekt Provayda',
+    browserExtension: 'Browza Ekstenshon',
+    secureConnection: 'Sikyur Konekshan',
+    selectAccount: 'Selekt Akount',
+    currentAccount: 'Korrent Akount',
+    switchAccount: 'Swich Akount',
+    unnamedAccount: 'Unnamed Akount',
+    copyAddress: 'Kapi Adres',
+    welcomeBack: 'Welkom Bak',
+    totalBalance: 'Toatal Balans',
+    balanceHidden: 'Balans Haid',
+    recentActivity: 'Riisent Aktiviti',
+    noTransactions: 'No transakshandem yet',
+    activityWillAppear: 'Yu aktiviti wi pia ya',
+  },
+  blockchain: {
+    block: 'Blaak',
+    blockNumber: 'Blaak Nomba',
+    blockHash: 'Blaak Hash',
+    timestamp: 'Taim',
+    validator: 'Validayta',
+    extrinsics: 'Ekstrinsiks',
+    events: 'Events',
+    finalized: 'Finalaiz',
+    pending: 'Pendin',
+    transaction: 'Chraanzakshan',
+    signature: 'Signaycha',
+    nonce: 'Nonce',
+    status: 'Status',
+    success: 'Gud',
+    failed: 'Fayl',
+  },
+  currency: {
+    dalla: 'DALLA',
+    bBZD: 'bBZD',
+    usd: 'USD',
+    gbp: 'GBP',
+    exchangeRate: 'Exchainj Rayt',
+    convert: 'Konvert',
+    tourismRewards: 'Turizm Riwods',
+    earnCashback: 'Ern Kashbak',
+  },
+  governance: {
+    proposals: 'Propozal',
+    vote: 'Voat',
+    referendum: 'Referendom',
+    council: 'Konsl',
+    treasury: 'Trejri',
+    createProposal: 'Mek Propozal',
+    voteYes: 'Voat Yes',
+    voteNo: 'Voat No',
+    votingPeriod: 'Voatin Taim',
+    enacted: 'Pas',
+    rejected: 'Rihjekt',
+  },
+  staking: {
+    stake: 'Stayk',
+    unstake: 'Onstayk',
+    rewards: 'Riwod',
+    nominate: 'Nominayt',
+    validators: 'Validayta',
+    commission: 'Komishan',
+    totalStake: 'Toatal Stayk',
+    nominators: 'Nominayta',
+    rewardPoints: 'Riwod Points',
+  },
+  identity: {
+    citizen: 'Sitizn',
+    business: 'Bizniz',
+    government: 'Govament',
+    tourism: 'Turizm',
+    verified: 'Verifaid',
+    unverified: 'No Verifaid',
+    kyc: 'KYC',
+    kycRequired: 'KYC Rikwayad',
+    documents: 'Dakyuments',
+  },
+  tourism: {
+    visitors: 'Vizita',
+    hotels: 'Hoatel',
+    restaurants: 'Restorant',
+    tours: 'Toor',
+    attractions: 'Attrakshan',
+    rewards: 'Riwod',
+    cashback: 'Kashbak',
+    incentives: 'Insentiv',
+    bookings: 'Bukin',
+    reviews: 'Riviyu',
+    activities: 'Aktiviti',
+    beaches: 'Biich',
+    culture: 'Kulcha',
+    heritage: 'Heritij',
+    wildlife: 'Wail Laif',
+  },
+  government: {
+    treasury: 'Trejri',
+    budget: 'Bujit',
+    spending: 'Spendin',
+    revenue: 'Revnyu',
+    departments: 'Dipaatment',
+    officials: 'Ofishal',
+    policies: 'Palisi',
+    regulations: 'Regiulayshan',
+    compliance: 'Komplaians',
+    oversight: 'Ovasait',
+    transparency: 'Chransperens',
+    accountability: 'Akountabiliti',
+    publicServices: 'Publik Sehrvisis',
+    infrastructure: 'Infrachrokcha',
+    healthcare: 'Helkiyer',
+    education: 'Ejiukayshan',
+    security: 'Sikyuriti',
+    administration: 'Administrayshan',
+  },
+  business: {
+    merchant: 'Mochant',
+    pointOfSale: 'Point a Sayl',
+    sales: 'Sayl',
+    inventory: 'Inventri',
+    customers: 'Kostoma',
+    invoices: 'Invois',
+    payments: 'Payment',
+    refunds: 'Rifonz',
+    reports: 'Ripoat',
+    analytics: 'Analitiks',
+    products: 'Prodok',
+    services: 'Sehrvisis',
+    discounts: 'Diskount',
+    promotions: 'Promoshon',
+    taxes: 'Taks',
+    receipt: 'Risiit',
+    cashRegister: 'Kash Rejista',
+    dailySales: 'Dayli Sayl',
+  },
+  validator: {
+    node: 'Noad',
+    uptime: 'Optaim',
+    performance: 'Pafomans',
+    era: 'Era',
+    epoch: 'Epok',
+    session: 'Seshan',
+    blocks: 'Blaak',
+    produced: 'Prodoos',
+    missed: 'Mis',
+    points: 'Point',
+    commission: 'Komishan',
+    delegators: 'Deligayta',
+    activeSet: 'Aktiv Set',
+    waitingList: 'Waytin Lis',
+    rotateKeys: 'Rotayt Kii',
+    setBondExtra: 'Set Bon Ekstra',
+    chill: 'Chill',
+    federatedLearning: 'Federaytid Lohnin',
+    proofOfUsefulWork: 'Pruuf a Yuusful Wok',
+  },
+  explorer: {
+    latestBlocks: 'Laytis Blaak',
+    latestTransactions: 'Laytis Chraanzakshan',
+    network: 'Netwok',
+    statistics: 'Statistiks',
+    totalIssuance: 'Toatal Ishuans',
+    circulatingSupply: 'Serkyulaytin Soplay',
+    blockTime: 'Blaak Taim',
+    finalizedBlocks: 'Finalaiz Blaak',
+    peers: 'Piir',
+    runtime: 'Rontaim',
+    metadata: 'Metadayta',
+    chainState: 'Chayn Stayt',
+    constants: 'Konstant',
+    storage: 'Stoarij',
+    extrinsicDetails: 'Ekstrinsik Ditail',
+    eventDetails: 'Event Ditail',
+  },
+};
+
+// Q'eqchi' Maya Translations (Mayan language spoken in southern Belize)
+const qek: Translations = {
+  common: {
+    loading'Yo\\'okin',
+    error'Sachb\\'al',
+    success: 'Us',
+    cancel: 'Junaj chic',
+    confirm: 'Kˈanjel',
+    save: 'Colok',
+    delete: 'Sachok',
+    edit: 'Jalok',
+    back'Sa\\'',
+    next: 'Ta\'raqeb'',
+    search: 'Sikok',
+    filter'Xutb\\'al',
+    clear'Q\\'uehok',
+    close: 'Tzˈapik',
+    viewAll: 'Ilok ajl',
+    yes: 'Us',
+    no'Ink\\'a',
+    welcome: 'Chahil',
+    logout'Eleq\\'',
+    login: 'Ochok',
+    dashboard'Xk\\'utunink',
+    profile'K\\'anjel',
+    help: 'Tenkˈa',
+    about: 'Chirix',
+    contact: 'Tˈanjel',
+    language: 'Aatin',
+  },
+  nav: {
+    home: 'Rochoch',
+    blocks'Che\\'',
+    transactions: 'K\'ayb'al',
+    validators'Ilonelb\\'',
+    accounts: 'Pwaq',
+    governance: 'Raj lal',
+    staking'Tz\\'aqal',
+    wallet'Tz\\'aqal pwaq',
+    settings: 'Jolomic',
+    services: 'Tenkˈa',
+  },
+  wallet: {
+    connect'Tz\\'aqal Walit',
+    disconnect'Esilb\\'al',
+    balance: 'Raqal',
+    send'Takeb\\'',
+    receive'K\\'ulum',
+    history: 'Kˈoroq',
+    connected'Tz\\'aqan',
+    notConnected: 'Ma\'us tz'aqan',
+    connectionError'Sachb\\'al',
+    extensionNotFound'Ma\\'us ril',
+    pleaseInstallExtension: 'Chˈoolok walit',
+    installExtension: 'Chˈoolok',
+    selectProvider: 'Sikok',
+    browserExtension: 'Extensión',
+    secureConnection'Tz\\'aqal us',
+    selectAccount: 'Sikok pwaq',
+    currentAccount: 'Anaqwan pwaq',
+    switchAccount: 'Jalok pwaq',
+    unnamedAccount: 'Ma\'us b'i'',
+    copyAddress: 'Jolok',
+    welcomeBack'Chahil sa\\'',
+    totalBalance: 'Ajl raqal',
+    balanceHidden'Muq\\'un',
+    recentActivity: 'Kˈoroq raqe',
+    noTransactions: 'Ma\'us k'ayb'al',
+    activityWillAppear'Ta\\'wil retal anaqwan',
+  },
+  blockchain: {
+    block'Che\\'',
+    blockNumber'Rajibal che\\'',
+    blockHash: 'B\'i' che'',
+    timestamp'K\\'utunil',
+    validator'Ilonelb\\'',
+    extrinsics: 'K\'ayb'aleb'',
+    events'Nimlaeb\\'',
+    finalized: 'Tzˈaqan',
+    pending'Yo\\'okin',
+    transaction: 'K\'ayb'al',
+    signature: 'Tz\'ib'ank',
+    nonce: 'Rajibal',
+    status'K\\'anjel',
+    success: 'Us',
+    failed'Ma\\'us',
+  },
+  currency: {
+    dalla: 'DALLA',
+    bBZD: 'bBZD',
+    usd: 'USD',
+    gbp: 'GBP',
+    exchangeRate'K\\'exuk',
+    convert: 'Jalok',
+    tourismRewards: 'K\'a'releb'',
+    earnCashback: 'K\'ulum sa'',
+  },
+  governance: {
+    proposals: 'K\'ajolb'al',
+    vote: 'Xik\'ub'',
+    referendum: 'Xik\'ub' li ajl',
+    council'Nimlaeb\\' raj',
+    treasury'Pwaq sa\\'',
+    createProposal: 'B\'anunk k'ajolb'al',
+    voteYes: 'Us',
+    voteNo'Ink\\'a',
+    votingPeriod: 'K\'utunil xik'ub'',
+    enacted'B\\'anun',
+    rejected: 'Ma\'us k'ulman',
+  },
+  staking: {
+    stake'Tz\\'aqal',
+    unstake'Esilb\\'al',
+    rewards: 'K\'a'releb'',
+    nominate: 'Sikok',
+    validators'Ilonelb\\'',
+    commission: 'K\'ayb'al',
+    totalStake'Ajl tz\\'aqal',
+    nominators'Sikonelb\\'',
+    rewardPoints: 'Rajibal k\'a're',
+  },
+  identity: {
+    citizen: 'Winq',
+    business: 'K\'ayb'al',
+    government: 'Raj lal',
+    tourism'B\\'ejebal',
+    verified: 'Ilun',
+    unverified'Ma\\'us ilun',
+    kyc: 'KYC',
+    kycRequired'Tz\\'aqal KYC',
+    documents: 'Hu',
+  },
+  tourism: {
+    visitors: 'B\'ejeb'',
+    hotels'Rochocheb\\'',
+    restaurants: 'Wa\'ineb'',
+    tours'B\\'ejebal',
+    attractions'Nimlaheb\\'',
+    rewards: 'K\'a'releb'',
+    cashback'Pwaq sa\\'',
+    incentives: 'K\'a're',
+    bookings: 'K\'atzˈib'al',
+    reviews: 'Relal',
+    activities'B\\'anunk',
+    beaches: 'Cho',
+    culture'K\\'anjel',
+    heritage: 'Kˈoroq mamin',
+    wildlife'Xuleb\\'',
+  },
+  government: {
+    treasury'Pwaq sa\\'',
+    budget'K\\'anjel pwaq',
+    spending: 'K\'ayb'al',
+    revenue'K\\'ulum pwaq',
+    departments'Najteb\\'',
+    officials'Nimlaeb\\' raj',
+    policies'Taklankileb\\'',
+    regulations'Chakub\\'il',
+    compliance: 'Tˈojok',
+    oversight: 'Ilonelal',
+    transparency'Ilb\\'al',
+    accountability'Relal k\\'anjel',
+    publicServices: 'Tenkˈa winq',
+    infrastructure: 'B\'anunkileb'',
+    healthcare: 'Tenkˈa yajel',
+    education'Katinb\\'al',
+    security'K\\'atunkilal',
+    administration: 'Raj lal',
+  },
+  business: {
+    merchant'K\\'aynel',
+    pointOfSale: 'K\'ayb'al naˈaj',
+    sales: 'K\'ayb'al',
+    inventory: 'Rilal',
+    customers: 'K\'ayeb'',
+    invoices: 'Tz\'ib'ank',
+    payments'Tojb\\'al',
+    refunds'Pwaq sa\\'',
+    reports: 'Relal',
+    analytics: 'Ilok',
+    products: 'K\'ayb'aleb'',
+    services: 'Tenkˈa',
+    discounts: 'Qˈuisinkil',
+    promotions: 'Nimlahik',
+    taxes'Tojb\\'al raj',
+    receipt: 'Tz\'ib'ank',
+    cashRegister: 'Pwaqil k\'a're',
+    dailySales: 'K\'ayb'al kˈij',
+  },
+  validator: {
+    node: 'Raˈaj',
+    uptime: 'K\'utunil yo'',
+    performance'K\\'anjel',
+    era'Junab\\'',
+    epoch'K\\'utunil',
+    session'Xk\\'olk',
+    blocks: 'Che\'eb'',
+    produced'B\\'anun',
+    missed: 'Sachman',
+    points: 'Rajibal',
+    commission: 'K\'ayb'al',
+    delegators'Tˈojkelb\\'',
+    activeSet: 'Yo\' k'anjel',
+    waitingList'Choyeˈeb\\'',
+    rotateKeys'Jelok llab\\'ˈ',
+    setBondExtra'Tz\\'aqal roˈch',
+    chill: 'Hilankilal',
+    federatedLearning: 'Katinb\'al ch'ool',
+    proofOfUsefulWork: 'Ilb\'al k'anjel us',
+  },
+  explorer: {
+    latestBlocks'Che\\' raqe',
+    latestTransactions: 'K\'ayb'al raqe',
+    network: 'Tz\'aqaleb'',
+    statistics: 'Rajibal',
+    totalIssuance'Ajl ch\\'ool',
+    circulatingSupply'B\\'ej pwaq',
+    blockTime: 'K\'utunil che'',
+    finalizedBlocks'Che\\' tzˈaqan',
+    peers: 'Ch\'olelb'',
+    runtime: 'K\'utunil yo'',
+    metadata'Naˈleb\\'',
+    chainState: 'K\'anjel tz'aqal',
+    constants'Ma\\' jaloq',
+    storage: 'Colok',
+    extrinsicDetails: 'Naˈleb\' k'ayb'al',
+    eventDetails'Naˈleb\\' nimla',
+  },
+};
+
+// Garifuna Translations (Afro-Indigenous Garifuna language)
+const gar: Translations = {
+  common: {
+    loading: 'Abeigülei',
+    error: 'Lidan',
+    success: 'Serun',
+    cancel: 'Afudaü',
+    confirm: 'Adüga',
+    save: 'Gülei',
+    delete: 'Haraga',
+    edit: 'Güdürü',
+    back: 'Dabürü',
+    next: 'Laün',
+    search: 'Arudi',
+    filter: 'Gülei laün',
+    clear: 'Alisi',
+    close: 'Abuga',
+    viewAll: 'Abi düga',
+    yes: 'Ehe',
+    no: 'Mana',
+    welcome: 'Buiti binafi',
+    logout: 'Güdei',
+    login: 'Güdürü',
+    dashboard: 'Wadaun',
+    profile: 'Bugiya',
+    help: 'Abüdürüha',
+    about: 'Lidan',
+    contact: 'Arudiha',
+    language: 'Duna',
+  },
+  nav: {
+    home: 'Dabüi',
+    blocks: 'Üma',
+    transactions: 'Güfudi',
+    validators: 'Gúbida',
+    accounts: 'Gani',
+    governance: 'Wadaun',
+    staking: 'Güdürü gani',
+    wallet: 'Gani wadaun',
+    settings: 'Gülei laün',
+    services: 'Abüdürüha',
+  },
+  wallet: {
+    connect: 'Güdürü Walit',
+    disconnect: 'Afudaü',
+    balance: 'Gani',
+    send: 'Aun',
+    receive: 'Arudi',
+    history: 'Lidan budun',
+    connected: 'Güdürügu',
+    notConnected: 'Mana güdürügu',
+    connectionError: 'Lidan güdürü',
+    extensionNotFound: 'Mana ürüwa',
+    pleaseInstallExtension: 'Gülei walit',
+    installExtension: 'Gülei',
+    selectProvider: 'Abi',
+    browserExtension: 'Güdürü laün',
+    secureConnection: 'Güdürü serun',
+    selectAccount: 'Abi gani',
+    currentAccount: 'Gani anigi',
+    switchAccount: 'Güdürü gani',
+    unnamedAccount: 'Mana rina',
+    copyAddress: 'Arudi lidan',
+    welcomeBack: 'Buiti binafi dabürü',
+    totalBalance: 'Düga gani',
+    balanceHidden: 'Gani hümüti',
+    recentActivity: 'Lidan budun',
+    noTransactions: 'Mana güfudi',
+    activityWillAppear: 'Lidan anigi laün baba',
+  },
+  blockchain: {
+    block: 'Üma',
+    blockNumber: 'Üma rajibal',
+    blockHash: 'Üma rina',
+    timestamp: 'Wadaun',
+    validator: 'Gúbida',
+    extrinsics: 'Güfudi',
+    events: 'Lidan',
+    finalized: 'Serun',
+    pending: 'Abeigülei',
+    transaction: 'Güfudi',
+    signature: 'Rina',
+    nonce: 'Rajibal',
+    status: 'Bugiya',
+    success: 'Serun',
+    failed: 'Lidan',
+  },
+  currency: {
+    dalla: 'DALLA',
+    bBZD: 'bBZD',
+    usd: 'USD',
+    gbp: 'GBP',
+    exchangeRate: 'Güdürü gani',
+    convert: 'Güdürü',
+    tourismRewards: 'Gani budun',
+    earnCashback: 'Arudi gani',
+  },
+  governance: {
+    proposals: 'Adüga',
+    vote: 'Abi',
+    referendum: 'Abi düga',
+    council: 'Wadaun',
+    treasury: 'Gani dabüi',
+    createProposal: 'Gülei adüga',
+    voteYes: 'Ehe',
+    voteNo: 'Mana',
+    votingPeriod: 'Wadaun abi',
+    enacted: 'Serun',
+    rejected: 'Afudaü',
+  },
+  staking: {
+    stake: 'Güdürü gani',
+    unstake: 'Afudaü gani',
+    rewards: 'Gani budun',
+    nominate: 'Abi',
+    validators: 'Gúbida',
+    commission: 'Güfudi',
+    totalStake: 'Düga güdürü',
+    nominators: 'Abi gúbida',
+    rewardPoints: 'Rajibal gani',
+  },
+  identity: {
+    citizen: 'Garinagu',
+    business: 'Güfudi',
+    government: 'Wadaun',
+    tourism: 'Budun',
+    verified: 'Adüga',
+    unverified: 'Mana adüga',
+    kyc: 'KYC',
+    kycRequired: 'Abi KYC',
+    documents: 'Lidan',
+  },
+  tourism: {
+    visitors: 'Budun üma',
+    hotels: 'Dabüi budun',
+    restaurants: 'Güdügü',
+    tours: 'Budun',
+    attractions: 'Lidan serun',
+    rewards: 'Gani budun',
+    cashback: 'Arudi gani',
+    incentives: 'Gani laün',
+    bookings: 'Gülei laün',
+    reviews: 'Lidan',
+    activities: 'Bugiya',
+    beaches: 'Weyu',
+    culture: 'Duna',
+    heritage: 'Budun maba',
+    wildlife: 'Üma weyu',
+  },
+  government: {
+    treasury: 'Gani dabüi',
+    budget: 'Gani wadaun',
+    spending: 'Güfudi',
+    revenue: 'Arudi gani',
+    departments: 'Wadaun üma',
+    officials: 'Gúbida wadaun',
+    policies: 'Adüga',
+    regulations: 'Lidan serun',
+    compliance: 'Adüga',
+    oversight: 'Gúbida',
+    transparency: 'Abi düga',
+    accountability: 'Lidan serun',
+    publicServices: 'Abüdürüha düga',
+    infrastructure: 'Bugiya',
+    healthcare: 'Abüdürüha',
+    education: 'Arudiha',
+    security: 'Gúbida serun',
+    administration: 'Wadaun',
+  },
+  business: {
+    merchant: 'Güfudi üma',
+    pointOfSale: 'Güfudi naˈaj',
+    sales: 'Güfudi',
+    inventory: 'Lidan',
+    customers: 'Budun',
+    invoices: 'Lidan rina',
+    payments: 'Gani',
+    refunds: 'Arudi gani',
+    reports: 'Lidan',
+    analytics: 'Abi lidan',
+    products: 'Güfudi üma',
+    services: 'Abüdürüha',
+    discounts: 'Gani laün',
+    promotions: 'Lidan serun',
+    taxes: 'Gani wadaun',
+    receipt: 'Lidan rina',
+    cashRegister: 'Gani üma',
+    dailySales: 'Güfudi hahati',
+  },
+  validator: {
+    node: 'Üma',
+    uptime: 'Wadaun',
+    performance: 'Bugiya',
+    era: 'Budun',
+    epoch: 'Wadaun',
+    session: 'Laün',
+    blocks: 'Üma',
+    produced: 'Gülei',
+    missed: 'Afudaü',
+    points: 'Rajibal',
+    commission: 'Güfudi',
+    delegators: 'Gúbida laün',
+    activeSet: 'Bugiya anigi',
+    waitingList: 'Abeigülei',
+    rotateKeys: 'Güdürü lidan',
+    setBondExtra: 'Gülei laün',
+    chill: 'Dabürü',
+    federatedLearning: 'Arudiha düga',
+    proofOfUsefulWork: 'Lidan bugiya serun',
+  },
+  explorer: {
+    latestBlocks: 'Üma budun',
+    latestTransactions: 'Güfudi budun',
+    network: 'Wadaun düga',
+    statistics: 'Rajibal',
+    totalIssuance: 'Düga gani',
+    circulatingSupply: 'Gani budun',
+    blockTime: 'Wadaun üma',
+    finalizedBlocks: 'Üma serun',
+    peers: 'Gúbida',
+    runtime: 'Wadaun',
+    metadata: 'Lidan',
+    chainState: 'Bugiya',
+    constants: 'Lidan serun',
+    storage: 'Gülei',
+    extrinsicDetails: 'Lidan güfudi',
+    eventDetails: 'Lidan budun',
+  },
+};
+
+// Mopan Maya Translations (Mayan language spoken in western Belize)
+const mop: Translations = {
+  common: {
+    loading'T k\\'aaxal',
+    error'Ma\\' uts',
+    success: 'Uts',
+    cancel'Ma\\'',
+    confirm: 'Jach',
+    save: 'Kol',
+    delete: 'Péek',
+    edit'Jats\\'',
+    back: 'Sut',
+    next'Xa\\'an',
+    search'K\\'aj',
+    filter: 'Xut',
+    clear: 'Péek ajl',
+    close'Ts\\'ap',
+    viewAll: 'Il ajl',
+    yes: 'Jach',
+    no'Ma\\'',
+    welcome: 'Ki\'imak a wo'och',
+    logout: 'Toj',
+    login: 'Och',
+    dashboard: 'Aaw',
+    profile'A wi\\'naj',
+    help: 'Taak',
+    about'Yok\\'ol',
+    contact'T\\'aan',
+    language'T\\'aan',
+  },
+  nav: {
+    home: 'Naj',
+    blocks'Che\\'',
+    transactions'K\\'aj',
+    validators: 'Ilol',
+    accounts: 'Taak',
+    governance: 'Ajalil',
+    staking'Ts\\'ook',
+    wallet: 'Taak naj',
+    settings: 'Jach',
+    services: 'Taak',
+  },
+  wallet: {
+    connect'Ts\\'ook Walit',
+    disconnect: 'Péek',
+    balance: 'Taak',
+    send: 'Táak',
+    receive'K\\'am',
+    history: 'Úuchben',
+    connected'Ts\\'ook',
+    notConnected: 'Ma\' ts'ook',
+    connectionError'Ma\\' uts',
+    extensionNotFound: 'Ma\' ta'aw',
+    pleaseInstallExtension: 'Kol walit',
+    installExtension: 'Kol',
+    selectProvider'K\\'aj',
+    browserExtension: 'Extensión',
+    secureConnection'Ts\\'ook uts',
+    selectAccount'K\\'aj taak',
+    currentAccount: 'Bejla\'e' taak',
+    switchAccount'Jats\\' taak',
+    unnamedAccount: 'Ma\' k'aaba'',
+    copyAddress'Ts\\'aj',
+    welcomeBack'Ki\\'imak sut',
+    totalBalance: 'Ajl taak',
+    balanceHidden: 'Taak muuk',
+    recentActivity: 'Bejla\'e' k'iin',
+    noTransactions: 'Ma\' k'aj',
+    activityWillAppear: 'Ta\'aaw bejla'e'',
+  },
+  blockchain: {
+    block'Che\\'',
+    blockNumber: 'Xo\'k che'',
+    blockHash: 'K\'aaba' che'',
+    timestamp'K\\'iin',
+    validator: 'Ilol',
+    extrinsics'K\\'aj',
+    events'K\\'iinil',
+    finalized'Ts\\'ook',
+    pending'T k\\'aaxal',
+    transaction'K\\'aj',
+    signature'Ts\\'ib',
+    nonce'Xo\\'k',
+    status: 'Aaw',
+    success: 'Uts',
+    failed'Ma\\' uts',
+  },
+  currency: {
+    dalla: 'DALLA',
+    bBZD: 'bBZD',
+    usd: 'USD',
+    gbp: 'GBP',
+    exchangeRate'K\\'ex',
+    convert'Jats\\'',
+    tourismRewards'Taak k\\'iinil',
+    earnCashback'K\\'am sut',
+  },
+  governance: {
+    proposals'T\\'aan',
+    vote'K\\'aj',
+    referendum'K\\'aj ajl',
+    council: 'Ajalil',
+    treasury: 'Taak naj',
+    createProposal'Men t\\'aan',
+    voteYes: 'Jach',
+    voteNo'Ma\\'',
+    votingPeriod: 'K\'iin k'aj',
+    enacted: 'Men',
+    rejected: 'Ma\' k'am',
+  },
+  staking: {
+    stake'Ts\\'ook',
+    unstake: 'Péek',
+    rewards: 'Taak',
+    nominate'K\\'aj',
+    validators: 'Ilol',
+    commission'K\\'aj taak',
+    totalStake'Ajl ts\\'ook',
+    nominators'K\\'ajol',
+    rewardPoints'Xo\\'k taak',
+  },
+  identity: {
+    citizen: 'Winik',
+    business'K\\'aj',
+    government: 'Ajalil',
+    tourism: 'Xiimbal',
+    verified: 'Il',
+    unverified'Ma\\' il',
+    kyc: 'KYC',
+    kycRequired'Ts\\'ook KYC',
+    documents'Hu\\'un',
+  },
+  tourism: {
+    visitors: 'Xiimbalob',
+    hotels: 'Najob',
+    restaurants: 'Wajanal',
+    tours: 'Xiimbal',
+    attractions'K\\'iinil',
+    rewards: 'Taak',
+    cashback: 'Taak sut',
+    incentives'Taak xi\\'ibal',
+    bookings'Ts\\'ib',
+    reviews: 'Aaw',
+    activities: 'Men',
+    beaches: 'Kaknab',
+    culture: 'Kuxtal',
+    heritage: 'Úuchben',
+    wildlife: 'B\'a'alche'ob',
+  },
+  government: {
+    treasury: 'Taak naj',
+    budget: 'Taak men',
+    spending'K\\'aj',
+    revenue'K\\'am taak',
+    departments: 'Najob',
+    officials: 'Ajalil',
+    policies'T\\'aan',
+    regulations'Jach t\\'aan',
+    compliance: 'Toj',
+    oversight: 'Ilol',
+    transparency: 'Il ajl',
+    accountability: 'Aaw jach',
+    publicServices: 'Taak winikob',
+    infrastructure: 'Men',
+    healthcare'Taak k\\'uxul',
+    education: 'Kaansaj',
+    security'K\\'atun',
+    administration: 'Ajalil',
+  },
+  business: {
+    merchant'K\\'ajol',
+    pointOfSale'K\\'aj naj',
+    sales'K\\'aj',
+    inventory: 'Aaw',
+    customers'K\\'ajolob',
+    invoices'Ts\\'ib',
+    payments: 'Taak',
+    refunds: 'Taak sut',
+    reports: 'Aaw',
+    analytics: 'Il',
+    products: 'K\'aj xi'ibal',
+    services: 'Taak',
+    discounts'Taak xi\\'ibal',
+    promotions'K\\'iinil',
+    taxes: 'Taak ajalil',
+    receipt'Ts\\'ib',
+    cashRegister: 'Taak naj',
+    dailySales: 'K\'aj k'iin',
+  },
+  validator: {
+    node: 'Naj',
+    uptime'K\\'iin',
+    performance: 'Men uts',
+    era'Ja\\'ab',
+    epoch'K\\'iin',
+    session'Xa\\'an',
+    blocks'Che\\'ob',
+    produced: 'Men',
+    missed: 'Sach',
+    points'Xo\\'k',
+    commission'K\\'aj',
+    delegators: 'Ilolob',
+    activeSet: 'Men bejla\'e'',
+    waitingList'K\\'aatal',
+    rotateKeys'Jats\\' jach',
+    setBondExtra: 'Ts\'ook xi'ibal',
+    chill'Jaats\\'',
+    federatedLearning: 'Kaansaj ajl',
+    proofOfUsefulWork: 'Il men uts',
+  },
+  explorer: {
+    latestBlocks: 'Che\' bejla'e'',
+    latestTransactions: 'K\'aj bejla'e'',
+    network'Ts\\'ook ajl',
+    statistics'Xo\\'k',
+    totalIssuance: 'Ajl taak',
+    circulatingSupply: 'Taak xiimbal',
+    blockTime: 'K\'iin che'',
+    finalizedBlocks: 'Che\' ts'ook',
+    peers'Ts\\'ookob',
+    runtime'K\\'iin',
+    metadata: 'Aaw',
+    chainState: 'Men bejla\'e'',
+    constants: 'Ma\' jats'',
+    storage: 'Kol',
+    extrinsicDetails'Aaw k\\'aj',
+    eventDetails'Aaw k\\'iinil',
+  },
+};
+
+const translations = { en, es, kri, qek, gar, mop };
+
+// i18n Store
+interface I18nState {
+  locale: Locale;
+  t: Translations;
+  setLocale: (locale: Locale) => void;
+}
+
+export const useI18n = create<I18nState>()(
+  persist(
+    (set) => ({
+      locale: 'en',
+      t: translations.en,
+      setLocale: (locale: Locale) => {
+        set({ locale, t: translations[locale] });
+      },
+    }),
+    {
+      name: 'belizechain-locale',
+    }
+  )
+);
+
+// Utility function for getting translations
+export function getTranslations(locale: Locale): Translations {
+  return translations[locale];
+}
+
+// Locale metadata
+export const localeInfo = {
+  en: {
+    name: 'English',
+    nativeName: 'English',
+    flag: '🇬🇧',
+  },
+  es: {
+    name: 'Spanish',
+    nativeName: 'Español',
+    flag: '🇪🇸',
+  },
+  kri: {
+    name: 'Kriol',
+    nativeName: 'Kriol',
+    flag: '🇧🇿',
+  },
+};

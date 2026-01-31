@@ -1,0 +1,36 @@
+{
+  "name": "@belizechain/ui",
+  "version": "2.0.0",
+  "description": "BelizeChain UI Monorepo - Production-Ready User Experience Suite",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "maya-wallet",
+    "blue-hole-portal"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "dev:maya": "npm run dev --workspace=maya-wallet",
+    "dev:bluehole": "npm run dev --workspace=blue-hole-portal",
+    "dev:all": "concurrently \"npm run dev:maya\" \"npm run dev:bluehole\"",
+    "build:all": "turbo run build",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/eslint": "^9.6.1",
+    "@types/eslint-scope": "^8.3.2",
+    "@types/estree": "^1.0.8",
+    "@types/glob": "^8.1.0",
+    "@types/node": "^24.7.2",
+    "@types/resolve": "^1.20.6",
+    "concurrently": "^8.2.2",
+    "turbo": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

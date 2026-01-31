@@ -1,0 +1,401 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button, Input, Card, Modal, useWallet, useBalance, useI18n } from '@belizechain/shared';
+import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
+import { useUIStore } from '@/store/ui';
+import {
+  ArrowLeft,
+  User,
+  Users,
+  CurrencyDollar,
+  Check,
+  Warning,
+} from 'phosphor-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+// Validation schema
+const sendMoneySchema = z.object({
+  recipient: z.string().min(10, 'Invalid address'),
+  amount: z.string().min(1, 'Amount is required').refine(
+    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+    'Amount must be greater than 0'
+  ),
+  currency: z.enum(['DALLA', 'bBZD']),
+  note: z.string().max(100, 'Note must be less than 100 characters').optional(),
+});
+
+type SendMoneyForm = z.infer<typeof sendMoneySchema>;
+
+export default function SendPage() {
+  const router = useRouter();
+  const { selectedAccount } = useWallet();
+  const { balance } = useBalance(selectedAccount?.address ?? null);
+  const { t } = useI18n();
+  const account = selectedAccount as InjectedAccountWithMeta;
+  const { addNotification } = useUIStore();
+  const [step, setStep] = useState<'select' | 'amount' | 'confirm' | 'success'>('select');
+  const [selectedContact, setSelectedContact] = useState<any>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+    reset,
+  } = useForm<SendMoneyForm>({
+    resolver: zodResolver(sendMoneySchema),
+    defaultValues: {
+      currency: 'DALLA',
+    },
+  });
+
+  const watchAmount = watch('amount');
+  const watchCurrency = watch('currency');
+
+  // Mock contacts
+  const contacts = [
+    { id: '1', name: 'Maria Garcia', address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', avatar: '👩' },
+    { id: '2', name: 'Juan Martinez', address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty', avatar: '👨' },
+    { id: '3', name: 'Sarah Johnson', address: '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y', avatar: '👱‍♀️' },
+    { id: '4', name: 'Carlos Rodriguez', address: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy', avatar: '🧑' },
+  ];
+
+  const handleSelectContact = (contact: any) => {
+    setSelectedContact(contact);
+    setStep('amount');
+  };
+
+  const handleManualAddress = () => {
+    setSelectedContact({ name: 'Custom Address', address: '', avatar: '📋' });
+    setStep('amount');
+  };
+
+  const onSubmit = async (data: SendMoneyForm) => {
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmSend = async () => {
+    setIsSending(true);
+    setShowConfirmModal(false);
+
+    try {
+      // Import blockchain service dynamically to avoid SSR issues
+      const { submitTransfer } = await import('@/services/blockchain');
+      
+      if (!account?.address) {
+        throw new Error('No account connected');
+      }
+
+      const recipientAddress = selectedContact?.address || watch('recipient');
+      if (!recipientAddress) {
+        throw new Error('No recipient address');
+      }
+
+      // Submit actual blockchain transaction
+      const result = await submitTransfer(
+        account.address,
+        recipientAddress,
+        watchAmount || '0',
+        watchCurrency?.toLowerCase() as 'dalla' | 'bBZD'
+      );
+
+      console.log('Transaction successful:', result);
+      
+      setStep('success');
+      
+      addNotification({
+        type: 'success',
+        message: `Successfully sent ${watchAmount} ${watchCurrency} to ${selectedContact?.name}`,
+      });
+
+      // Reset after 3 seconds
+      setTimeout(() => {
+        router.push('/');
+      }, 3000);
+    } catch (error) {
+      console.error('Transaction error:', error);
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to send money. Please try again.',
+      });
+      setIsSending(false);
+      setShowConfirmModal(true); // Reopen modal to retry
+    }
+  };
+
+  if (!account) {
+    router.push('/');
+    return null;
+  }
+
+  // Success screen
+  if (step === 'success') {
+    return (
+      <div className="min-h-screen bg-sand-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center">
+          <div className="mb-6 mx-auto h-24 w-24 rounded-full bg-jungle-100 flex items-center justify-center">
+            <Check size={48} weight="bold" className="text-jungle-600" />
+          </div>
+          <h1 className="text-3xl font-bold text-bluehole-900 mb-2">{t.wallet.send} Success!</h1>
+          <p className="text-bluehole-600 mb-6">
+            {selectedContact?.name} received your {watchAmount} {watchCurrency}
+          </p>
+          <div className="confetti">🎉</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-sand-50">
+      {/* Header */}
+      <div className="bg-white border-b border-sand-200 px-4 py-4">
+        <div className="flex items-center">
+          <button
+            onClick={() => step === 'select' ? router.push('/') : setStep('select')}
+            className="mr-3 text-bluehole-700 hover:text-bluehole-900"
+          >
+            <ArrowLeft size={24} weight="bold" />
+          </button>
+          <h1 className="text-xl font-semibold text-bluehole-900">{t.wallet.send} Money</h1>
+        </div>
+      </div>
+
+      {/* Step 1: Select Recipient */}
+      {step === 'select' && (
+        <div className="p-4 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-bluehole-900 mb-3">{t.wallet.send} to</h2>
+            
+            {/* Manual Address Entry */}
+            <Card
+              className="mb-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={handleManualAddress}
+            >
+              <div className="flex items-center space-x-3">
+                <div className="h-12 w-12 rounded-full bg-caribbean-100 flex items-center justify-center">
+                  <User size={24} className="text-caribbean-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-bluehole-900">Enter Address</p>
+                  <p className="text-sm text-bluehole-600">Send to any BelizeChain address</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Recent Contacts */}
+            <div className="mb-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <Users size={20} className="text-bluehole-600" />
+                <h3 className="text-sm font-medium text-bluehole-700">Recent Contacts</h3>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {contacts.map((contact) => (
+                <Card
+                  key={contact.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => handleSelectContact(contact)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-12 w-12 rounded-full bg-maya-100 flex items-center justify-center text-2xl">
+                        {contact.avatar}
+                      </div>
+                      <div>
+                        <p className="font-medium text-bluehole-900">{contact.name}</p>
+                        <p className="text-sm text-bluehole-600">
+                          {contact.address.slice(0, 8)}...{contact.address.slice(-6)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-caribbean-500">→</div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Enter Amount */}
+      {step === 'amount' && (
+        <div className="p-4">
+          <Card className="mb-6">
+            <div className="text-center mb-4">
+              <p className="text-sm text-bluehole-600 mb-2">Sending to</p>
+              <div className="flex items-center justify-center space-x-2">
+                <span className="text-2xl">{selectedContact?.avatar}</span>
+                <h2 className="text-xl font-semibold text-bluehole-900">
+                  {selectedContact?.name}
+                </h2>
+              </div>
+            </div>
+          </Card>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Manual address input if needed */}
+            {selectedContact?.address === '' && (
+              <Input
+                label="Recipient Address"
+                placeholder="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHp..."
+                {...register('recipient')}
+                error={errors.recipient?.message}
+              />
+            )}
+
+            {/* Currency Selector */}
+            <div>
+              <label className="block text-sm font-medium text-bluehole-900 mb-2">
+                Currency
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => register('currency').onChange({ target: { value: 'DALLA' } })}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    watchCurrency === 'DALLA'
+                      ? 'border-caribbean-500 bg-caribbean-50'
+                      : 'border-sand-300 bg-white'
+                  }`}
+                >
+                  <p className="font-semibold text-bluehole-900">DALLA</p>
+                  <p className="text-sm text-bluehole-600">
+                    {t.wallet.balance}: {balance?.total || '0.00'}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValue('currency', 'bBZD')}
+                  className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                    watchCurrency === 'bBZD'
+                      ? 'border-caribbean-500 bg-caribbean-50'
+                      : 'border-sand-300 bg-white'
+                  }`}
+                >
+                  <p className="font-semibold text-bluehole-900">bBZD</p>
+                  <p className="text-sm text-bluehole-600">
+                    {t.wallet.balance}: 0.00
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Amount Input */}
+            <div>
+              <Input
+                label="Amount"
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                {...register('amount')}
+                error={errors.amount?.message}
+                leftIcon={<CurrencyDollar size={20} />}
+              />
+              {watchAmount && (
+                <p className="mt-2 text-sm text-bluehole-600">
+                  ≈ ${parseFloat(watchAmount || '0').toFixed(2)} {watchCurrency}
+                </p>
+              )}
+            </div>
+
+            {/* Note (Optional) */}
+            <Input
+              label="Note (Optional)"
+              placeholder="What's this for?"
+              {...register('note')}
+              error={errors.note?.message}
+            />
+
+            {/* Quick Amount Buttons */}
+            <div>
+              <p className="text-sm font-medium text-bluehole-700 mb-2">Quick amounts</p>
+              <div className="grid grid-cols-4 gap-2">
+                {['10', '25', '50', '100'].map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => register('amount').onChange({ target: { value: amount } })}
+                    className="px-3 py-2 rounded-lg border border-caribbean-500 text-caribbean-600 hover:bg-caribbean-50 transition-colors text-sm font-medium"
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button type="submit" variant="primary" size="lg" className="w-full">
+              Review & {t.wallet.send}
+            </Button>
+          </form>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        title="Confirm Transaction"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="bg-maya-50 border border-maya-200 rounded-lg p-4">
+            <Warning size={24} className="text-maya-700 mb-2" />
+            <p className="text-sm text-maya-900">
+              Please review carefully. Blockchain transactions cannot be reversed.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-bluehole-600">To</span>
+              <span className="font-medium text-bluehole-900">{selectedContact?.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-bluehole-600">Amount</span>
+              <span className="font-semibold text-bluehole-900 text-xl">
+                {watchAmount} {watchCurrency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-bluehole-600">Fee</span>
+              <span className="text-bluehole-900">Free</span>
+            </div>
+            <div className="border-t border-sand-200 pt-3 flex justify-between">
+              <span className="font-medium text-bluehole-900">Total</span>
+              <span className="font-bold text-bluehole-900 text-xl">
+                {watchAmount} {watchCurrency}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmModal(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmSend}
+              isLoading={isSending}
+              className="flex-1"
+            >
+              {isSending ? 'Sending...' : 'Confirm'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
