@@ -9,6 +9,7 @@ const withPWA = require('next-pwa')({
 
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   transpilePackages: ['@belizechain/shared'],
   eslint: {
     // Don't fail build on ESLint warnings
