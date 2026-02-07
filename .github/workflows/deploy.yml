@@ -108,10 +108,10 @@ jobs:
               --network belizechain-net \
               --restart unless-stopped \
               -p 3000:3000 \
-              -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://174.161.1.222:9944" \
-              -e NEXT_PUBLIC_PAKIT_API="http://174.161.1.222:8001" \
-              -e NEXT_PUBLIC_KINICH_API="http://174.161.1.222:8081" \
-              -e NEXT_PUBLIC_NAWAL_API="http://174.161.1.222:8002" \
+              -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://${{ secrets.VM_HOST }}:9944" \
+              -e NEXT_PUBLIC_PAKIT_API="http://${{ secrets.VM_HOST }}:8001" \
+              -e NEXT_PUBLIC_KINICH_API="http://${{ secrets.VM_HOST }}:8081" \
+              -e NEXT_PUBLIC_NAWAL_API="http://${{ secrets.VM_HOST }}:8002" \
               $REGISTRY/blue-hole-portal:latest
 
             # ── Deploy maya-wallet ──
@@ -121,8 +121,8 @@ jobs:
               --network belizechain-net \
               --restart unless-stopped \
               -p 3001:3001 \
-              -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://174.161.1.222:9944" \
-              -e NEXT_PUBLIC_PAKIT_API="http://174.161.1.222:8001" \
+              -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://${{ secrets.VM_HOST }}:9944" \
+              -e NEXT_PUBLIC_PAKIT_API="http://${{ secrets.VM_HOST }}:8001" \
               $REGISTRY/maya-wallet:latest
 
             # Health checks
