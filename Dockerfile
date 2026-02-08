@@ -13,17 +13,20 @@ COPY maya-wallet/package.json ./maya-wallet/
 
 RUN npm ci
 
-# ── Stage 2: Build all workspaces ────────────────────────
+# ── Stage 2: Build targeted workspace only ───────────────
 FROM node:18-alpine AS builder
 WORKDIR /app
+
+ARG APP_NAME
+ENV APP_NAME=${APP_NAME}
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build shared lib first, then apps via turbo
+# Build only the target app and its dependencies (shared)
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV BUILDING=true
-RUN npx turbo run build
+RUN npx turbo run build --filter=${APP_NAME}...
 
 # ── Stage 3a: blue-hole-portal runner ────────────────────
 FROM node:18-alpine AS portal

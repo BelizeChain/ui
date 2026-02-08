@@ -19,11 +19,29 @@ const nextConfig = {
     // Don't fail build on TypeScript errors during builds (only show warnings)
     ignoreBuildErrors: false,
   },
-  // Note: output: 'export' disabled temporarily to debug location error
-  // output: 'export',
-  // images: {
-  //   unoptimized: true,
-  // },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Polkadot extension packages access `window` / browser extension APIs at
+      // module init time, which breaks Next.js SSR and static prerendering.
+      // Replace them with empty stubs on the server side.
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@polkadot/extension-dapp': false,
+        '@polkadot/extension-inject': false,
+      };
+    }
+
+    // Provide fallbacks for Node.js built-ins used by Polkadot libs
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
+  },
 };
 
 module.exports = withPWA(nextConfig);
