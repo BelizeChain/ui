@@ -40,11 +40,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Copy built portal app (standalone output includes server.js)
 COPY --from=builder /app/blue-hole-portal/.next/standalone ./
-COPY --from=builder /app/blue-hole-portal/.next/static ./.next/static
+COPY --from=builder /app/blue-hole-portal/.next/static ./blue-hole-portal/.next/static
 
 USER nextjs
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "blue-hole-portal/server.js"]
 
 # ── Stage 3b: maya-wallet runner ─────────────────────────
 FROM node:18-alpine AS wallet
@@ -58,12 +58,12 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Copy built wallet app
 COPY --from=builder /app/maya-wallet/.next/standalone ./
-COPY --from=builder /app/maya-wallet/.next/static ./.next/static
-COPY --from=builder /app/maya-wallet/public ./public
+COPY --from=builder /app/maya-wallet/.next/static ./maya-wallet/.next/static
+COPY --from=builder /app/maya-wallet/public ./maya-wallet/public
 
 USER nextjs
 EXPOSE 3001
-CMD ["node", "server.js"]
+CMD ["node", "maya-wallet/server.js"]
 
 # ── Default target: portal ───────────────────────────────
 FROM portal
