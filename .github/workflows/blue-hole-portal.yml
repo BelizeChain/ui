@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   NEXT_PUBLIC_NODE_ENDPOINT: 'ws://127.0.0.1:9944'
 
 jobs:
