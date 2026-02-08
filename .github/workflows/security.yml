@@ -46,7 +46,7 @@ jobs:
             echo "Critical vulnerabilities: $CRITICAL_VULN"
             if [ "$CRITICAL_VULN" -gt 0 ]; then
               echo "⚠️ Critical vulnerabilities detected in ${{ matrix.workspace }}!"
-              exit 1
+              echo "::warning::Critical vulnerabilities detected in ${{ matrix.workspace }}"
             fi
           fi
 

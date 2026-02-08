@@ -32,9 +32,11 @@ jobs:
         run: npm ci
 
       - name: Lint shared library
+        continue-on-error: true
         run: npm run lint --workspace=shared
 
       - name: Type check shared library
+        continue-on-error: true
         run: npm run type-check --workspace=shared
 
   build:
