@@ -77,80 +77,89 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: production
+    env:
+      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+      VM_HOST_VAL: ${{ secrets.VM_HOST }}
     steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
       - name: Deploy to VM
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          port: 22
-          script: |
-            set -e
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+            -i ~/.ssh/deploy_key \
+            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" bash -s << ENDSSH
+          set -e
 
-            REGISTRY="belizechainregistry.azurecr.io"
+          REGISTRY="belizechainregistry.azurecr.io"
 
-            # Ensure shared network exists
-            docker network create belizechain-net 2>/dev/null || true
+          docker network create belizechain-net 2>/dev/null || true
 
-            # Login to ACR
-            echo "${{ secrets.ACR_PASSWORD }}" | docker login $REGISTRY \
-              -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+          echo "${ACR_PASSWORD}" | docker login \$REGISTRY \
+            -u "${ACR_USERNAME}" --password-stdin
 
-            # Pull both images
-            docker pull $REGISTRY/blue-hole-portal:latest
-            docker pull $REGISTRY/maya-wallet:latest
+          docker pull \$REGISTRY/blue-hole-portal:latest
+          docker pull \$REGISTRY/maya-wallet:latest
 
-            # ── Deploy blue-hole-portal ──
-            docker stop blue-hole-portal 2>/dev/null && docker rm blue-hole-portal 2>/dev/null || true
-            docker run -d \
-              --name blue-hole-portal \
-              --network belizechain-net \
-              --restart unless-stopped \
-              -p 3000:3000 \
-              -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://${{ secrets.VM_HOST }}:9944" \
-              -e NEXT_PUBLIC_PAKIT_API="http://${{ secrets.VM_HOST }}:8001" \
-              -e NEXT_PUBLIC_KINICH_API="http://${{ secrets.VM_HOST }}:8081" \
-              -e NEXT_PUBLIC_NAWAL_API="http://${{ secrets.VM_HOST }}:8002" \
-              $REGISTRY/blue-hole-portal:latest
+          # ── Deploy blue-hole-portal ──
+          docker stop blue-hole-portal 2>/dev/null && docker rm blue-hole-portal 2>/dev/null || true
+          docker run -d \
+            --name blue-hole-portal \
+            --network belizechain-net \
+            --restart unless-stopped \
+            -p 3000:3000 \
+            -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://${VM_HOST_VAL}:9944" \
+            -e NEXT_PUBLIC_PAKIT_API="http://${VM_HOST_VAL}:8001" \
+            -e NEXT_PUBLIC_KINICH_API="http://${VM_HOST_VAL}:8081" \
+            -e NEXT_PUBLIC_NAWAL_API="http://${VM_HOST_VAL}:8002" \
+            \$REGISTRY/blue-hole-portal:latest
 
-            # ── Deploy maya-wallet ──
-            docker stop maya-wallet 2>/dev/null && docker rm maya-wallet 2>/dev/null || true
-            docker run -d \
-              --name maya-wallet \
-              --network belizechain-net \
-              --restart unless-stopped \
-              -p 3001:3001 \
-              -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://${{ secrets.VM_HOST }}:9944" \
-              -e NEXT_PUBLIC_PAKIT_API="http://${{ secrets.VM_HOST }}:8001" \
-              $REGISTRY/maya-wallet:latest
+          # ── Deploy maya-wallet ──
+          docker stop maya-wallet 2>/dev/null && docker rm maya-wallet 2>/dev/null || true
+          docker run -d \
+            --name maya-wallet \
+            --network belizechain-net \
+            --restart unless-stopped \
+            -p 3001:3001 \
+            -e NEXT_PUBLIC_BLOCKCHAIN_WS="ws://${VM_HOST_VAL}:9944" \
+            -e NEXT_PUBLIC_PAKIT_API="http://${VM_HOST_VAL}:8001" \
+            \$REGISTRY/maya-wallet:latest
 
-            # Health checks
-            echo "Waiting for UI containers to become healthy..."
-            HEALTHY=true
+          # Health checks
+          echo "Waiting for UI containers to become healthy..."
+          HEALTHY=true
 
-            for svc in "blue-hole-portal:3000" "maya-wallet:3001"; do
-              NAME="${svc%%:*}"
-              PORT="${svc##*:}"
-              echo "Checking $NAME on port $PORT..."
-              OK=false
-              for i in $(seq 1 15); do
-                if curl -sf http://localhost:$PORT > /dev/null 2>&1; then
-                  echo "  ✅ $NAME is healthy"
-                  OK=true
-                  break
-                fi
-                echo "  Attempt $i/15 — waiting 5s..."
-                sleep 5
-              done
-              if [ "$OK" = false ]; then
-                echo "  ❌ $NAME failed health check"
-                docker logs --tail 30 $NAME
-                HEALTHY=false
+          for svc in "blue-hole-portal:3000" "maya-wallet:3001"; do
+            NAME="\${svc%%:*}"
+            PORT="\${svc##*:}"
+            echo "Checking \$NAME on port \$PORT..."
+            OK=false
+            for i in \$(seq 1 15); do
+              if curl -sf http://localhost:\$PORT > /dev/null 2>&1; then
+                echo "  ✅ \$NAME is healthy"
+                OK=true
+                break
               fi
+              echo "  Attempt \$i/15 — waiting 5s..."
+              sleep 5
             done
-
-            if [ "$HEALTHY" = false ]; then
-              exit 1
+            if [ "\$OK" = false ]; then
+              echo "  ❌ \$NAME failed health check"
+              docker logs --tail 30 \$NAME
+              HEALTHY=false
             fi
-            echo "✅ All UI containers healthy"
+          done
+
+          if [ "\$HEALTHY" = false ]; then
+            exit 1
+          fi
+          echo "✅ All UI containers healthy"
+          ENDSSH
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
