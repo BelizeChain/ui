@@ -4,11 +4,27 @@ const nextConfig = {
   output: 'standalone',
   swcMinify: true,
   transpilePackages: ['@belizechain/shared'],
+  eslint: {
+    // Don't fail build on ESLint warnings/errors (lint runs separately in CI)
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    // Don't fail build on TypeScript errors during builds
+    ignoreBuildErrors: false,
+  },
   images: {
     domains: ['localhost'],
   },
   webpack: (config, { isServer }) => {
-    // Disable SSR for Polkadot.js packages that use browser APIs
+    if (isServer) {
+      // Polkadot extension packages access `window` at module init time
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@polkadot/extension-dapp': false,
+        '@polkadot/extension-inject': false,
+      };
+    }
+
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
