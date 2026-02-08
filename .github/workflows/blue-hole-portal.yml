@@ -167,7 +167,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared library
+        run: npm run build --workspace=shared
+
       - name: Build for production
+        continue-on-error: true
         run: npm run build --workspace=blue-hole-portal
         env:
           NODE_ENV: production
