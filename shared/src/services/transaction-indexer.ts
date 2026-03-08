@@ -1,6 +1,6 @@
 /**
  * BelizeChain Transaction Indexer
- * 
+ *
  * Queries blockchain events and indexes transaction history for accounts.
  * Provides caching and efficient lookup for activity feeds.
  */
@@ -61,7 +61,7 @@ export class TransactionIndexer {
     filter: TransactionFilter = {}
   ): Promise<Transaction[]> {
     const cacheKey = `${CACHE_KEY_PREFIX}${accountAddress}`;
-    
+
     // Check cache first (browser only)
     if (this.cacheEnabled && typeof window !== 'undefined') {
       const cached = this.getFromCache(cacheKey);
@@ -72,7 +72,7 @@ export class TransactionIndexer {
 
     // Fetch fresh data
     const transactions = await this.fetchTransactions(accountAddress, filter);
-    
+
     // Update cache
     if (this.cacheEnabled && typeof window !== 'undefined') {
       const currentBlock = await this.getCurrentBlockNumber();
@@ -95,7 +95,7 @@ export class TransactionIndexer {
   ): Promise<Transaction[]> {
     const transactions: Transaction[] = [];
     const currentBlock = await this.getCurrentBlockNumber();
-    
+
     const fromBlock = filter.fromBlock ?? Math.max(0, currentBlock - 10000); // Last ~10k blocks
     const toBlock = filter.toBlock ?? currentBlock;
 
@@ -118,7 +118,7 @@ export class TransactionIndexer {
           );
 
           // Check if extrinsic succeeded
-          const success = extrinsicEvents.some(({ event }: any) => 
+          const success = extrinsicEvents.some(({ event }: any) =>
             this.api.events.system.ExtrinsicSuccess.is(event)
           );
 
@@ -167,14 +167,14 @@ export class TransactionIndexer {
     let amount = '0';
     let asset: 'DALLA' | 'bBZD' = 'DALLA';
     let fee = '0';
-    let metadata: Transaction['metadata'] = {
+    const metadata: Transaction['metadata'] = {
       palletName,
       method: methodName,
     };
 
     // Extract transaction fee
-    const feeEvent = events.find(({ event }) => 
-      this.api.events.balances?.Withdraw?.is(event) || 
+    const feeEvent = events.find(({ event }) =>
+      this.api.events.balances?.Withdraw?.is(event) ||
       this.api.events.transactionPayment?.TransactionFeePaid?.is(event)
     );
     if (feeEvent) {
@@ -253,9 +253,9 @@ export class TransactionIndexer {
         }
         break;
 
-      default:
+      default: {
         // Check for reward events
-        const rewardEvent = events.find(({ event }) => 
+        const rewardEvent = events.find(({ event }) =>
           event.method === 'Reward' || event.method === 'Rewarded'
         );
         if (rewardEvent) {
@@ -265,6 +265,7 @@ export class TransactionIndexer {
           metadata.description = 'PoUW Reward';
         }
         break;
+      }
     }
 
     // Only return transactions involving the account
@@ -367,7 +368,7 @@ export class TransactionIndexer {
    */
   private getFromCache(key: string): CachedData | null {
     if (typeof window === 'undefined') return null;
-    
+
     try {
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : null;
@@ -379,7 +380,7 @@ export class TransactionIndexer {
 
   private saveToCache(key: string, data: CachedData): void {
     if (typeof window === 'undefined') return;
-    
+
     try {
       localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
@@ -392,7 +393,7 @@ export class TransactionIndexer {
    */
   clearCache(accountAddress?: string): void {
     if (typeof window === 'undefined') return;
-    
+
     if (accountAddress) {
       const key = `${CACHE_KEY_PREFIX}${accountAddress}`;
       localStorage.removeItem(key);

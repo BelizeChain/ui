@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { GlassCard } from './glass-card';
 import { cn } from '@/lib/utils';
 import { ArrowFatUp, ArrowFatDown, ChatDots, Share, MapPin } from 'phosphor-react';
 import Link from 'next/link';
@@ -104,7 +103,7 @@ export function PostCard({
             ?
           </div>
         )}
-        
+
         <div className="flex-1">
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
