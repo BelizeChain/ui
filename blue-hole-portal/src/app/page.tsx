@@ -16,6 +16,7 @@ import {
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
+import { PortalShellReadinessPanel } from '@/components/navigation/PortalShellReadinessPanel';
 import { useBlockchain } from '@/lib/blockchain/hooks';
 import { useWalletStore } from '@/store/wallet';
 import { useEconomy } from '@/hooks/useEconomy';
@@ -100,6 +101,8 @@ export default function NationalDashboard() {
           </div>
         </GlassCard>
       )}
+
+      <PortalShellReadinessPanel />
 
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

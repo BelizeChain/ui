@@ -143,9 +143,9 @@ npm run dev:all
 Expected output:
 ```
 ✅ Blockchain node running on ws://127.0.0.1:9944
-✅ Nawal service running on http://localhost:8001
-✅ Kinich service running on http://localhost:8002
-✅ Pakit service running on http://localhost:8003
+✅ Nawal service running on http://localhost:8080
+✅ Kinich service running on http://localhost:8888
+✅ Pakit service running on http://localhost:8001
 ✅ SUCCESS: All critical services running!
 ```
 

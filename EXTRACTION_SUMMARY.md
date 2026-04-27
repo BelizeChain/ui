@@ -91,8 +91,8 @@ All external integrations use **environment variables** for configuration - **ze
 
 ### 1. **BelizeChain Node** (Blockchain Core)
 ```bash
-NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944         # WebSocket RPC
-NEXT_PUBLIC_HTTP_ENDPOINT=http://127.0.0.1:9933       # HTTP RPC
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944         # WebSocket RPC
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944      # HTTP RPC
 ```
 - **Technology**: Polkadot.js API 10.11.2+
 - **Communication**: WebSocket subscriptions + HTTP queries
@@ -100,7 +100,7 @@ NEXT_PUBLIC_HTTP_ENDPOINT=http://127.0.0.1:9933       # HTTP RPC
 
 ### 2. **Nawal AI** (Federated Learning)
 ```bash
-NEXT_PUBLIC_NAWAL_ENDPOINT=http://127.0.0.1:8001
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
 ```
 - **Technology**: Python FastAPI REST API
 - **Communication**: HTTP JSON requests
@@ -108,8 +108,7 @@ NEXT_PUBLIC_NAWAL_ENDPOINT=http://127.0.0.1:8001
 
 ### 3. **Kinich Quantum** (Quantum Computing)
 ```bash
-NEXT_PUBLIC_KINICH_ENDPOINT=http://127.0.0.1:8002
-NEXT_PUBLIC_KINICH_API_URL=http://127.0.0.1:8888
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
 ```
 - **Technology**: Python FastAPI + Azure Quantum SDK
 - **Communication**: HTTP JSON requests
@@ -117,7 +116,7 @@ NEXT_PUBLIC_KINICH_API_URL=http://127.0.0.1:8888
 
 ### 4. **Pakit Storage** (Sovereign DAG Storage)
 ```bash
-NEXT_PUBLIC_PAKIT_ENDPOINT=http://127.0.0.1:8003
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
 ```
 - **Technology**: Python FastAPI + DAG storage backend
 - **Communication**: HTTP JSON requests

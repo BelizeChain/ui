@@ -1,11 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { RuntimeEnvironmentBadge, getRuntimeConfig } from '@belizechain/shared';
 import { ArrowLeft, Code, Terminal, Cube, Link as LinkIcon, FileCode, Flask, Package } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 
 export default function DeveloperPage() {
   const router = useRouter();
+  const runtimeConfig = getRuntimeConfig();
 
   const apiEndpoints = [
     { method: 'GET', endpoint: '/api/v1/blocks/latest', description: 'Get latest block' },
@@ -22,7 +24,7 @@ export default function DeveloperPage() {
       language: 'TypeScript',
       code: `import { ApiPromise, WsProvider } from '@polkadot/api';
 
-const provider = new WsProvider('ws://localhost:9944');
+    const provider = new WsProvider('${runtimeConfig.blockchainWsUrl}');
 const api = await ApiPromise.create({ provider });
 
 console.log('Connected to chain:', await api.rpc.system.chain());`,
@@ -92,6 +94,9 @@ console.log('Transaction hash:', hash.toHex());`,
           </div>
           <Code size={32} className="text-purple-400" weight="duotone" />
         </div>
+        <div className="px-4 pb-4">
+          <RuntimeEnvironmentBadge className="w-full justify-center" />
+        </div>
       </div>
 
       {/* Main Content Container */}
@@ -106,25 +111,25 @@ console.log('Transaction hash:', hash.toHex());`,
             <div>
               <p className="text-xs text-gray-400 mb-1">WebSocket RPC</p>
               <code className="text-sm text-emerald-400 bg-gray-800/50 px-3 py-2 rounded block">
-                ws://localhost:9944
+                {runtimeConfig.blockchainWsUrl}
               </code>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">HTTP RPC</p>
               <code className="text-sm text-emerald-400 bg-gray-800/50 px-3 py-2 rounded block">
-                http://localhost:9933
+                {runtimeConfig.blockchainRpcUrl}
               </code>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Testnet WebSocket</p>
+              <p className="text-xs text-gray-400 mb-1">Pakit API</p>
               <code className="text-sm text-emerald-400 bg-gray-800/50 px-3 py-2 rounded block">
-                wss://testnet.belizechain.io
+                {runtimeConfig.pakitApiUrl}
               </code>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-1">Mainnet WebSocket</p>
+              <p className="text-xs text-gray-400 mb-1">Kinich API</p>
               <code className="text-sm text-emerald-400 bg-gray-800/50 px-3 py-2 rounded block">
-                wss://rpc.belizechain.io
+                {runtimeConfig.kinichApiUrl}
               </code>
             </div>
           </div>

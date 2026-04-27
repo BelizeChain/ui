@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { InjectedAccountWithMeta, InjectedExtension } from '@polkadot/extension-inject/types';
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { getRuntimeConfig } from '../lib/runtime-config';
 
 export interface WalletState {
   isConnected: boolean;
@@ -24,8 +25,6 @@ export interface UseWalletReturn extends WalletState {
   signAndSend: (extrinsic: any, callback?: (status: any) => void) => Promise<void>;
 }
 
-const WS_ENDPOINT = process.env.NEXT_PUBLIC_WS_ENDPOINT || 'ws://localhost:9944';
-
 export function useWallet(): UseWalletReturn {
   const [state, setState] = useState<WalletState>({
     isConnected: false,
@@ -43,7 +42,7 @@ export function useWallet(): UseWalletReturn {
 
     async function initApi() {
       try {
-        const provider = new WsProvider(WS_ENDPOINT);
+        const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
         const api = await ApiPromise.create({ provider });
         
         if (mounted) {
@@ -218,7 +217,7 @@ export function useBalance(address: string | null) {
       setIsLoading(true);
       
       try {
-        const provider = new WsProvider(WS_ENDPOINT);
+        const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
         const api = await ApiPromise.create({ provider });
 
         const unsub = await api.query.system.account(address, (account: any) => {
@@ -271,7 +270,7 @@ export function useNewBlocks() {
 
     async function subscribe() {
       try {
-        const provider = new WsProvider(WS_ENDPOINT);
+        const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
         const api = await ApiPromise.create({ provider });
 
         unsubscribe = await api.rpc.chain.subscribeNewHeads((header) => {

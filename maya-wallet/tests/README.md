@@ -91,10 +91,12 @@ Test results are saved to:
 ### Playwright Config (`playwright.config.ts`)
 - **Timeout**: 60 seconds per test
 - **Retries**: 2 on CI, 0 locally
-- **Base URL**: http://localhost:3001
+- **Base URL**: local dev server at http://localhost:3001
 - **Browsers**: Chromium (desktop + mobile)
 - **Viewport**: 1280x720 (desktop), 375x667 (mobile)
 - **Timezone**: America/Belize
+
+The browser base URL is local-only; chain and service connectivity should still follow `NEXT_PUBLIC_BLOCKCHAIN_WS`, `NEXT_PUBLIC_BLOCKCHAIN_RPC`, and `NEXT_PUBLIC_*_API`.
 
 ### Test Fixtures (`tests/fixtures/blockchain.ts`)
 Custom fixtures for blockchain testing:
@@ -181,7 +183,7 @@ npx playwright show-trace test-results/trace.zip
 → Verify UI dev server is running on localhost:3001
 
 **"Blockchain not connected"**
-→ Verify blockchain node is running on ws://127.0.0.1:9944
+→ Verify `NEXT_PUBLIC_BLOCKCHAIN_WS` points to a reachable node and `NEXT_PUBLIC_*_API` values match the current runtime model
 
 **"Tests flaky"**
 → Use more flexible selectors (regex, `.first()`, `.catch()`)

@@ -10,6 +10,7 @@ test.describe('Home Page', () => {
     
     // Check for main sections
     await expect(page.locator('text=Welcome')).toBeVisible();
+    await expect(page.locator('[data-testid="shell-readiness-panel"]')).toBeVisible();
   });
 
   test('should display wallet connection prompt when not connected', async ({ page }) => {

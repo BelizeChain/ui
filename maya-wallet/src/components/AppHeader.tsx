@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { RuntimeEnvironmentBadge } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
 import { NotificationBell } from './NotificationBell';
 import { User, CaretDown, SignOut } from 'phosphor-react';
@@ -31,6 +32,10 @@ export function AppHeader() {
 
         {/* Right Side */}
         <div className="flex items-center space-x-3">
+          <div className="hidden md:block">
+            <RuntimeEnvironmentBadge compact />
+          </div>
+
           {/* Notifications */}
           <NotificationBell />
 

@@ -1,8 +1,8 @@
 # 🧪 Maya Wallet Testing Checklist
 
 **Date:** January 25, 2026  
-**Blockchain:** ws://127.0.0.1:9944 (Block #137+)  
-**UI:** http://localhost:3001
+**Blockchain WS:** `NEXT_PUBLIC_BLOCKCHAIN_WS` (local default `ws://127.0.0.1:9944`)  
+**UI:** local Maya dev server at `http://localhost:3001`
 
 ---
 

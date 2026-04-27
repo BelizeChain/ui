@@ -6,6 +6,8 @@ export * from './ui';
 
 // Shared portal components
 export * from './WalletConnect';
+export * from './RuntimeEnvironmentBadge';
+export * from './ShellReadinessPanel';
 
 // i18n Components
 export * from './LanguageSwitcher';

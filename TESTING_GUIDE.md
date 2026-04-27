@@ -2,6 +2,8 @@
 
 ## Quick Test Checklist
 
+This guide uses local UI URLs for development. Production and Ceiba deployments should still use the public proxy routes configured through `NEXT_PUBLIC_BLOCKCHAIN_WS`, `NEXT_PUBLIC_BLOCKCHAIN_RPC`, and `NEXT_PUBLIC_*_API`.
+
 ### Prerequisites
 - [x] Blockchain compiled: `cargo build --release`
 - [ ] Polkadot.js extension installed
@@ -257,7 +259,7 @@ npm run dev
 ### Terminal 3 (UI Dev Server)
 ```
 # Watch for API calls:
-✅ [API] Connected to ws://127.0.0.1:9944
+✅ [API] Connected to configured NEXT_PUBLIC_BLOCKCHAIN_WS endpoint
 ✅ [Staking] Fetched 4 validators
 ✅ [Governance] Fetched 3 proposals
 ✅ [BelizeX] Quote calculated: 100 DALLA → 49.85 bBZD
@@ -277,6 +279,8 @@ lsof -i :9944
 # Restart node
 ./target/release/belizechain-node --dev --tmp
 ```
+
+Also verify `NEXT_PUBLIC_BLOCKCHAIN_WS` points to the intended node. The local fallback is `ws://127.0.0.1:9944`.
 
 ### Issue 2: "Transaction failed: InsufficientBalance"
 **Cause:** Account has no DALLA  

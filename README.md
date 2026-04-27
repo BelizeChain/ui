@@ -23,6 +23,22 @@ npm run dev:bluehole    # Blue Hole Portal (localhost:3002)
 npm run build:all
 ```
 
+## Runtime Configuration
+
+The shell now resolves chain and service endpoints through the shared runtime config helper.
+In Ceiba and other self-hosted deployments, prefer the public reverse-proxy routes on the UI origin:
+
+```bash
+NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
+NEXT_PUBLIC_IPFS_GATEWAY=https://${DOMAIN}/ipfs
+```
+
+For local development, keep the same variable names and point them at local services.
+
 ## 📦 Applications
 
 ### [Maya Wallet](./maya-wallet/) - **Port 3001**

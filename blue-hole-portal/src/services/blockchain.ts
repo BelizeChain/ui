@@ -8,6 +8,7 @@
 
 import type { ApiPromise, WsProvider } from '@polkadot/api';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
+import { getRuntimeConfig } from '@belizechain/shared';
 
 // ============================================================================
 // Dynamic Module Loader (SSR-safe)
@@ -122,7 +123,7 @@ class BlockchainService {
       // Load Polkadot modules dynamically (client-side only)
       const modules = await loadPolkadotModules();
       
-      const nodeEndpoint = process.env.NEXT_PUBLIC_NODE_ENDPOINT || 'ws://127.0.0.1:9944';
+      const nodeEndpoint = getRuntimeConfig().blockchainWsUrl;
       
       this.wsProvider = new modules.WsProvider(nodeEndpoint, 1000, {}, 30000);
       

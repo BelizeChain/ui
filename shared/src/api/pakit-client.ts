@@ -5,6 +5,8 @@
  * @see /home/wicked/BelizeChain/belizechain/pakit/
  */
 
+import { getRuntimeConfig } from '../lib/runtime-config';
+
 export interface PakitConfig {
   apiUrl: string; // Default: http://localhost:8001
   timeout?: number; // Request timeout in ms
@@ -210,7 +212,7 @@ let pakitClient: PakitClient | null = null;
 export function getPakitClient(apiUrl?: string): PakitClient {
   if (!pakitClient) {
     pakitClient = new PakitClient({
-      apiUrl: apiUrl || (typeof window !== 'undefined' && (window as any).ENV?.NEXT_PUBLIC_PAKIT_API_URL) || 'http://localhost:8001',
+      apiUrl: apiUrl || getRuntimeConfig().pakitApiUrl,
     });
   }
   return pakitClient;

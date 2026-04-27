@@ -67,9 +67,9 @@ Both UI applications have **complete backend integration** (100% pallet coverage
    - ✅ `useSystem` - Node metrics
 
 3. **Monitoring Service** (`services/monitoring.ts`)
-   - ✅ Nawal endpoint: `http://localhost:8001`
-   - ✅ Kinich endpoint: `http://localhost:8002`
-   - ✅ Pakit endpoint: `http://localhost:8003`
+   - ✅ Nawal endpoint: runtime-config backed (`http://localhost:8080` locally, `/api/nawal` on Ceiba)
+   - ✅ Kinich endpoint: runtime-config backed (`http://localhost:8888` locally, `/api/kinich` on Ceiba)
+   - ✅ Pakit endpoint: runtime-config backed (`http://localhost:8001` locally, `/api/pakit` on Ceiba)
 
 ---
 
@@ -103,11 +103,12 @@ No `.env.example` or `.env.local` found. Need to create:
 
 ```bash
 # ui/maya-wallet/.env.example
-NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944
-NEXT_PUBLIC_NAWAL_ENDPOINT=http://localhost:8001
-NEXT_PUBLIC_KINICH_ENDPOINT=http://localhost:8002
-NEXT_PUBLIC_PAKIT_ENDPOINT=http://localhost:8003
-NEXT_PUBLIC_NETWORK_NAME=BelizeChain
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
+NEXT_PUBLIC_NETWORK_NAME=BelizeChain Testnet
 NEXT_PUBLIC_CHAIN_ID=belizechain
 ```
 
@@ -143,11 +144,12 @@ Need:
 #### 2. **Environment Configuration**
 ```bash
 # ui/blue-hole-portal/.env.example
-NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944
-NEXT_PUBLIC_NAWAL_ENDPOINT=http://localhost:8001
-NEXT_PUBLIC_KINICH_ENDPOINT=http://localhost:8002
-NEXT_PUBLIC_PAKIT_ENDPOINT=http://localhost:8003
-NEXT_PUBLIC_NETWORK_NAME=BelizeChain
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
+NEXT_PUBLIC_NETWORK_NAME=BelizeChain Testnet
 NEXT_PUBLIC_CHAIN_ID=belizechain
 ```
 

@@ -1,5 +1,6 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
+import { getRuntimeConfig } from '@belizechain/shared';
 
 let apiInstance: ApiPromise | null = null;
 
@@ -52,7 +53,7 @@ export async function initializeGovernmentApi(): Promise<void> {
   if (apiInstance) return;
 
   const wsProvider = new WsProvider(
-    process.env.NEXT_PUBLIC_NODE_ENDPOINT || 'ws://127.0.0.1:9944'
+    getRuntimeConfig().blockchainWsUrl
   );
   
   apiInstance = await ApiPromise.create({ provider: wsProvider });

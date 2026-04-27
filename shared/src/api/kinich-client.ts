@@ -5,6 +5,8 @@
  * @see /home/wicked/BelizeChain/belizechain/kinich/
  */
 
+import { getRuntimeConfig } from '../lib/runtime-config';
+
 export interface KinichConfig {
   apiUrl: string; // Default: http://localhost:8888
   timeout?: number;
@@ -321,7 +323,7 @@ let kinichClient: KinichClient | null = null;
 export function getKinichClient(apiUrl?: string): KinichClient {
   if (!kinichClient) {
     kinichClient = new KinichClient({
-      apiUrl: apiUrl || (typeof window !== 'undefined' && (window as any).ENV?.NEXT_PUBLIC_KINICH_API_URL) || 'http://localhost:8888',
+      apiUrl: apiUrl || getRuntimeConfig().kinichApiUrl,
     });
   }
   return kinichClient;

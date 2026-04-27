@@ -1,6 +1,7 @@
 // Pakit Bridge Service
 // Syncs mesh messages to IPFS when gateway comes online
 
+import { getRuntimeConfig } from '@belizechain/shared';
 import type { MeshMessage } from './bluetooth-mesh.service';
 
 interface PakitUploadResponse {
@@ -19,11 +20,14 @@ interface MessageBundle {
 }
 
 class PakitBridgeService {
-  private readonly PAKIT_API_URL = 'http://localhost:8001';
   private pendingMessages: MeshMessage[] = [];
   private syncInterval: NodeJS.Timeout | null = null;
   private readonly SYNC_INTERVAL = 60000; // 1 minute
   private readonly BUNDLE_SIZE_LIMIT = 1024 * 1024; // 1 MB
+
+  private get pakitApiUrl(): string {
+    return getRuntimeConfig().pakitApiUrl;
+  }
 
   async initialize() {
     // Check Pakit availability
@@ -39,7 +43,7 @@ class PakitBridgeService {
 
   private async checkPakitAvailability(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.PAKIT_API_URL}/health`, {
+      const response = await fetch(`${this.pakitApiUrl}/health`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -71,7 +75,7 @@ class PakitBridgeService {
     };
 
     try {
-      const response = await fetch(`${this.PAKIT_API_URL}/upload`, {
+      const response = await fetch(`${this.pakitApiUrl}/upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +113,7 @@ class PakitBridgeService {
   // Retrieve message bundle from IPFS
   async downloadBundle(ipfsHash: string): Promise<MessageBundle> {
     try {
-      const response = await fetch(`${this.PAKIT_API_URL}/retrieve/${ipfsHash}`, {
+      const response = await fetch(`${this.pakitApiUrl}/retrieve/${ipfsHash}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });

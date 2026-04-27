@@ -7,9 +7,22 @@ export * from './components/ui';
 
 // Utility functions
 export { cn } from './lib/utils';
+export {
+  getBlockchainWsEndpoints,
+  getRuntimeConfig,
+  isLocalRuntimeConfig,
+  type RuntimeConfig,
+} from './lib/runtime-config';
 
 // Hooks (explicit re-exports for visibility)
 export { useWallet, useBalance, useNewBlocks, type UseWalletReturn, type WalletState } from './hooks/useWallet';
+export {
+  useServiceProbes,
+  type ServiceProbeId,
+  type ServiceProbeState,
+  type ServiceProbeStatus,
+  type ServiceProbeSummary,
+} from './hooks/useServiceProbes';
 
 // i18n (explicit re-exports)
 export { useI18n, getTranslations, localeInfo, type Locale, type Translations } from './i18n';

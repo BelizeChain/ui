@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import {
+  RuntimeEnvironmentBadge,
+  getRuntimeConfig,
+  isLocalRuntimeConfig,
+} from '@belizechain/shared';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,16 +22,26 @@ import {
 
 export default function AdvancedPage() {
   const router = useRouter();
-  const [rpcEndpoint, setRpcEndpoint] = useState('wss://rpc.belizechain.bz');
+  const runtimeConfig = getRuntimeConfig();
+  const usesLocalRuntime = isLocalRuntimeConfig(runtimeConfig);
+  const [rpcEndpoint, setRpcEndpoint] = useState(runtimeConfig.blockchainWsUrl);
   const [debugMode, setDebugMode] = useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
   const [cacheEnabled, setCacheEnabled] = useState(true);
 
   const rpcEndpoints = [
-    { url: 'wss://rpc.belizechain.bz', name: 'BelizeChain Official', status: 'online', latency: '45ms' },
-    { url: 'wss://rpc-backup.belizechain.bz', name: 'Backup Node', status: 'online', latency: '67ms' },
-    { url: 'wss://archive.belizechain.bz', name: 'Archive Node', status: 'online', latency: '102ms' },
-    { url: 'ws://127.0.0.1:9944', name: 'Local Node', status: 'offline', latency: 'N/A' }
+    {
+      url: runtimeConfig.blockchainWsUrl,
+      name: `${runtimeConfig.networkName} Default`,
+      status: usesLocalRuntime ? 'local' : 'online',
+      latency: usesLocalRuntime ? 'N/A' : 'Proxy',
+    },
+    {
+      url: 'ws://127.0.0.1:9944',
+      name: 'Local Node',
+      status: usesLocalRuntime ? 'online' : 'offline',
+      latency: usesLocalRuntime ? 'N/A' : 'N/A',
+    },
   ];
 
   const storageInfo = {
@@ -57,6 +72,10 @@ export default function AdvancedPage() {
       </div>
 
       <div className="p-4 space-y-6">
+        <div className="flex justify-center">
+          <RuntimeEnvironmentBadge className="w-full justify-center sm:w-auto" />
+        </div>
+
         {/* Warning Banner */}
         <GlassCard variant="dark" blur="sm" className="p-4 border-l-4 border-amber-500">
           <div className="flex items-start gap-3">

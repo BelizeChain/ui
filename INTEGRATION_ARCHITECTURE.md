@@ -54,8 +54,8 @@ The BelizeChain UI Suite is a **standalone, multi-workspace repository** that in
 ### 1. BelizeChain Blockchain (Substrate/Polkadot.js)
 
 **Protocol**: WebSocket  
-**Default Endpoint**: `ws://127.0.0.1:9944`  
-**Environment Variable**: `NEXT_PUBLIC_NODE_ENDPOINT`
+**Runtime Config**: `NEXT_PUBLIC_BLOCKCHAIN_WS`, `NEXT_PUBLIC_BLOCKCHAIN_RPC`  
+**Default Behavior**: Ceiba public `/ws` and `/rpc` routes, with local fallback to `ws://127.0.0.1:9944` and `http://127.0.0.1:9944`
 
 **Purpose**:
 - Primary blockchain connection
@@ -65,11 +65,11 @@ The BelizeChain UI Suite is a **standalone, multi-workspace repository** that in
 
 **Integration Method**:
 ```typescript
-// shared/src/blockchain/connection.ts
+// shared/src/lib/runtime-config.ts
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { getRuntimeConfig } from '@belizechain/shared';
 
-const endpoint = process.env.NEXT_PUBLIC_NODE_ENDPOINT || 'ws://127.0.0.1:9944';
-const provider = new WsProvider(endpoint);
+const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
 const api = await ApiPromise.create({ provider });
 ```
 
@@ -79,10 +79,13 @@ const api = await ApiPromise.create({ provider });
 
 **Configuration**:
 ```bash
-# .env.local
-NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944      # Local development
-# NEXT_PUBLIC_NODE_ENDPOINT=wss://testnet.belizechain.org  # Testnet
-# NEXT_PUBLIC_NODE_ENDPOINT=wss://rpc.belizechain.org      # Production
+# .env.local (local development)
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+
+# Ceiba public runtime
+NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
 ```
 
 ---
@@ -90,8 +93,8 @@ NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944      # Local development
 ### 2. Nawal AI (Federated Learning)
 
 **Protocol**: HTTP REST  
-**Default Endpoint**: `http://127.0.0.1:8001`  
-**Environment Variable**: `NEXT_PUBLIC_NAWAL_ENDPOINT`
+**Runtime Config**: `NEXT_PUBLIC_NAWAL_API`  
+**Default Behavior**: Ceiba public `/api/nawal` route, with local fallback to `http://localhost:8080`
 
 **Purpose**:
 - Federated learning participation
@@ -101,7 +104,7 @@ NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944      # Local development
 
 **API Endpoints**:
 ```
-GET  /api/v1/health                  # Service health check
+GET  /health                         # Service health check
 GET  /api/v1/training/status         # Training round status
 POST /api/v1/training/participate    # Join training round
 GET  /api/v1/rewards/{accountId}     # Check PoUW rewards
@@ -111,8 +114,10 @@ GET  /api/v1/metrics/global          # Global model metrics
 **Integration Method**:
 ```typescript
 // shared/src/api/nawal-client.ts
+import { getRuntimeConfig } from '../lib/runtime-config';
+
 export class NawalClient {
-  private baseUrl = process.env.NEXT_PUBLIC_NAWAL_ENDPOINT || 'http://127.0.0.1:8001';
+  private baseUrl = getRuntimeConfig().nawalApiUrl;
   
   async getTrainingStatus() {
     const response = await fetch(`${this.baseUrl}/api/v1/training/status`);
@@ -128,8 +133,10 @@ export class NawalClient {
 **Configuration**:
 ```bash
 # .env.local
-NEXT_PUBLIC_NAWAL_ENDPOINT=http://127.0.0.1:8001  # Local development
-# NEXT_PUBLIC_NAWAL_ENDPOINT=https://nawal.belizechain.org  # Production
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+
+# Ceiba public runtime
+NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
 ```
 
 ---
@@ -137,8 +144,8 @@ NEXT_PUBLIC_NAWAL_ENDPOINT=http://127.0.0.1:8001  # Local development
 ### 3. Kinich Quantum (Quantum Computing)
 
 **Protocol**: HTTP REST  
-**Default Endpoints**: `http://127.0.0.1:8002` or `http://127.0.0.1:8888`  
-**Environment Variables**: `NEXT_PUBLIC_KINICH_ENDPOINT`, `NEXT_PUBLIC_KINICH_API_URL`
+**Runtime Config**: `NEXT_PUBLIC_KINICH_API`  
+**Default Behavior**: Ceiba public `/api/kinich` route, with local fallback to `http://localhost:8888`
 
 **Purpose**:
 - Quantum workload submission
@@ -148,7 +155,7 @@ NEXT_PUBLIC_NAWAL_ENDPOINT=http://127.0.0.1:8001  # Local development
 
 **API Endpoints**:
 ```
-GET  /api/v1/health                  # Service health check
+GET  /readyz                         # Service health check
 POST /api/v1/quantum/submit          # Submit quantum job
 GET  /api/v1/quantum/results/{jobId} # Get job results
 GET  /api/v1/qkd/generate            # Generate quantum keys
@@ -158,8 +165,10 @@ GET  /api/v1/backends/status         # Backend availability
 **Integration Method**:
 ```typescript
 // shared/src/api/kinich-client.ts
+import { getRuntimeConfig } from '../lib/runtime-config';
+
 export class KinichClient {
-  private baseUrl = process.env.NEXT_PUBLIC_KINICH_ENDPOINT || 'http://127.0.0.1:8002';
+  private baseUrl = getRuntimeConfig().kinichApiUrl;
   
   async submitQuantumJob(circuit: string) {
     const response = await fetch(`${this.baseUrl}/api/v1/quantum/submit`, {
@@ -179,9 +188,10 @@ export class KinichClient {
 **Configuration**:
 ```bash
 # .env.local
-NEXT_PUBLIC_KINICH_ENDPOINT=http://127.0.0.1:8002  # Primary endpoint
-NEXT_PUBLIC_KINICH_API_URL=http://127.0.0.1:8888   # Alternative endpoint
-# NEXT_PUBLIC_KINICH_ENDPOINT=https://kinich.belizechain.org  # Production
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
+
+# Ceiba public runtime
+NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
 ```
 
 ---
@@ -189,8 +199,8 @@ NEXT_PUBLIC_KINICH_API_URL=http://127.0.0.1:8888   # Alternative endpoint
 ### 4. Pakit Storage (Decentralized Storage)
 
 **Protocol**: HTTP REST  
-**Default Endpoint**: `http://127.0.0.1:8003` (Blue Hole) or `http://127.0.0.1:8001` (Maya)  
-**Environment Variable**: `NEXT_PUBLIC_PAKIT_ENDPOINT`
+**Runtime Config**: `NEXT_PUBLIC_PAKIT_API`  
+**Default Behavior**: Ceiba public `/api/pakit` route, with local fallback to `http://localhost:8001`
 
 **Purpose**:
 - Sovereign DAG storage
@@ -200,7 +210,7 @@ NEXT_PUBLIC_KINICH_API_URL=http://127.0.0.1:8888   # Alternative endpoint
 
 **API Endpoints**:
 ```
-GET  /api/v1/health                  # Service health check
+GET  /health                         # Service health check
 POST /api/v1/storage/upload          # Upload document
 GET  /api/v1/storage/retrieve/{cid}  # Retrieve by CID
 GET  /api/v1/proof/{cid}             # Get storage proof
@@ -210,8 +220,10 @@ GET  /api/v1/stats                   # Storage statistics
 **Integration Method**:
 ```typescript
 // shared/src/api/pakit-client.ts
+import { getRuntimeConfig } from '../lib/runtime-config';
+
 export class PakitClient {
-  private baseUrl = process.env.NEXT_PUBLIC_PAKIT_ENDPOINT || 'http://127.0.0.1:8003';
+  private baseUrl = getRuntimeConfig().pakitApiUrl;
   
   async uploadDocument(file: File, metadata: object) {
     const formData = new FormData();
@@ -234,8 +246,10 @@ export class PakitClient {
 **Configuration**:
 ```bash
 # .env.local
-NEXT_PUBLIC_PAKIT_ENDPOINT=http://127.0.0.1:8003  # Local development
-# NEXT_PUBLIC_PAKIT_ENDPOINT=https://pakit.belizechain.org  # Production
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
+
+# Ceiba public runtime
+NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
 ```
 
 ---
@@ -298,10 +312,11 @@ The UI Suite uses a **three-tier environment variable system**:
 
 ```bash
 # Root: ui/.env.local (shared by both apps)
-NEXT_PUBLIC_NODE_ENDPOINT=ws://127.0.0.1:9944
-NEXT_PUBLIC_NAWAL_ENDPOINT=http://127.0.0.1:8001
-NEXT_PUBLIC_KINICH_ENDPOINT=http://127.0.0.1:8002
-NEXT_PUBLIC_PAKIT_ENDPOINT=http://127.0.0.1:8003
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
 
 # Maya-specific: maya-wallet/.env.local
 MAYA_PORT=3001
@@ -314,15 +329,17 @@ NEXT_PUBLIC_DEV_MODE=false
 
 ### Fallback Strategy
 
-All integrations use **smart fallbacks**:
+All integrations use **smart fallbacks** via the shared runtime config helper:
 
 ```typescript
-const endpoint = 
-  process.env.NEXT_PUBLIC_NODE_ENDPOINT ||  // 1. User config
-  'ws://127.0.0.1:9944';                     // 2. Localhost default
+import { getRuntimeConfig } from '@belizechain/shared';
+
+const endpoint = getRuntimeConfig().blockchainWsUrl;
 ```
 
 This allows:
+- ✅ **Ceiba public proxy routes** when the UI is running behind nginx
+- ✅ **Explicit environment overrides** for staging or custom testnets
 - ✅ **Graceful degradation** when services are unavailable
 - ✅ **Development mode** without full stack running
 - ✅ **Mock data** for frontend development
@@ -375,10 +392,12 @@ UI will use:
 
 ```bash
 # Environment variables in hosting platform
-NEXT_PUBLIC_NODE_ENDPOINT=wss://rpc.belizechain.org
-NEXT_PUBLIC_NAWAL_ENDPOINT=https://nawal.belizechain.org
-NEXT_PUBLIC_KINICH_ENDPOINT=https://kinich.belizechain.org
-NEXT_PUBLIC_PAKIT_ENDPOINT=https://pakit.belizechain.org
+NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
+NEXT_PUBLIC_IPFS_GATEWAY=https://${DOMAIN}/ipfs
 NODE_ENV=production
 ```
 
@@ -409,19 +428,21 @@ services:
     build: ./maya-wallet
     ports: ["3001:3001"]
     environment:
-      - NEXT_PUBLIC_NODE_ENDPOINT=ws://blockchain:9944
-      - NEXT_PUBLIC_NAWAL_ENDPOINT=http://nawal:8001
-      - NEXT_PUBLIC_KINICH_ENDPOINT=http://kinich:8002
-      - NEXT_PUBLIC_PAKIT_ENDPOINT=http://pakit:8003
+      - NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+      - NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+      - NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+      - NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+      - NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
   
   blue-hole-portal:
     build: ./blue-hole-portal
     ports: ["3002:3002"]
     environment:
-      - NEXT_PUBLIC_NODE_ENDPOINT=ws://blockchain:9944
-      - NEXT_PUBLIC_NAWAL_ENDPOINT=http://nawal:8001
-      - NEXT_PUBLIC_KINICH_ENDPOINT=http://kinich:8002
-      - NEXT_PUBLIC_PAKIT_ENDPOINT=http://pakit:8003
+      - NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+      - NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+      - NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+      - NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+      - NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
 ```
 
 ```bash
@@ -458,11 +479,12 @@ import { WsProvider } from '@polkadot/api';
 
 test.beforeAll(async () => {
   // Verify blockchain node is running
-  const provider = new WsProvider('ws://127.0.0.1:9944');
+  const provider = new WsProvider(process.env.NEXT_PUBLIC_BLOCKCHAIN_WS ?? 'ws://127.0.0.1:9944');
   await provider.connect();
   
   // Verify Python services
-  const nawalHealth = await fetch('http://127.0.0.1:8001/api/v1/health');
+  const nawalBaseUrl = process.env.NEXT_PUBLIC_NAWAL_API ?? 'http://localhost:8080';
+  const nawalHealth = await fetch(`${nawalBaseUrl}/health`);
   expect(nawalHealth.status).toBe(200);
 });
 ```
@@ -512,7 +534,7 @@ export async function checkServicesHealth() {
 
 async function checkBlockchain() {
   try {
-    const provider = new WsProvider(process.env.NEXT_PUBLIC_NODE_ENDPOINT);
+    const provider = new WsProvider(process.env.NEXT_PUBLIC_BLOCKCHAIN_WS ?? 'ws://127.0.0.1:9944');
     await provider.connect();
     return { status: 'online', latency: provider.stats.bytesRecv };
   } catch (error) {

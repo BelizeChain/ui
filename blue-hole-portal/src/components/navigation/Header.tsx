@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { RuntimeEnvironmentBadge } from '@belizechain/shared';
 import {
   Bell,
   MagnifyingGlass,
@@ -129,6 +130,10 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
           {/* Connection Status */}
           <div className="hidden sm:block">
             {getStatusBadge()}
+          </div>
+
+          <div className="hidden lg:block">
+            <RuntimeEnvironmentBadge compact />
           </div>
 
           {/* Notifications */}

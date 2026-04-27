@@ -23,8 +23,14 @@ npm install
 cp maya-wallet/.env.example maya-wallet/.env.local
 cp blue-hole-portal/.env.example blue-hole-portal/.env.local
 
-# Edit .env.local files and verify endpoints
-# Default: ws://127.0.0.1:9944 for blockchain
+# Edit .env.local files and verify runtime endpoints
+# Local defaults:
+# NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+# NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+# NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+# NEXT_PUBLIC_KINICH_API=http://localhost:8888
+# NEXT_PUBLIC_PAKIT_API=http://localhost:8001
+# Ceiba uses the same variable names with /ws, /rpc, /api/*, and /ipfs public routes
 ```
 
 ### 2. Start Development Environment
@@ -304,7 +310,8 @@ console.log('Chain:', await api.rpc.system.chain());
 #### Common Issues
 
 1. **"Cannot connect to blockchain"**
-   - Solution: Ensure node is running on ws://127.0.0.1:9944
+  - Solution: Ensure `NEXT_PUBLIC_BLOCKCHAIN_WS` points to a reachable node
+  - Local fallback: `ws://127.0.0.1:9944`
    - Check: `ps aux | grep belizechain-node`
 
 2. **"Extension not found"**
@@ -329,28 +336,33 @@ Create test script to verify all pages:
 
 echo "Testing UI Wiring..."
 
+BLOCKCHAIN_RPC_URL="${NEXT_PUBLIC_BLOCKCHAIN_RPC:-http://127.0.0.1:9944}"
+NAWAL_API_URL="${NEXT_PUBLIC_NAWAL_API:-http://localhost:8080}"
+KINICH_API_URL="${NEXT_PUBLIC_KINICH_API:-http://localhost:8888}"
+PAKIT_API_URL="${NEXT_PUBLIC_PAKIT_API:-http://localhost:8001}"
+
 # Check if node is running
-if ! curl -s http://127.0.0.1:9944 > /dev/null 2>&1; then
-  echo "❌ Blockchain node not running on ws://127.0.0.1:9944"
+if ! curl -s "$BLOCKCHAIN_RPC_URL" > /dev/null 2>&1; then
+  echo "❌ Blockchain RPC not reachable at $BLOCKCHAIN_RPC_URL"
   exit 1
 fi
 
 echo "✅ Blockchain node connected"
 
 # Check if Python services are running
-if curl -s http://localhost:8001/health > /dev/null 2>&1; then
+if curl -s "$NAWAL_API_URL/health" > /dev/null 2>&1; then
   echo "✅ Nawal service running"
 else
   echo "⚠️  Nawal service not running (optional)"
 fi
 
-if curl -s http://localhost:8002/health > /dev/null 2>&1; then
+if curl -s "$KINICH_API_URL/readyz" > /dev/null 2>&1; then
   echo "✅ Kinich service running"
 else
   echo "⚠️  Kinich service not running (optional)"
 fi
 
-if curl -s http://localhost:8003/health > /dev/null 2>&1; then
+if curl -s "$PAKIT_API_URL/health" > /dev/null 2>&1; then
   echo "✅ Pakit service running"
 else
   echo "⚠️  Pakit service not running (optional)"

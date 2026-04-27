@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { GlassCard } from './glass-card';
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 import { TrendUp, TrendDown } from 'phosphor-react';
 
 export interface AssetCardProps {

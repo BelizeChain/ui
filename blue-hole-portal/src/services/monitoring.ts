@@ -5,6 +5,7 @@
  */
 
 import { blockchainService } from './blockchain';
+import { getRuntimeConfig } from '@belizechain/shared';
 
 // ============================================================================
 // Types & Interfaces
@@ -116,9 +117,10 @@ class MonitoringService {
   private alerts: SystemAlert[] = [];
 
   constructor() {
-    this.nawalEndpoint = process.env.NEXT_PUBLIC_NAWAL_ENDPOINT || 'http://localhost:8001';
-    this.kinichEndpoint = process.env.NEXT_PUBLIC_KINICH_ENDPOINT || 'http://localhost:8002';
-    this.pakitEndpoint = process.env.NEXT_PUBLIC_PAKIT_ENDPOINT || 'http://localhost:8003';
+    const runtimeConfig = getRuntimeConfig();
+    this.nawalEndpoint = runtimeConfig.nawalApiUrl;
+    this.kinichEndpoint = runtimeConfig.kinichApiUrl;
+    this.pakitEndpoint = runtimeConfig.pakitApiUrl;
   }
 
   // ============================================================================

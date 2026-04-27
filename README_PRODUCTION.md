@@ -225,8 +225,9 @@ import { GlassCard, Button } from '@belizechain/shared';
 ### Polkadot.js Connection
 ```typescript
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { getRuntimeConfig } from '@belizechain/shared';
 
-const provider = new WsProvider('ws://localhost:9944');
+const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
 const api = await ApiPromise.create({ provider });
 ```
 
@@ -269,19 +270,24 @@ npm run test:coverage
 
 ### Environment Variables
 
-**Maya Wallet (.env.local):**
+**Shared runtime vars (.env.local or runtime env):**
 ```bash
-NEXT_PUBLIC_CHAIN_WS=ws://localhost:9944
-NEXT_PUBLIC_CHAIN_HTTP=http://localhost:9933
-NEXT_PUBLIC_IPFS_GATEWAY=https://ipfs.io/ipfs/
-NEXT_PUBLIC_ARWEAVE_GATEWAY=https://arweave.net/
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_IPFS_GATEWAY=http://127.0.0.1:8080/ipfs
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
 ```
 
-**Blue Hole Portal (.env.local):**
+**Ceiba public runtime:**
 ```bash
-NEXT_PUBLIC_CHAIN_WS=ws://localhost:9944
-NEXT_PUBLIC_CHAIN_HTTP=http://localhost:9933
-NEXT_PUBLIC_ADMIN_API=http://localhost:8080
+NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+NEXT_PUBLIC_IPFS_GATEWAY=https://${DOMAIN}/ipfs
+NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
 ```
 
 ### Docker Deployment

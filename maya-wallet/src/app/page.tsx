@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
+import { MayaShellReadinessPanel } from '@/components/MayaShellReadinessPanel';
 import {
   Eye,
   EyeSlash,
@@ -149,6 +150,7 @@ export default function HomeNew() {
             <p className="text-gray-400 mb-8 text-center">
               Connect your wallet to access your BelizeChain assets
             </p>
+            <MayaShellReadinessPanel className="mb-6" />
             <button
               onClick={connect}
               className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-emerald-500/30"
@@ -172,6 +174,10 @@ export default function HomeNew() {
         <p className="text-gray-400 text-sm mb-1">Hello Belizean,</p>
         <h1 className="text-white text-3xl font-bold">Welcome!!</h1>
       </motion.div>
+
+      <div className="mx-6 mb-6">
+        <MayaShellReadinessPanel />
+      </div>
 
       {/* Balance Card */}
       <motion.div

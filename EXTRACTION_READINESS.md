@@ -65,36 +65,33 @@ ui/
 5. **Integration Pattern** - Uses environment variables
    ```typescript
    // Already using env vars for external services
-   NEXT_PUBLIC_NODE_ENDPOINT || 'ws://127.0.0.1:9944'
-   NEXT_PUBLIC_NAWAL_ENDPOINT || 'http://localhost:8001'
-   NEXT_PUBLIC_KINICH_ENDPOINT || 'http://localhost:8002'
-   NEXT_PUBLIC_PAKIT_ENDPOINT || 'http://localhost:8003'
+   NEXT_PUBLIC_BLOCKCHAIN_WS || 'ws://127.0.0.1:9944'
+   NEXT_PUBLIC_NAWAL_API || 'http://localhost:8080'
+   NEXT_PUBLIC_KINICH_API || 'http://localhost:8888'
+   NEXT_PUBLIC_PAKIT_API || 'http://localhost:8001'
    ```
 
 ---
 
-## 🟡 Current Integration Endpoints
+## 🟡 Current Runtime Defaults
 
-### Hardcoded Localhost References (Need .env Configuration)
+### Runtime config notes
 
-**Maya Wallet**: 18 references found
-- `ws://127.0.0.1:9944` - BelizeChain node
-- `ws://localhost:9944` - Blockchain node fallback
-- `http://localhost:8001` - Pakit API
-- Playwright tests: `http://localhost:3001`
+**Maya Wallet**
+- `NEXT_PUBLIC_BLOCKCHAIN_WS` falls back to `ws://127.0.0.1:9944` for local development
+- `NEXT_PUBLIC_PAKIT_API` falls back to `http://localhost:8001`
+- Playwright tests use `http://localhost:3001` as the local browser base URL
 
-**Blue Hole Portal**: 16 references found
-- `ws://127.0.0.1:9944` - BelizeChain node
-- `ws://localhost:9944` - Blockchain node fallback
-- `http://localhost:8001` - Nawal API
-- `http://localhost:8002` - Kinich API
-- `http://localhost:8003` - Pakit API
+**Blue Hole Portal**
+- `NEXT_PUBLIC_BLOCKCHAIN_WS` falls back to `ws://127.0.0.1:9944` for local development
+- `NEXT_PUBLIC_NAWAL_API` falls back to `http://localhost:8080`
+- `NEXT_PUBLIC_KINICH_API` falls back to `http://localhost:8888`
+- `NEXT_PUBLIC_PAKIT_API` falls back to `http://localhost:8001`
 
-**Shared Library**: 2 references
-- `ws://localhost:9944` - Default WS endpoint
-- `http://localhost:8888` - Kinich API fallback
+**Shared Library**
+- Uses the shared runtime config helper to prefer env overrides first, then same-origin Ceiba proxy routes, then local development fallbacks
 
-✅ **Good News**: All hardcoded endpoints already have environment variable fallbacks!
+✅ **Good News**: The active shell now uses the current runtime variable names everywhere.
 
 ---
 
@@ -147,25 +144,25 @@ ui/
 1. **Blockchain (Substrate/Polkadot.js)**
    - Protocol: WebSocket
    - Default: `ws://127.0.0.1:9944`
-   - Env: `NEXT_PUBLIC_NODE_ENDPOINT`
+   - Env: `NEXT_PUBLIC_BLOCKCHAIN_WS`
    - Used by: Both Maya Wallet & Blue Hole Portal
 
 2. **Nawal AI (Federated Learning)**
    - Protocol: HTTP REST
-   - Default: `http://localhost:8001`
-   - Env: `NEXT_PUBLIC_NAWAL_ENDPOINT`
+   - Default: `http://localhost:8080`
+   - Env: `NEXT_PUBLIC_NAWAL_API`
    - Used by: Blue Hole Portal (monitoring)
 
 3. **Kinich Quantum (Quantum Computing)**
    - Protocol: HTTP REST
-   - Default: `http://localhost:8002` / `http://localhost:8888`
-   - Env: `NEXT_PUBLIC_KINICH_ENDPOINT` / `NEXT_PUBLIC_KINICH_API_URL`
+   - Default: `http://localhost:8888`
+   - Env: `NEXT_PUBLIC_KINICH_API`
    - Used by: Both apps (quantum features)
 
 4. **Pakit Storage (Decentralized Storage)**
    - Protocol: HTTP REST
-   - Default: `http://localhost:8001` (Maya) / `http://localhost:8003` (Blue Hole)
-   - Env: `NEXT_PUBLIC_PAKIT_ENDPOINT`
+   - Default: `http://localhost:8001`
+   - Env: `NEXT_PUBLIC_PAKIT_API`
    - Used by: Both apps (document storage)
 
 5. **GEM Contracts (Smart Contracts)**
@@ -399,19 +396,21 @@ services:
     build: ./maya-wallet
     ports: ["3001:3001"]
     environment:
-      - NEXT_PUBLIC_NODE_ENDPOINT=ws://blockchain:9944
-      - NEXT_PUBLIC_NAWAL_ENDPOINT=http://nawal:8001
-      - NEXT_PUBLIC_KINICH_ENDPOINT=http://kinich:8002
-      - NEXT_PUBLIC_PAKIT_ENDPOINT=http://pakit:8003
+         - NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+         - NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+         - NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+         - NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+         - NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
   
   blue-hole-portal:
     build: ./blue-hole-portal
     ports: ["3002:3002"]
     environment:
-      - NEXT_PUBLIC_NODE_ENDPOINT=ws://blockchain:9944
-      - NEXT_PUBLIC_NAWAL_ENDPOINT=http://nawal:8001
-      - NEXT_PUBLIC_KINICH_ENDPOINT=http://kinich:8002
-      - NEXT_PUBLIC_PAKIT_ENDPOINT=http://pakit:8003
+         - NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+         - NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+         - NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+         - NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+         - NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
 ```
 
 ---

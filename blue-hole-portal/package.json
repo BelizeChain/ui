@@ -10,6 +10,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "jest",
+    "test:e2e": "playwright test",
     "test:watch": "jest --watch",
     "storybook": "storybook dev -p 6002",
     "build-storybook": "storybook build"

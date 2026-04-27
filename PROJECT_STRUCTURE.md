@@ -300,17 +300,22 @@ blue-hole-portal/.next/
 
 ### Maya Wallet (.env.local)
 ```bash
-NEXT_PUBLIC_CHAIN_WS=ws://localhost:9944
-NEXT_PUBLIC_CHAIN_HTTP=http://localhost:9933
-NEXT_PUBLIC_IPFS_GATEWAY=https://ipfs.io/ipfs/
-NEXT_PUBLIC_ARWEAVE_GATEWAY=https://arweave.net/
+NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_IPFS_GATEWAY=http://127.0.0.1:8080/ipfs
+NEXT_PUBLIC_NAWAL_API=http://localhost:8080
+NEXT_PUBLIC_KINICH_API=http://localhost:8888
+NEXT_PUBLIC_PAKIT_API=http://localhost:8001
 ```
 
 ### Blue Hole Portal (.env.local)
 ```bash
-NEXT_PUBLIC_CHAIN_WS=ws://localhost:9944
-NEXT_PUBLIC_CHAIN_HTTP=http://localhost:9933
-NEXT_PUBLIC_ADMIN_API=http://localhost:8080
+NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
+NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc
+NEXT_PUBLIC_IPFS_GATEWAY=https://${DOMAIN}/ipfs
+NEXT_PUBLIC_NAWAL_API=https://${DOMAIN}/api/nawal
+NEXT_PUBLIC_KINICH_API=https://${DOMAIN}/api/kinich
+NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
 ```
 
 ## 🧹 Cleanup Summary

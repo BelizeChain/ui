@@ -12,6 +12,7 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { TypeRegistry } from '@polkadot/types';
 import type { ApiOptions } from '@polkadot/api/types';
+import { getBlockchainWsEndpoints } from '@belizechain/shared';
 
 // BelizeChain custom types for all 15 pallets
 const belizeChainTypes = {
@@ -89,13 +90,6 @@ class BlockchainConnectionManager {
   private isConnecting: boolean = false;
   private connectionListeners: Array<(status: ConnectionStatus) => void> = [];
   
-  // Connection endpoints (primary + fallbacks)
-  private endpoints = [
-    'ws://127.0.0.1:9944',           // Local development node
-    'ws://localhost:9944',            // Fallback localhost
-    'wss://rpc.belizechain.org',     // Production (when deployed)
-  ];
-  
   private constructor() {}
   
   /**
@@ -133,7 +127,7 @@ class BlockchainConnectionManager {
     
     try {
       // Create WsProvider with fallback endpoints
-      this.provider = new WsProvider(this.endpoints);
+      this.provider = new WsProvider(getBlockchainWsEndpoints());
       
       // API options with custom types
       const options: ApiOptions = {

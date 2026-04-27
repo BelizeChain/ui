@@ -5,8 +5,10 @@
  * @see /home/wicked/BelizeChain/belizechain/nawal/
  */
 
+import { getRuntimeConfig } from '../lib/runtime-config';
+
 export interface NawalConfig {
-  apiUrl: string; // Default: http://localhost:8765
+  apiUrl: string; // Default: http://localhost:8080
   timeout?: number;
 }
 
@@ -282,7 +284,7 @@ let nawalClient: NawalClient | null = null;
 export function getNawalClient(apiUrl?: string): NawalClient {
   if (!nawalClient) {
     nawalClient = new NawalClient({
-      apiUrl: apiUrl || (typeof window !== 'undefined' && (window as any).ENV?.NEXT_PUBLIC_NAWAL_API_URL) || 'http://localhost:8765',
+      apiUrl: apiUrl || getRuntimeConfig().nawalApiUrl,
     });
   }
   return nawalClient;

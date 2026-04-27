@@ -1,6 +1,5 @@
-import * as React from 'react';
 import { Progress } from './progress';
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 import { MapPin } from 'phosphor-react';
 import Link from 'next/link';
 

@@ -3,16 +3,10 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 // Removed walletLogger to fix SSR issues
-import type { Balance } from '@belizechain/shared';
+import { getRuntimeConfig, type Balance } from '@belizechain/shared';
 
 let api: ApiPromise | null = null;
 let wsProvider: WsProvider | null = null;
-
-// BelizeChain node endpoint (default to local development node)
-// Only access window in browser environment
-const NODE_ENDPOINT = typeof window !== 'undefined' 
-  ? process.env.NEXT_PUBLIC_NODE_ENDPOINT || 'ws://127.0.0.1:9944'
-  : 'ws://127.0.0.1:9944';
 
 /**
  * Initialize connection to BelizeChain node
@@ -23,7 +17,7 @@ export async function initializeApi(): Promise<ApiPromise> {
   }
 
   try {
-    wsProvider = new WsProvider(NODE_ENDPOINT);
+    wsProvider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
     api = await ApiPromise.create({ provider: wsProvider });
     
     const chain = await api.rpc.system.chain();
