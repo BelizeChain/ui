@@ -104,7 +104,7 @@ No `.env.example` or `.env.local` found. Need to create:
 ```bash
 # ui/maya-wallet/.env.example
 NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
-NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933
 NEXT_PUBLIC_NAWAL_API=http://localhost:8080
 NEXT_PUBLIC_KINICH_API=http://localhost:8888
 NEXT_PUBLIC_PAKIT_API=http://localhost:8001
@@ -145,7 +145,7 @@ Need:
 ```bash
 # ui/blue-hole-portal/.env.example
 NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
-NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933
 NEXT_PUBLIC_NAWAL_API=http://localhost:8080
 NEXT_PUBLIC_KINICH_API=http://localhost:8888
 NEXT_PUBLIC_PAKIT_API=http://localhost:8001

@@ -256,9 +256,9 @@ ui/
    - Update links to other extracted repos
 
 3. **DEPLOYMENT.md**
-   - Vercel deployment guide
-   - Netlify deployment guide
-   - Self-hosted deployment
+   - Ceiba self-hosted deployment guide
+   - Image handoff via BelizeChain/infra
+   - Reverse-proxy runtime contract
 
 ---
 

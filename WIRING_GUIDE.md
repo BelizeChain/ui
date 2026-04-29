@@ -26,7 +26,7 @@ cp blue-hole-portal/.env.example blue-hole-portal/.env.local
 # Edit .env.local files and verify runtime endpoints
 # Local defaults:
 # NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
-# NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+# NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933
 # NEXT_PUBLIC_NAWAL_API=http://localhost:8080
 # NEXT_PUBLIC_KINICH_API=http://localhost:8888
 # NEXT_PUBLIC_PAKIT_API=http://localhost:8001

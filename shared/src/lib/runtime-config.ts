@@ -7,10 +7,8 @@ type PublicRuntimeEnv = {
   NEXT_PUBLIC_NAWAL_API?: string;
   NEXT_PUBLIC_NAWAL_API_URL?: string;
   NEXT_PUBLIC_NETWORK_NAME?: string;
-  NEXT_PUBLIC_NODE_ENDPOINT?: string;
   NEXT_PUBLIC_PAKIT_API?: string;
   NEXT_PUBLIC_PAKIT_API_URL?: string;
-  NEXT_PUBLIC_WS_ENDPOINT?: string;
 };
 
 declare global {
@@ -41,10 +39,8 @@ const publicEnv: PublicRuntimeEnv = {
   NEXT_PUBLIC_NAWAL_API: process.env.NEXT_PUBLIC_NAWAL_API,
   NEXT_PUBLIC_NAWAL_API_URL: process.env.NEXT_PUBLIC_NAWAL_API_URL,
   NEXT_PUBLIC_NETWORK_NAME: process.env.NEXT_PUBLIC_NETWORK_NAME,
-  NEXT_PUBLIC_NODE_ENDPOINT: process.env.NEXT_PUBLIC_NODE_ENDPOINT,
   NEXT_PUBLIC_PAKIT_API: process.env.NEXT_PUBLIC_PAKIT_API,
   NEXT_PUBLIC_PAKIT_API_URL: process.env.NEXT_PUBLIC_PAKIT_API_URL,
-  NEXT_PUBLIC_WS_ENDPOINT: process.env.NEXT_PUBLIC_WS_ENDPOINT,
 };
 
 function readPublicEnv(...keys: Array<keyof PublicRuntimeEnv>): string | undefined {
@@ -107,11 +103,7 @@ function getEndpointSource(hasEnvOverride: boolean, hasProxyOrigin: boolean): Ru
 export function getRuntimeConfig(): RuntimeConfig {
   const browserOrigin = getBrowserOrigin();
 
-  const wsOverride = readPublicEnv(
-    'NEXT_PUBLIC_BLOCKCHAIN_WS',
-    'NEXT_PUBLIC_WS_ENDPOINT',
-    'NEXT_PUBLIC_NODE_ENDPOINT'
-  );
+  const wsOverride = readPublicEnv('NEXT_PUBLIC_BLOCKCHAIN_WS');
   const rpcOverride = readPublicEnv('NEXT_PUBLIC_BLOCKCHAIN_RPC');
   const pakitOverride = readPublicEnv('NEXT_PUBLIC_PAKIT_API', 'NEXT_PUBLIC_PAKIT_API_URL');
   const kinichOverride = readPublicEnv('NEXT_PUBLIC_KINICH_API', 'NEXT_PUBLIC_KINICH_API_URL');
@@ -124,14 +116,14 @@ export function getRuntimeConfig(): RuntimeConfig {
   return {
     blockchainRpcUrl:
       rpcOverride ||
-      (browserOrigin ? toHttpUrl(browserOrigin, '/rpc') : 'http://127.0.0.1:9944'),
+      (browserOrigin ? toHttpUrl(browserOrigin, '/rpc') : 'http://127.0.0.1:9933'),
     blockchainWsUrl:
       wsOverride ||
       (browserOrigin ? toWebSocketUrl(browserOrigin, '/ws') : 'ws://127.0.0.1:9944'),
     endpointSource: getEndpointSource(Boolean(wsOverride || rpcOverride), hasProxyOrigin),
     ipfsGatewayUrl:
       ipfsOverride ||
-      (browserOrigin ? toHttpUrl(browserOrigin, '/ipfs') : 'http://127.0.0.1:8080/ipfs'),
+      (browserOrigin ? toHttpUrl(browserOrigin, '/ipfs') : 'http://127.0.0.1:8082/ipfs'),
     kinichApiUrl:
       kinichOverride ||
       (browserOrigin ? toHttpUrl(browserOrigin, '/api/kinich') : 'http://localhost:8888'),

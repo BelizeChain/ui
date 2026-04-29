@@ -108,27 +108,20 @@ npm login
 npm token create --read-only=false
 ```
 
-#### **4.2 Vercel Deployment** (for Maya Wallet & Blue Hole Portal)
+#### **4.2 Ceiba Image Handoff** (for Maya Wallet & Blue Hole Portal)
 ```
-# Install Vercel CLI
-npm i -g vercel
+# The UI repo is build-and-validate only.
+# Runtime deployment is owned by the Ceiba self-hosted stack in BelizeChain/infra.
 
-# Link projects and get tokens
-cd maya-wallet && vercel link
-cd blue-hole-portal && vercel link
+# CI builds the Docker targets from the repo root:
+docker build --build-arg APP_NAME=maya-wallet --target wallet -t belizechain/maya-wallet:<tag> .
+docker build --build-arg APP_NAME=blue-hole-portal --target portal -t belizechain/blue-hole-portal:<tag> .
 
-# Add secrets to GitHub:
-Secret Name: VERCEL_TOKEN
-Value: <from vercel token list>
-
-Secret Name: VERCEL_ORG_ID
-Value: <from .vercel/project.json>
-
-Secret Name: VERCEL_PROJECT_ID_MAYA
-Value: <from maya-wallet/.vercel/project.json>
-
-Secret Name: VERCEL_PROJECT_ID_PORTAL
-Value: <from blue-hole-portal/.vercel/project.json>
+# Promote immutable image tags through:
+# - ../infra/.env
+# - ../infra/docker-compose.ceiba.yml
+#
+# Then roll out on Ceiba from /opt/belizechain.
 ```
 
 ---
@@ -174,7 +167,7 @@ git push origin main
 
 ---
 
-### ✅ Step 7: Test Deployment Preview
+### ✅ Step 7: Test Ceiba Build Handoff
 
 #### **7.1 Create a Pull Request**
 ```bash
@@ -186,7 +179,7 @@ echo "console.log('test');" >> maya-wallet/src/app/page.tsx
 
 # Commit and push
 git add .
-git commit -m "test: Deployment preview"
+git commit -m "test: Ceiba handoff summary"
 git push origin feature/test-deployment
 ```
 
@@ -195,7 +188,8 @@ git push origin feature/test-deployment
 2. Click **"Compare & pull request"**
 3. Fill in PR details and create
 4. Wait for workflows to complete
-5. Check for Vercel preview URL in PR comments
+5. Check the workflow summary for the Ceiba handoff notes
+6. Confirm there is no repo-local preview deployment expectation
 
 ---
 
@@ -239,7 +233,8 @@ git push origin shared-v1.0.1
 ### **GitHub Actions**
 - ✅ All 4 workflows enabled
 - ✅ Workflows pass on initial run
-- ✅ Vercel deployments successful (if secrets configured)
+- ✅ Ceiba handoff summaries appear on pull requests
+- ✅ Ceiba image builds pass on pushes to `main`
 - ✅ npm publish successful (if NPM_TOKEN configured)
 
 ### **Branch Protection**
@@ -265,15 +260,12 @@ git push origin shared-v1.0.1
 
 ---
 
-### **Issue: Vercel Deployment Fails**
+### **Issue: Ceiba Image Build Or Handoff Fails**
 **Solution**:
-1. Verify secrets are set correctly:
-   - `VERCEL_TOKEN`
-   - `VERCEL_ORG_ID`
-   - `VERCEL_PROJECT_ID_MAYA`
-   - `VERCEL_PROJECT_ID_PORTAL`
-2. Check Vercel dashboard for project status
-3. Review workflow logs for error details
+1. Review the image-build job logs in the relevant workflow
+2. Verify the root Dockerfile still supports the `wallet` and `portal` targets
+3. Confirm the promotion target in `BelizeChain/infra` is using the intended immutable tag
+4. Re-test the Ceiba reverse-proxy routes after rollout
 
 ---
 
@@ -329,9 +321,10 @@ After successful setup, you should see:
 ### **npm Package**
 - Package: https://www.npmjs.com/package/@belizechain/shared
 
-### **Vercel Deployments**
-- Maya Wallet: https://maya-wallet.vercel.app (after deployment)
-- Blue Hole Portal: https://blue-hole-portal.vercel.app (after deployment)
+### **Ceiba Deployment Sources**
+- Core runbook: `../belizechain/docs/operations/CEIBA_OPERATIONS_RUNBOOK.md`
+- Phase 2 plan: `../belizechain/docs/deployment/PHASE2_CEIBA_SERVICES_PLAN.md`
+- Infra compose: `../infra/docker-compose.ceiba.yml`
 
 ### **Documentation**
 - Main README: [README.md](./README.md)
@@ -346,7 +339,7 @@ After successful setup, you should see:
 Once all steps are complete, your BelizeChain UI Suite repository is:
 
 - ✅ **Live on GitHub** with full version history
-- ✅ **CI/CD enabled** with automated testing and deployment
+- ✅ **CI/CD enabled** with automated testing and image validation
 - ✅ **Production-ready** with comprehensive documentation
 - ✅ **Integration-ready** with environment variable configuration
 - ✅ **Community-ready** with issues, discussions, and PRs enabled

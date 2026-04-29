@@ -16,8 +16,9 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_VERSION: '20'
-  NEXT_PUBLIC_NODE_ENDPOINT: 'ws://127.0.0.1:9944'
+  NODE_VERSION: '24'
+  NEXT_PUBLIC_BLOCKCHAIN_WS: 'ws://127.0.0.1:9944'
+  NEXT_PUBLIC_BLOCKCHAIN_RPC: 'http://127.0.0.1:9933'
 
 jobs:
   lint-and-typecheck:
@@ -63,7 +64,6 @@ jobs:
         continue-on-error: true
         run: npm run build --workspace=blue-hole-portal
         env:
-          NEXT_PUBLIC_NODE_ENDPOINT: ${{ env.NEXT_PUBLIC_NODE_ENDPOINT }}
           NEXT_PUBLIC_DEV_MODE: 'false'
 
       - name: Check bundle size
@@ -136,23 +136,23 @@ jobs:
           path: blue-hole-portal/storybook-static
           retention-days: 7
 
-  deploy-preview:
-    name: Deploy Preview (Vercel)
+  ceiba-handoff:
+    name: Ceiba Handoff Summary
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     needs: [lint-and-typecheck, build, test]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Vercel
+      - name: Summarize Ceiba handoff
         run: |
-          echo "🚀 Deploying preview to Vercel..."
-          echo "Preview URL would be generated here"
-        # Add Vercel deployment here if VERCEL_TOKEN is configured
+          echo "# Blue Hole Portal Ceiba handoff" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- This repo does not self-deploy preview environments." >> $GITHUB_STEP_SUMMARY
+          echo "- Active rollout target is the Ceiba self-hosted stack managed in BelizeChain/infra." >> $GITHUB_STEP_SUMMARY
+          echo "- Docker build target: portal with APP_NAME=blue-hole-portal." >> $GITHUB_STEP_SUMMARY
+          echo "- Expected public reverse-proxy routes: /rpc, /ws, /api/pakit, /api/nawal, /api/kinich, /ipfs." >> $GITHUB_STEP_SUMMARY
 
-  deploy-production:
-    name: Deploy Production
+  build-ceiba-image:
+    name: Build Ceiba Image
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [lint-and-typecheck, build, test]
@@ -160,33 +160,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Blue Hole Portal image
+        uses: docker/build-push-action@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Install dependencies
-        run: npm ci
+          context: .
+          build-args: |
+            APP_NAME=blue-hole-portal
+          target: portal
+          push: false
+          load: false
+          tags: belizechain/blue-hole-portal:${{ github.sha }}
 
-      - name: Build shared library
-        run: npm run build --workspace=shared
-
-      - name: Build for production
-        continue-on-error: true
-        run: npm run build --workspace=blue-hole-portal
-        env:
-          NODE_ENV: production
-          NEXT_PUBLIC_NODE_ENDPOINT: ${{ secrets.PROD_NODE_ENDPOINT || 'wss://rpc.belizechain.org' }}
-
-      - name: Deploy to production
+      - name: Summarize image handoff
         run: |
-          echo "🚀 Deploying to production..."
-          echo "Production deployment would happen here"
-        # Add production deployment here (Vercel, Netlify, etc.)
+          echo "# Blue Hole Portal image build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Built image tag: belizechain/blue-hole-portal:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- No registry push occurs in this repo." >> $GITHUB_STEP_SUMMARY
+          echo "- Promote by pinning an immutable tag in BelizeChain/infra before rollout on Ceiba." >> $GITHUB_STEP_SUMMARY
 
   summary:
     name: Workflow Summary
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, build, test]
+    needs: [lint-and-typecheck, build, test, ceiba-handoff, build-ceiba-image]
     if: always()
     steps:
       - name: Summary
@@ -198,3 +197,5 @@ jobs:
           echo "| Lint & Type Check | ${{ needs.lint-and-typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ceiba Handoff | ${{ needs.ceiba-handoff.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ceiba Image Build | ${{ needs.build-ceiba-image.result }} |" >> $GITHUB_STEP_SUMMARY

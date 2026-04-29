@@ -105,7 +105,7 @@ ui/
 
 ### Prerequisites
 ```bash
-node >= 18.0.0
+node >= 24.0.0
 npm >= 9.0.0
 ```
 
@@ -273,8 +273,8 @@ npm run test:coverage
 **Shared runtime vars (.env.local or runtime env):**
 ```bash
 NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
-NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
-NEXT_PUBLIC_IPFS_GATEWAY=http://127.0.0.1:8080/ipfs
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933
+NEXT_PUBLIC_IPFS_GATEWAY=http://127.0.0.1:8082/ipfs
 NEXT_PUBLIC_NAWAL_API=http://localhost:8080
 NEXT_PUBLIC_KINICH_API=http://localhost:8888
 NEXT_PUBLIC_PAKIT_API=http://localhost:8001
@@ -292,16 +292,19 @@ NEXT_PUBLIC_PAKIT_API=https://${DOMAIN}/api/pakit
 
 ### Docker Deployment
 ```bash
-# Build images
-docker build -t belizechain/maya-wallet:latest ./maya-wallet
-docker build -t belizechain/blue-hole-portal:latest ./blue-hole-portal
-
-# Run containers
-docker-compose up -d
+# Build monorepo targets from the repo root
+docker build --build-arg APP_NAME=maya-wallet --target wallet -t belizechain/maya-wallet:<tag> .
+docker build --build-arg APP_NAME=blue-hole-portal --target portal -t belizechain/blue-hole-portal:<tag> .
 ```
+
+Ceiba rollout note:
+- This repo does not own the runtime compose stack.
+- Promote immutable image tags through `BelizeChain/infra/.env` or `BelizeChain/infra/docker-compose.ceiba.yml`.
+- Validate the public reverse-proxy routes `/rpc`, `/ws`, `/api/pakit`, `/api/nawal`, `/api/kinich`, and `/ipfs` after rollout.
 
 ### Production Checklist
 - [ ] Set `NODE_ENV=production`
+- [ ] Pin immutable image tags in `BelizeChain/infra`
 - [ ] Configure HTTPS/SSL certificates
 - [ ] Enable rate limiting
 - [ ] Set up monitoring (Sentry, LogRocket)
@@ -309,6 +312,7 @@ docker-compose up -d
 - [ ] Enable gzip/brotli compression
 - [ ] Set up backup strategies
 - [ ] Configure Web3 providers
+- [ ] Verify Ceiba reverse-proxy routes for RPC, WS, service APIs, and IPFS
 - [ ] Test all blockchain integrations
 - [ ] Review security headers
 

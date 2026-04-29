@@ -1,5 +1,5 @@
 # ── Stage 1: Install dependencies ────────────────────────
-FROM node:18-alpine AS deps
+FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY maya-wallet/package.json ./maya-wallet/
 RUN npm ci
 
 # ── Stage 2: Build targeted workspace only ───────────────
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 ARG APP_NAME
@@ -29,7 +29,7 @@ ENV BUILDING=true
 RUN npx turbo run build --filter=${APP_NAME}...
 
 # ── Stage 3a: blue-hole-portal runner ────────────────────
-FROM node:18-alpine AS portal
+FROM node:24-alpine AS portal
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -47,7 +47,7 @@ EXPOSE 3000
 CMD ["node", "blue-hole-portal/server.js"]
 
 # ── Stage 3b: maya-wallet runner ─────────────────────────
-FROM node:18-alpine AS wallet
+FROM node:24-alpine AS wallet
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

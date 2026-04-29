@@ -81,7 +81,7 @@ const api = await ApiPromise.create({ provider });
 ```bash
 # .env.local (local development)
 NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
-NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933
 
 # Ceiba public runtime
 NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
@@ -313,7 +313,7 @@ The UI Suite uses a **three-tier environment variable system**:
 ```bash
 # Root: ui/.env.local (shared by both apps)
 NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944
-NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933
 NEXT_PUBLIC_NAWAL_API=http://localhost:8080
 NEXT_PUBLIC_KINICH_API=http://localhost:8888
 NEXT_PUBLIC_PAKIT_API=http://localhost:8001
@@ -386,9 +386,9 @@ UI will use:
 - Mock API responses
 - Static fallback values
 
-### Scenario 3: Production Deployment
+### Scenario 3: Ceiba Public Deployment
 
-**Deployed to Vercel/Netlify**:
+**Deployed behind the Ceiba reverse proxy**:
 
 ```bash
 # Environment variables in hosting platform
@@ -401,32 +401,28 @@ NEXT_PUBLIC_IPFS_GATEWAY=https://${DOMAIN}/ipfs
 NODE_ENV=production
 ```
 
-### Scenario 4: Docker Compose (Recommended)
+### Scenario 4: Ceiba Compose Contract (Recommended)
 
-**All services orchestrated**:
+**All services orchestrated through BelizeChain/infra**:
 
 ```yaml
-# docker-compose.yml
+# ../infra/docker-compose.ceiba.yml
 services:
-  blockchain:
-    image: ghcr.io/belizechain/blockchain:latest
+  ceiba-node:
+    image: belizechain/ceiba-node:latest
     ports: ["9944:9944"]
   
   nawal:
-    image: ghcr.io/belizechain/nawal:latest
-    ports: ["8001:8001"]
+    image: belizechain/nawal:latest
   
   kinich:
-    image: ghcr.io/belizechain/kinich:latest
-    ports: ["8002:8002"]
+    image: belizechain/kinich-quantum:latest
   
   pakit:
-    image: ghcr.io/belizechain/pakit:latest
-    ports: ["8003:8003"]
+    image: belizechain/pakit-storage:latest
   
-  maya-wallet:
-    build: ./maya-wallet
-    ports: ["3001:3001"]
+  ui:
+    image: belizechain/blue-hole-portal:latest
     environment:
       - NEXT_PUBLIC_BLOCKCHAIN_WS=wss://${DOMAIN}/ws
       - NEXT_PUBLIC_BLOCKCHAIN_RPC=https://${DOMAIN}/rpc

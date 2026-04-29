@@ -69,7 +69,7 @@ ui/
 ├── .editorconfig              # Code formatting standards
 ├── .dockerignore              # Docker exclusions
 ├── .env.example               # Environment variable template
-├── .nvmrc                     # Node.js 18.0.0 requirement
+├── .nvmrc                     # Node.js 24 requirement
 ├── .npmrc                     # npm configuration
 │
 └── Documentation (13 files):
@@ -92,7 +92,7 @@ All external integrations use **environment variables** for configuration - **ze
 ### 1. **BelizeChain Node** (Blockchain Core)
 ```bash
 NEXT_PUBLIC_BLOCKCHAIN_WS=ws://127.0.0.1:9944         # WebSocket RPC
-NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9944      # HTTP RPC
+NEXT_PUBLIC_BLOCKCHAIN_RPC=http://127.0.0.1:9933      # HTTP RPC
 ```
 - **Technology**: Polkadot.js API 10.11.2+
 - **Communication**: WebSocket subscriptions + HTTP queries
@@ -164,7 +164,7 @@ NEXT_PUBLIC_FAUCET_CONTRACT=5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 - **Storybook** 7+ (Component testing)
 
 ### **Build & Dev Tools**
-- **Node.js** 18.0.0+ (specified in .nvmrc)
+- **Node.js** 24.0.0+ (specified in .nvmrc)
 - **npm** 9+ (workspace support)
 - **Turbo** (parallel builds)
 
@@ -179,11 +179,11 @@ NEXT_PUBLIC_FAUCET_CONTRACT=5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 1. **Lint & Type-Check**: ESLint + TypeScript compiler
 2. **Build**: Next.js production build with shared library
 3. **Playwright Tests**: E2E tests across 10 page suites (40+ tests)
-4. **Deploy Preview**: Vercel preview deployment (PRs only)
-5. **Deploy Production**: Vercel production deployment (main branch only)
+4. **Ceiba Handoff Summary**: PR summary for infra-managed rollout
+5. **Ceiba Image Build**: Docker target validation on `main`
 
 **Environment**:
-- Node.js 18
+- Node.js 24
 - Artifact retention: 7 days
 - Playwright browsers: Chromium, Firefox, WebKit
 
@@ -197,11 +197,11 @@ NEXT_PUBLIC_FAUCET_CONTRACT=5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 2. **Build**: Next.js production build with shared library
 3. **Jest Tests**: Unit tests with coverage report
 4. **Build Storybook**: Component documentation
-5. **Deploy Preview**: Vercel preview deployment (PRs only)
-6. **Deploy Production**: Vercel production deployment (main branch only)
+5. **Ceiba Handoff Summary**: PR summary for infra-managed rollout
+6. **Ceiba Image Build**: Docker target validation on `main`
 
 **Environment**:
-- Node.js 18
+- Node.js 24
 - Coverage threshold: 80%
 - Storybook static build
 
@@ -216,7 +216,7 @@ NEXT_PUBLIC_FAUCET_CONTRACT=5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 3. **Publish to npm**: Auto-publish on version tags (v1.x.x)
 
 **Environment**:
-- Node.js 18
+- Node.js 24
 - Package name: `@belizechain/shared`
 - Registry: npmjs.com (requires NPM_TOKEN secret)
 
@@ -234,7 +234,7 @@ NEXT_PUBLIC_FAUCET_CONTRACT=5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 6. **Environment Variables**: Check for hardcoded secrets
 
 **Environment**:
-- Node.js 18
+- Node.js 24
 - CodeQL languages: JavaScript, TypeScript
 - Fail on: HIGH/CRITICAL vulnerabilities
 
@@ -281,7 +281,7 @@ NEXT_PUBLIC_FAUCET_CONTRACT=5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 1. **.editorconfig** - Code formatting standards (TypeScript/JavaScript)
 2. **.dockerignore** - Docker build exclusions (node_modules, .next, tests)
 3. **.env.example** - Comprehensive environment template (40+ variables)
-4. **.nvmrc** - Node.js version requirement (18.0.0)
+4. **.nvmrc** - Node.js version requirement (24)
 5. **.npmrc** - npm configuration (workspaces, engine-strict)
 
 ### **CI/CD Workflows (4)**
@@ -469,17 +469,14 @@ git push origin v1.0.1
 # GitHub Actions will auto-publish to npm
 ```
 
-### **6. Setup Vercel Deployment**
+### **6. Setup Ceiba Image Handoff**
 ```bash
-# Install Vercel CLI
-npm i -g vercel
+# Build app images from the repo root
+docker build --build-arg APP_NAME=maya-wallet --target wallet -t belizechain/maya-wallet:<tag> .
+docker build --build-arg APP_NAME=blue-hole-portal --target portal -t belizechain/blue-hole-portal:<tag> .
 
-# Link projects
-cd maya-wallet && vercel link
-cd blue-hole-portal && vercel link
-
-# Deploy
-vercel --prod
+# Promote immutable tags through BelizeChain/infra
+# and roll out on Ceiba from /opt/belizechain.
 ```
 
 ---
