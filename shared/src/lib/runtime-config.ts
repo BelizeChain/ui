@@ -1,6 +1,10 @@
 type PublicRuntimeEnv = {
   NEXT_PUBLIC_BLOCKCHAIN_WS?: string;
   NEXT_PUBLIC_BLOCKCHAIN_RPC?: string;
+  NEXT_PUBLIC_BELI_NFT_CONTRACT?: string;
+  NEXT_PUBLIC_DALLA_CONTRACT?: string;
+  NEXT_PUBLIC_DAO_CONTRACT?: string;
+  NEXT_PUBLIC_FAUCET_CONTRACT?: string;
   NEXT_PUBLIC_IPFS_GATEWAY?: string;
   NEXT_PUBLIC_KINICH_API?: string;
   NEXT_PUBLIC_KINICH_API_URL?: string;
@@ -21,6 +25,12 @@ export interface RuntimeConfig {
   blockchainRpcUrl: string;
   blockchainWsUrl: string;
   endpointSource: 'env' | 'proxy' | 'local';
+  gemContracts: {
+    beliNft?: string;
+    dalla?: string;
+    dao?: string;
+    faucet?: string;
+  };
   ipfsGatewayUrl: string;
   kinichApiUrl: string;
   nawalApiUrl: string;
@@ -33,6 +43,10 @@ const localHostnames = new Set(['127.0.0.1', '::1', 'localhost']);
 const publicEnv: PublicRuntimeEnv = {
   NEXT_PUBLIC_BLOCKCHAIN_WS: process.env.NEXT_PUBLIC_BLOCKCHAIN_WS,
   NEXT_PUBLIC_BLOCKCHAIN_RPC: process.env.NEXT_PUBLIC_BLOCKCHAIN_RPC,
+  NEXT_PUBLIC_BELI_NFT_CONTRACT: process.env.NEXT_PUBLIC_BELI_NFT_CONTRACT,
+  NEXT_PUBLIC_DALLA_CONTRACT: process.env.NEXT_PUBLIC_DALLA_CONTRACT,
+  NEXT_PUBLIC_DAO_CONTRACT: process.env.NEXT_PUBLIC_DAO_CONTRACT,
+  NEXT_PUBLIC_FAUCET_CONTRACT: process.env.NEXT_PUBLIC_FAUCET_CONTRACT,
   NEXT_PUBLIC_IPFS_GATEWAY: process.env.NEXT_PUBLIC_IPFS_GATEWAY,
   NEXT_PUBLIC_KINICH_API: process.env.NEXT_PUBLIC_KINICH_API,
   NEXT_PUBLIC_KINICH_API_URL: process.env.NEXT_PUBLIC_KINICH_API_URL,
@@ -110,6 +124,10 @@ export function getRuntimeConfig(): RuntimeConfig {
   const nawalOverride = readPublicEnv('NEXT_PUBLIC_NAWAL_API', 'NEXT_PUBLIC_NAWAL_API_URL');
   const ipfsOverride = readPublicEnv('NEXT_PUBLIC_IPFS_GATEWAY');
   const networkNameOverride = readPublicEnv('NEXT_PUBLIC_NETWORK_NAME');
+  const dallaContract = readPublicEnv('NEXT_PUBLIC_DALLA_CONTRACT');
+  const beliNftContract = readPublicEnv('NEXT_PUBLIC_BELI_NFT_CONTRACT');
+  const daoContract = readPublicEnv('NEXT_PUBLIC_DAO_CONTRACT');
+  const faucetContract = readPublicEnv('NEXT_PUBLIC_FAUCET_CONTRACT');
 
   const hasProxyOrigin = Boolean(browserOrigin);
 
@@ -121,6 +139,12 @@ export function getRuntimeConfig(): RuntimeConfig {
       wsOverride ||
       (browserOrigin ? toWebSocketUrl(browserOrigin, '/ws') : 'ws://127.0.0.1:9944'),
     endpointSource: getEndpointSource(Boolean(wsOverride || rpcOverride), hasProxyOrigin),
+    gemContracts: {
+      beliNft: beliNftContract,
+      dalla: dallaContract,
+      dao: daoContract,
+      faucet: faucetContract,
+    },
     ipfsGatewayUrl:
       ipfsOverride ||
       (browserOrigin ? toHttpUrl(browserOrigin, '/ipfs') : 'http://127.0.0.1:8082/ipfs'),

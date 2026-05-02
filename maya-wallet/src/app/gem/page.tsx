@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { GlassCard } from '@/components/ui';
+import { getRuntimeConfig } from '@belizechain/shared';
 import { useRouter } from 'next/navigation';
 import {
   FileCode,
@@ -21,31 +22,42 @@ import {
 export default function GemPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'deploy' | 'contracts' | 'dao'>('deploy');
+  const runtimeConfig = getRuntimeConfig();
+  const formatAddress = (address?: string) =>
+    address ? `${address.slice(0, 8)}...${address.slice(-6)}` : 'Not configured';
 
   const deployedContracts = [
     {
       name: 'DALLA Token',
       type: 'PSP22',
-      address: '5GD4w5...NVsNB',
-      deployed: '2024-12-10',
-      calls: 15420,
+      address: formatAddress(runtimeConfig.gemContracts.dalla),
+      deployed: '2026-05-02',
+      calls: 0,
       size: '10.5 KB'
     },
     {
       name: 'BeliNFT Collection',
       type: 'PSP34',
-      address: '5Ho6Ks...iFQL7',
-      deployed: '2024-12-15',
-      calls: 8934,
+      address: formatAddress(runtimeConfig.gemContracts.beliNft),
+      deployed: '2026-05-02',
+      calls: 0,
       size: '14.9 KB'
     },
     {
-      name: 'Tourism DAO',
+      name: 'Simple DAO',
       type: 'DAO',
-      address: '5Fk3dM...8xR2P',
-      deployed: '2025-01-05',
-      calls: 2104,
+      address: formatAddress(runtimeConfig.gemContracts.dao),
+      deployed: '2026-05-02',
+      calls: 0,
       size: '12.9 KB'
+    },
+    {
+      name: 'Testnet Faucet',
+      type: 'Faucet',
+      address: formatAddress(runtimeConfig.gemContracts.faucet),
+      deployed: '2026-05-02',
+      calls: 0,
+      size: '7.5 KB'
     }
   ];
 
@@ -133,11 +145,11 @@ export default function GemPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
               <p className="text-xs text-gray-400 mb-1">Contracts</p>
-              <p className="text-2xl font-bold text-pink-400">3</p>
+              <p className="text-2xl font-bold text-pink-400">{deployedContracts.length}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-400 mb-1">Total Calls</p>
-              <p className="text-2xl font-bold text-blue-400">26.4K</p>
+              <p className="text-2xl font-bold text-blue-400">0</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-400 mb-1">Gas Saved</p>
