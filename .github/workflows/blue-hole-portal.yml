@@ -113,30 +113,8 @@ jobs:
           name: blue-hole-portal
           fail_ci_if_error: false
 
-  storybook:
-    name: Build Storybook
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Storybook
-        run: npm run build-storybook --workspace=blue-hole-portal
-
-      - name: Upload Storybook
-        uses: actions/upload-artifact@v4
-        with:
-          name: storybook-static
-          path: blue-hole-portal/storybook-static
-          retention-days: 7
+  # Storybook job removed: blue-hole-portal/.storybook config and stories
+  # do not exist yet. Re-add when Storybook is actually configured.
 
   ceiba-handoff:
     name: Ceiba Handoff Summary
