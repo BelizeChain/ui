@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, Input, useWallet, useI18n } from '@belizechain/shared';
 import { useUIStore } from '@/store/ui';
@@ -22,8 +22,13 @@ export default function ReceivePage() {
   const [requestAmount, setRequestAmount] = useState('');
   const [requestNote, setRequestNote] = useState('');
 
+  useEffect(() => {
+    if (!selectedAccount) {
+      router.replace('/');
+    }
+  }, [router, selectedAccount]);
+
   if (!selectedAccount) {
-    router.push('/');
     return null;
   }
 

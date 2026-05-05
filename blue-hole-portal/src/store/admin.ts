@@ -12,7 +12,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
+import { useEffect } from 'react';
+import { useWallet } from '@belizechain/shared';
 
 export interface Admin {
   id: string;
@@ -33,23 +34,6 @@ interface AdminState {
   logout: () => void;
   checkAuth: () => void;
   loadAdminProfile: (address: string) => Promise<void>;
-}
-
-/**
- * Load shared wallet hook on client side only
- */
-function useSharedWallet() {
-  if (typeof window === 'undefined') {
-    return {
-      isConnected: false,
-      selectedAccount: null,
-      connect: async () => {},
-      disconnect: () => {},
-    };
-  }
-
-  const { useWallet } = require('@belizechain/shared');
-  return useWallet();
 }
 
 /**
@@ -186,18 +170,15 @@ export const useAdminStore = create<AdminState>()(
  * This wraps shared useWallet + admin state
  */
 export function useAdminWithWallet() {
-  const { selectedAccount, isConnected, connect, disconnect } = useSharedWallet();
+  const { selectedAccount, isConnected, connect, disconnect } = useWallet();
   const { admin, loadAdminProfile, logout } = useAdminStore();
 
   // Auto-load admin profile when wallet connects
-  if (typeof window !== 'undefined') {
-    const { useEffect } = require('react');
-    useEffect(() => {
-      if (selectedAccount?.address && !admin) {
-        loadAdminProfile(selectedAccount.address).catch(console.error);
-      }
-    }, [selectedAccount?.address]);
-  }
+  useEffect(() => {
+    if (selectedAccount?.address && !admin) {
+      loadAdminProfile(selectedAccount.address).catch(console.error);
+    }
+  }, [admin, loadAdminProfile, selectedAccount?.address]);
 
   return {
     admin,

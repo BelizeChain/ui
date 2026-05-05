@@ -43,6 +43,12 @@ export default function HistoryPage() {
     }
   }, [account?.address]);
 
+  useEffect(() => {
+    if (!account) {
+      router.replace('/');
+    }
+  }, [account, router]);
+
   const loadTransactionHistory = async () => {
     if (!account?.address) return;
 
@@ -86,7 +92,6 @@ export default function HistoryPage() {
   };
 
   if (!account) {
-    router.push('/');
     return null;
   }
 
