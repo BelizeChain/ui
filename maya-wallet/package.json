@@ -7,7 +7,7 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "lint": "next lint",
+    "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
@@ -65,14 +65,15 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "3.3.5",
     "@playwright/test": "^1.58.0",
     "@types/node": "^24.0.0",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "autoprefixer": "^10.4.17",
     "baseline-browser-mapping": "^2.9.17",
-    "eslint": "^8.56.0",
-    "eslint-config-next": "^14.1.0",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
