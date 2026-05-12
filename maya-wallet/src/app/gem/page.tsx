@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import {
   claimFromFaucet,
+  createDaoProposal,
   getFaucetStatus,
   getGemContractCatalog,
   listDaoProposals,
@@ -14,6 +15,9 @@ import {
   getDallaBalance,
   getBeliNftCollection,
   getBeliNftBalanceOf,
+  mintBeliNft,
+  transferBeliNft,
+  listBeliNftsOwnedBy,
   type FaucetStatus,
   type GemContractDescriptor,
   type DaoProposal,
@@ -36,7 +40,7 @@ import {
 export default function GemPage() {
   const router = useRouter();
   const { selectedAccount } = useWallet();
-  const [activeTab, setActiveTab] = useState<'deploy' | 'contracts' | 'dao'>('deploy');
+  const [activeTab, setActiveTab] = useState<'deploy' | 'contracts' | 'dao' | 'nft'>('deploy');
   const runtimeConfig = getRuntimeConfig();
   const formatAddress = (address?: string) =>
     address ? `${address.slice(0, 8)}…${address.slice(-6)}` : 'Not deployed';
@@ -154,6 +158,121 @@ export default function GemPage() {
     },
     [selectedAccount?.address, refreshDao],
   );
+
+  // Proposal creation form state
+  const [propDescription, setPropDescription] = useState('');
+  const [propTransferTarget, setPropTransferTarget] = useState('');
+  const [propTransferValue, setPropTransferValue] = useState('0');
+  const [propBusy, setPropBusy] = useState(false);
+  const [propTxHash, setPropTxHash] = useState<string | null>(null);  const handleCreateProposal = useCallback(async () => {
+    if (!selectedAccount?.address) {
+      setDaoError('Connect a wallet account to create a proposal');
+      return;
+    }
+    const desc = propDescription.trim();
+    if (!desc) {
+      setDaoError('Description is required');
+      return;
+    }
+    setPropBusy(true);
+    setDaoError(null);
+    setPropTxHash(null);
+    try {
+      const target = propTransferTarget.trim() || null;
+      const hash = await createDaoProposal(
+        selectedAccount.address,
+        desc,
+        target,
+        propTransferValue.trim() || '0',
+      );
+      setPropTxHash(hash);
+      setPropDescription('');
+      setPropTransferTarget('');
+      setPropTransferValue('0');
+      await refreshDao();
+    } catch (err) {
+      setDaoError(err instanceof Error ? err.message : 'Proposal submission failed');
+    } finally {
+      setPropBusy(false);
+    }
+  }, [selectedAccount?.address, propDescription, propTransferTarget, propTransferValue, refreshDao]);
+
+  // NFT form state
+  const [nftMintTo, setNftMintTo] = useState('');
+  const [nftMintUri, setNftMintUri] = useState('');
+  const [nftMintBusy, setNftMintBusy] = useState(false);
+  const [nftTransferTo, setNftTransferTo] = useState('');
+  const [nftTransferId, setNftTransferId] = useState('');
+  const [nftTransferBusy, setNftTransferBusy] = useState(false);
+  const [nftTxHash, setNftTxHash] = useState<string | null>(null);
+  const [nftError, setNftError] = useState<string | null>(null);
+  const [ownedNfts, setOwnedNfts] = useState<Array<{ id: number; uri: string | null }>>([]);
+
+  const refreshOwnedNfts = useCallback(async () => {
+    if (!selectedAccount?.address) return;
+    try {
+      const owned = await listBeliNftsOwnedBy(selectedAccount.address, selectedAccount.address, 100);
+      setOwnedNfts(owned);
+    } catch {
+      setOwnedNfts([]);
+    }
+  }, [selectedAccount?.address]);
+
+  useEffect(() => {
+    if (activeTab === 'nft') void refreshOwnedNfts();
+  }, [activeTab, refreshOwnedNfts]);
+
+  const handleMintNft = useCallback(async () => {
+    if (!selectedAccount?.address) {
+      setNftError('Connect a wallet account first');
+      return;
+    }
+    const to = nftMintTo.trim() || selectedAccount.address;
+    const uri = nftMintUri.trim();
+    if (!uri) {
+      setNftError('Metadata URI is required');
+      return;
+    }
+    setNftMintBusy(true);
+    setNftError(null);
+    setNftTxHash(null);
+    try {
+      const hash = await mintBeliNft(selectedAccount.address, to, uri);
+      setNftTxHash(hash);
+      setNftMintUri('');
+      await Promise.all([refreshNfts(), refreshOwnedNfts()]);
+    } catch (err) {
+      setNftError(err instanceof Error ? err.message : 'Mint failed');
+    } finally {
+      setNftMintBusy(false);
+    }
+  }, [selectedAccount?.address, nftMintTo, nftMintUri, refreshNfts, refreshOwnedNfts]);
+
+  const handleTransferNft = useCallback(async () => {
+    if (!selectedAccount?.address) {
+      setNftError('Connect a wallet account first');
+      return;
+    }
+    const to = nftTransferTo.trim();
+    const id = nftTransferId.trim();
+    if (!to || !id) {
+      setNftError('Recipient and token ID are required');
+      return;
+    }
+    setNftTransferBusy(true);
+    setNftError(null);
+    setNftTxHash(null);
+    try {
+      const hash = await transferBeliNft(selectedAccount.address, to, Number(id));
+      setNftTxHash(hash);
+      setNftTransferId('');
+      await Promise.all([refreshNfts(), refreshOwnedNfts()]);
+    } catch (err) {
+      setNftError(err instanceof Error ? err.message : 'Transfer failed');
+    } finally {
+      setNftTransferBusy(false);
+    }
+  }, [selectedAccount?.address, nftTransferTo, nftTransferId, refreshNfts, refreshOwnedNfts]);
 
   const votingPowerDisplay = useMemo(() => {
     // DALLA has 12 decimals; show whole-token count with thousands separators.
@@ -290,6 +409,16 @@ export default function GemPage() {
             }`}
           >
             DAO
+          </button>
+          <button
+            onClick={() => setActiveTab('nft')}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
+              activeTab === 'nft'
+                ? 'bg-gradient-to-r from-pink-500 to-red-400 text-white shadow-md'
+                : 'text-gray-400 hover:bg-gray-200'
+            }`}
+          >
+            NFTs
           </button>
         </div>
       </div>
@@ -460,6 +589,62 @@ export default function GemPage() {
               <div className="text-xs text-red-400">{daoError}</div>
             )}
 
+            <GlassCard variant="dark" blur="sm" className="p-5">
+              <h3 className="font-bold text-white mb-1">Create Proposal</h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Submit a text proposal, or attach a treasury DALLA transfer.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Description</label>
+                  <textarea
+                    value={propDescription}
+                    onChange={(e) => setPropDescription(e.target.value)}
+                    placeholder="What should the DAO do?"
+                    rows={3}
+                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Transfer target <span className="text-gray-500">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={propTransferTarget}
+                      onChange={(e) => setPropTransferTarget(e.target.value)}
+                      placeholder="r1... AccountId"
+                      className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Transfer DALLA</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.000001"
+                      value={propTransferValue}
+                      onChange={(e) => setPropTransferValue(e.target.value)}
+                      className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700"
+                    />
+                  </div>
+                </div>
+                {propTxHash && (
+                  <div className="text-xs text-emerald-300 break-all">
+                    Submitted: {propTxHash}
+                  </div>
+                )}
+                <button
+                  onClick={handleCreateProposal}
+                  disabled={propBusy || !selectedAccount?.address || !propDescription.trim()}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {propBusy ? 'Submitting…' : 'Submit Proposal'}
+                </button>
+              </div>
+            </GlassCard>
+
             <div className="space-y-3">
               {daoLoading && daoProposals.length === 0 ? (
                 <p className="text-sm text-gray-400">Loading proposals…</p>
@@ -536,6 +721,135 @@ export default function GemPage() {
                 })
               )}
             </div>
+          </>
+        )}
+
+        {activeTab === 'nft' && (
+          <>
+            <GlassCard variant="dark" blur="sm" className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-bold text-white">{nftCollection?.name ?? 'BeliNFT Collection'}</h3>
+                  <p className="text-xs text-gray-400">
+                    {nftCollection?.symbol ?? 'BNFT'} • {nftCollection?.totalSupply ?? 0} minted total
+                  </p>
+                </div>
+                <Heart size={32} className="text-pink-400" weight="fill" />
+              </div>
+              <p className="text-sm text-gray-300">
+                You hold <span className="font-bold text-white">{nftBalance}</span>{' '}
+                {nftCollection?.symbol ?? 'BNFT'}
+              </p>
+            </GlassCard>
+
+            {nftError && <div className="text-xs text-red-400">{nftError}</div>}
+            {nftTxHash && (
+              <div className="text-xs text-emerald-300 break-all">Submitted: {nftTxHash}</div>
+            )}
+
+            <GlassCard variant="dark" blur="sm" className="p-5">
+              <h3 className="font-bold text-white mb-1">Mint NFT</h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Mint a new BeliNFT. Typically restricted to the collection owner.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Recipient <span className="text-gray-500">(defaults to you)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={nftMintTo}
+                    onChange={(e) => setNftMintTo(e.target.value)}
+                    placeholder={selectedAccount?.address ?? 'r1...'}
+                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Metadata URI</label>
+                  <input
+                    type="text"
+                    value={nftMintUri}
+                    onChange={(e) => setNftMintUri(e.target.value)}
+                    placeholder="ipfs://… or https://…"
+                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                  />
+                </div>
+                <button
+                  onClick={handleMintNft}
+                  disabled={nftMintBusy || !selectedAccount?.address || !nftMintUri.trim()}
+                  className="w-full bg-gradient-to-r from-pink-500 to-red-400 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {nftMintBusy ? 'Minting…' : 'Mint NFT'}
+                </button>
+              </div>
+            </GlassCard>
+
+            <GlassCard variant="dark" blur="sm" className="p-5">
+              <h3 className="font-bold text-white mb-1">Transfer NFT</h3>
+              <p className="text-xs text-gray-400 mb-4">Send a BeliNFT you own.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Recipient</label>
+                  <input
+                    type="text"
+                    value={nftTransferTo}
+                    onChange={(e) => setNftTransferTo(e.target.value)}
+                    placeholder="r1..."
+                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Token ID</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={nftTransferId}
+                    onChange={(e) => setNftTransferId(e.target.value)}
+                    placeholder="0"
+                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700"
+                  />
+                </div>
+                <button
+                  onClick={handleTransferNft}
+                  disabled={nftTransferBusy || !selectedAccount?.address || !nftTransferTo.trim() || !nftTransferId.trim()}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {nftTransferBusy ? 'Transferring…' : 'Transfer NFT'}
+                </button>
+              </div>
+            </GlassCard>
+
+            <GlassCard variant="dark" blur="sm" className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-white">Your NFTs</h3>
+                <button
+                  onClick={() => void refreshOwnedNfts()}
+                  className="text-xs text-pink-400 hover:text-pink-300"
+                >
+                  Refresh
+                </button>
+              </div>
+              {ownedNfts.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  {selectedAccount?.address
+                    ? 'No BeliNFTs found in the first 100 token IDs.'
+                    : 'Connect a wallet to view your NFTs.'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {ownedNfts.map((n) => (
+                    <div
+                      key={n.id}
+                      className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-xs text-gray-300"
+                    >
+                      <p className="font-semibold text-white mb-1">Token #{n.id}</p>
+                      <p className="break-all text-gray-400">{n.uri ?? '— no URI —'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
           </>
         )}
       </div>

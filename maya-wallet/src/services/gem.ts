@@ -187,6 +187,100 @@ export async function getBeliNftBalanceOf(caller: string, owner: string): Promis
   return Number(balance ?? 0);
 }
 
+/**
+ * Mint a new BeliNFT to `to` with the given metadata URI.
+ * Typically only callable by the contract owner.
+ */
+export async function mintBeliNft(
+  minter: string,
+  to: string,
+  uri: string,
+): Promise<string> {
+  const api = await initializeApi();
+  const contract = getGemContract(api, 'beliNft');
+  if (!contract) throw new Error('BeliNFT contract address not configured');
+  const injector = await web3FromAddress(minter);
+  const tx = contract.tx.mint(
+    { gasLimit: makeGasLimit(api, 'write') as never, storageDepositLimit: null },
+    to,
+    uri,
+  );
+  return new Promise((resolve, reject) => {
+    tx.signAndSend(minter, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+      if (dispatchError) {
+        reject(new Error(dispatchError.toString()));
+        return;
+      }
+      if (status.isInBlock || status.isFinalized) {
+        resolve(txHash.toString());
+      }
+    }).catch(reject);
+  });
+}
+
+/**
+ * Transfer a BeliNFT owned by `sender` to `to`. The on-chain Id is encoded
+ * as the PSP34 `Id::U64` variant.
+ */
+export async function transferBeliNft(
+  sender: string,
+  to: string,
+  tokenId: number | string,
+): Promise<string> {
+  const api = await initializeApi();
+  const contract = getGemContract(api, 'beliNft');
+  if (!contract) throw new Error('BeliNFT contract address not configured');
+  const injector = await web3FromAddress(sender);
+  const id = { U64: Number(tokenId) };
+  const tx = contract.tx.transfer(
+    { gasLimit: makeGasLimit(api, 'write') as never, storageDepositLimit: null },
+    to,
+    id,
+    [],
+  );
+  return new Promise((resolve, reject) => {
+    tx.signAndSend(sender, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+      if (dispatchError) {
+        reject(new Error(dispatchError.toString()));
+        return;
+      }
+      if (status.isInBlock || status.isFinalized) {
+        resolve(txHash.toString());
+      }
+    }).catch(reject);
+  });
+}
+
+/**
+ * Walk token IDs 0..totalSupply-1 calling `owner_of` to find tokens held by `owner`.
+ * Bounded scan; for large collections this should be replaced with an indexer.
+ */
+export async function listBeliNftsOwnedBy(
+  caller: string,
+  owner: string,
+  maxScan = 100,
+): Promise<Array<{ id: number; uri: string | null }>> {
+  const api = await initializeApi();
+  const contract = getGemContract(api, 'beliNft');
+  if (!contract) return [];
+  const supplyRaw = await dryRunQuery<number>(contract, caller, 'totalSupply');
+  const supply = Math.min(Number(supplyRaw ?? 0), maxScan);
+  const owned: Array<{ id: number; uri: string | null }> = [];
+  for (let i = 0; i < supply; i += 1) {
+    try {
+      const id = { U64: i };
+      const ownerAddr = await dryRunQuery<string>(contract, caller, 'ownerOf', [id]);
+      if (ownerAddr && String(ownerAddr) === owner) {
+        const uri = await dryRunQuery<string>(contract, caller, 'tokenUri', [i]).catch(() => null);
+        owned.push({ id: i, uri: uri ? String(uri) : null });
+      }
+    } catch {
+      // skip
+    }
+  }
+  return owned;
+}
+
 /* ───────────── Faucet ───────────── */
 
 export interface FaucetStatus {
@@ -305,6 +399,49 @@ export async function voteOnDaoProposal(
   );
   return new Promise((resolve, reject) => {
     tx.signAndSend(voter, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+      if (dispatchError) {
+        reject(new Error(dispatchError.toString()));
+        return;
+      }
+      if (status.isInBlock || status.isFinalized) {
+        resolve(txHash.toString());
+      }
+    }).catch(reject);
+  });
+}
+
+/**
+ * Submit a new DAO proposal.
+ * @param description plain-text description
+ * @param transferTarget optional treasury recipient AccountId (or null for text-only proposal)
+ * @param transferValueDalla DALLA amount in human units (decimal string); 0 for text-only
+ */
+export async function createDaoProposal(
+  proposer: string,
+  description: string,
+  transferTarget: string | null,
+  transferValueDalla: string,
+): Promise<string> {
+  const api = await initializeApi();
+  const contract = getGemContract(api, 'dao');
+  if (!contract) throw new Error('DAO contract address not configured');
+  const injector = await web3FromAddress(proposer);
+
+  const PLANCK = 1_000_000_000_000n;
+  const trimmed = (transferValueDalla || '0').trim();
+  const [whole, frac = ''] = trimmed.split('.');
+  const fracPadded = (frac + '000000000000').slice(0, 12);
+  const value = BigInt(whole || '0') * PLANCK + BigInt(fracPadded || '0');
+
+  const tx = contract.tx.createProposal(
+    { gasLimit: makeGasLimit(api, 'write') as never, storageDepositLimit: null },
+    description,
+    transferTarget ?? null,
+    value.toString(),
+  );
+
+  return new Promise((resolve, reject) => {
+    tx.signAndSend(proposer, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
       if (dispatchError) {
         reject(new Error(dispatchError.toString()));
         return;
