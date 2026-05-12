@@ -106,15 +106,19 @@ export async function registerBelizeID(
   try {
     const injector = await web3FromAddress(address);
     
-    const tx = api.tx.identity.registerIdentity(
+    // Real signature: registerIdentity(name:Bytes). Pack the full PII tuple
+    // into a single newline-separated bytestring; richer fields are persisted
+    // off-chain by upcoming verification flows.
+    const namePayload = [
       data.firstName,
-      data.middleName || '',
+      data.middleName ?? '',
       data.lastName,
       data.dateOfBirth,
       data.nationality,
       data.residenceAddress,
-      data.district
-    );
+      data.district,
+    ].join('\n');
+    const tx = api.tx.identity.registerIdentity(namePayload);
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
@@ -181,23 +185,14 @@ export async function submitSSNVerification(
   address: string,
   ssn: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.identity.submitSsnVerification(ssn);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('SSN verification submission failed:', error);
-    throw error;
-  }
+  // The identity pallet only exposes issuer-driven attestation
+  // (`identity.issueSsn`). Self-submitted SSN proofs are not supported.
+  void address; void ssn;
+  await initializeApi();
+  throw new Error(
+    'SSN verification must be issued by an approved issuer (identity.issueSsn). ' +
+      'Self-submission is not supported by the on-chain identity pallet.',
+  );
 }
 
 /**
@@ -239,28 +234,13 @@ export async function submitPassportVerification(
   issueDate: number,
   expiryDate: number
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.identity.submitPassportVerification(
-      passportNumber,
-      issuingCountry,
-      issueDate,
-      expiryDate
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Passport verification submission failed:', error);
-    throw error;
-  }
+  // Passport verification is issuer-driven on chain (`identity.issuePassport`).
+  void address; void passportNumber; void issuingCountry; void issueDate; void expiryDate;
+  await initializeApi();
+  throw new Error(
+    'Passport verification must be issued by an approved issuer (identity.issuePassport). ' +
+      'Self-submission is not supported by the on-chain identity pallet.',
+  );
 }
 
 /**

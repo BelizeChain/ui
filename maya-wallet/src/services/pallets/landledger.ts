@@ -228,36 +228,13 @@ export async function registerDocument(
   
   try {
     const injector = await web3FromAddress(address);
-    
-    const tx = api.tx.landLedger.registerDocument(
-      titleId,
-      data.type,
-      data.name,
-      data.documentHash,
-      data.storageProof,
-      data.sizeBytes
+    // No `registerDocument` extrinsic; per-document attachments are not
+    // stored on chain. Use Pakit (IPFS) and pin the CID to the property's
+    // off-chain metadata index.
+    void titleId; void data; void injector;
+    throw new Error(
+      'Per-document registration is not supported by landLedger. Persist via Pakit and link off-chain.',
     );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let documentId = '';
-          
-          // Extract document ID from events
-          events.forEach(({ event }) => {
-            if (api.events.landLedger?.DocumentRegistered?.is(event)) {
-              const [, docId] = event.data;
-              documentId = docId.toString();
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            documentId,
-          });
-        }
-      }).catch(reject);
-    });
   } catch (error) {
     console.error('Register document failed:', error);
     throw error;
@@ -279,14 +256,20 @@ export async function initiatePropertyTransfer(
   
   try {
     const injector = await web3FromAddress(address);
-    const priceInPlanck = price ? parseFloat(price) * Math.pow(10, 12) : 0;
-    
-    const tx = api.tx.landLedger.initiateTransfer(
-      titleId,
+    const priceInPlanck = price ? BigInt(Math.floor(parseFloat(price) * 1e12)) : 0n;
+    // Real signature: transferProperty(propertyId:u32, newOwner, transferPrice:u128, transferTypeIndex:u8).
+    // Currency selection is not represented on chain. Map common transfer
+    // types to the chain's u8 index: 0=Sale, 1=Gift, 2=Inheritance, 3=Court.
+    void currency;
+    const transferTypeIndex = (
+      { Sale: 0, Gift: 1, Inheritance: 2, Court: 3 } as Record<string, number>
+    )[transferType] ?? 0;
+    const propertyIdNum = Number.parseInt(titleId, 10);
+    const tx = api.tx.landLedger.transferProperty(
+      propertyIdNum,
       to,
-      priceInPlanck,
-      currency,
-      transferType
+      priceInPlanck.toString(),
+      transferTypeIndex,
     );
 
     return new Promise((resolve, reject) => {

@@ -137,14 +137,16 @@ export async function submitProposal(
   
   try {
     const injector = await web3FromAddress(address);
-    const valueInPlanck = parseFloat(data.value) * Math.pow(10, 12);
-    
-    const tx = api.tx.governance.propose(
-      valueInPlanck,
+    const valueInPlanck = BigInt(Math.floor(parseFloat(data.value) * 1e12));
+
+    // Map UI submission to the chain's treasury-spend proposal extrinsic.
+    // Real signature: proposeTreasurySpend(recipient, amount, description, districtIndex?).
+    const descriptionBytes = `${data.title}\n\n${data.description}`;
+    const tx = api.tx.governance.proposeTreasurySpend(
       data.beneficiary,
-      data.title,
-      data.description,
-      data.category
+      valueInPlanck.toString(),
+      descriptionBytes,
+      null,
     );
 
     return new Promise((resolve, reject) => {
@@ -186,7 +188,13 @@ export async function voteOnProposal(
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.governance.vote(proposalIndex, { Standard: { vote, conviction } });
+    // Real signature: castVote(proposalId, voteChoiceIndex, conviction).
+    // voteChoiceIndex: 0 = Aye, 1 = Nay. Conviction: 0..5.
+    const voteChoiceIndex = vote === 'Aye' ? 0 : 1;
+    const convictionIndex = (
+      { None: 0, Locked1x: 1, Locked2x: 2, Locked4x: 3, Locked8x: 4, Locked16x: 5 } as const
+    )[conviction] ?? 0;
+    const tx = api.tx.governance.castVote(proposalIndex, voteChoiceIndex, convictionIndex);
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -325,16 +333,13 @@ export async function secondProposal(
   const api = await initializeApi();
   
   try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.governance.second(proposalIndex);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
+    // The governance pallet has no `second` extrinsic; supporting a proposal
+    // is expressed as an Aye cast vote with no conviction.
+    void address;
+    void api;
+    throw new Error(
+      `Seconding proposal ${proposalIndex} is not a separate extrinsic on chain. Cast an Aye vote instead.`,
+    );
   } catch (error) {
     console.error('Seconding proposal failed:', error);
     throw error;

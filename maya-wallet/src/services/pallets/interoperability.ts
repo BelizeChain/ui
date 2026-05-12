@@ -105,13 +105,15 @@ export async function initiateBridgeTransfer(
   
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    const tx = api.tx.interoperability.initiateBridgeTransfer(
-      bridgeId,
+    const amountInPlanck = BigInt(Math.floor(parseFloat(amount) * 1e12));
+    // Real signature: initiateBridge(targetChainIndex:u8, targetAddress:Bytes, amount:u128, assetIndex:u8).
+    const targetChainIndex = Number.parseInt(bridgeId, 10) || 0;
+    const assetIndex = Number.parseInt(asset, 10) || 0;
+    const tx = api.tx.interoperability.initiateBridge(
+      targetChainIndex,
       toAddress,
-      asset,
-      amountInPlanck
+      amountInPlanck.toString(),
+      assetIndex,
     );
 
     return new Promise((resolve, reject) => {
@@ -307,23 +309,13 @@ export async function cancelBridgeTransfer(
   address: string,
   transferId: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.interoperability.cancelTransfer(transferId);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Cancel transfer failed:', error);
-    throw error;
-  }
+  // No `cancelTransfer` extrinsic exists. A dispute can be filed via
+  // `interoperability.disputeBridgeTransaction(txId, reason)`.
+  void address; void transferId;
+  await initializeApi();
+  throw new Error(
+    'Bridge cancellation is not supported; file a dispute via interoperability.disputeBridgeTransaction.',
+  );
 }
 
 /**
@@ -333,35 +325,13 @@ export async function claimBridgeRefund(
   address: string,
   transferId: string
 ): Promise<{ hash: string; refundAmount: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.interoperability.claimRefund(transferId);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let refundAmount = '0.00';
-          
-          events.forEach(({ event }) => {
-            if (api.events.interoperability?.RefundClaimed?.is(event)) {
-              const [, , amount] = event.data;
-              refundAmount = formatBalance(amount.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            refundAmount,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Claim refund failed:', error);
-    throw error;
-  }
+  // No `claimRefund` extrinsic exists on chain. Refunds, when applicable,
+  // are processed via `interoperability.processUnlock` by a validator.
+  void address; void transferId;
+  await initializeApi();
+  throw new Error(
+    'Bridge refund claims are not supported by the interoperability pallet.',
+  );
 }
 
 /**

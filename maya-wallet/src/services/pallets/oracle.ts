@@ -262,36 +262,15 @@ export async function redeemTourismCashback(
   address: string,
   rewardIds: string[]
 ): Promise<{ hash: string; bBZDAmount: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.oracle.redeemTourismRewards(rewardIds);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let bBZDAmount = '0.00';
-          
-          // Extract bBZD amount from events
-          events.forEach(({ event }) => {
-            if (api.events.oracle?.RewardsRedeemed?.is(event)) {
-              const [, amount] = event.data;
-              bBZDAmount = formatBalance(amount.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            bBZDAmount,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Redeem cashback failed:', error);
-    throw error;
-  }
+  // Real chain has `oracle.claimOracleRewards()` (no per-id selection) and no
+  // dedicated tourism redemption. Until a redemption extrinsic exists, expose
+  // a clear failure so the UI can render an explanation instead of silently
+  // failing inside the SDK encoder.
+  void address; void rewardIds;
+  await initializeApi();
+  throw new Error(
+    'Tourism redemption is not yet available on chain. Use oracle.claimOracleRewards via a future release.',
+  );
 }
 
 /**
@@ -304,42 +283,14 @@ export async function reportMerchantTransaction(
   transactionHash: string,
   amount: string
 ): Promise<{ hash: string; cashbackAmount: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    const tx = api.tx.oracle.reportMerchantTransaction(
-      merchantId,
-      transactionHash,
-      amountInPlanck
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let cashbackAmount = '0.00';
-          
-          // Extract cashback amount from events
-          events.forEach(({ event }) => {
-            if (api.events.oracle?.CashbackEarned?.is(event)) {
-              const [, , amount] = event.data;
-              cashbackAmount = formatBalance(amount.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            cashbackAmount,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Report transaction failed:', error);
-    throw error;
-  }
+  // No `reportMerchantTransaction` extrinsic exists on chain. Merchant
+  // verification is done by oracles via `oracle.verifyMerchant`; cashback
+  // accrual is expected to happen via a future extrinsic.
+  void address; void merchantId; void transactionHash; void amount;
+  await initializeApi();
+  throw new Error(
+    'Merchant transaction reporting is not yet wired to the oracle pallet.',
+  );
 }
 
 /**

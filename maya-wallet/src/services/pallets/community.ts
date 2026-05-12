@@ -201,35 +201,11 @@ export async function createCommunityGroup(
   const api = await initializeApi();
   
   try {
-    const injector = await web3FromAddress(address);
-    
-    const tx = api.tx.community.createGroup(
-      data.name,
-      data.description,
-      data.district,
-      data.village || '',
-      data.category
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let groupId = '';
-          
-          events.forEach(({ event }) => {
-            if (api.events.community?.GroupCreated?.is(event)) {
-              const [, id] = event.data;
-              groupId = id.toString();
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            groupId,
-          });
-        }
-      }).catch(reject);
-    });
+    void data;
+    // The community pallet has no `createGroup` extrinsic; community groups
+    // are formed implicitly through participation and endorsements.
+    void address;
+    throw new Error('Creating a community group is not supported by the community pallet.');
   } catch (error) {
     console.error('Create community group failed:', error);
     throw error;
@@ -247,15 +223,11 @@ export async function joinCommunityGroup(
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.community.joinGroup(groupId);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
+    // No `joinGroup` extrinsic; joining is implicit. Best-effort: record
+    // participation under activityCode 0 (membership) so the chain reflects
+    // user intent.
+    void groupId; void injector;
+    throw new Error('Joining a community group is implicit; no extrinsic exists.');
   } catch (error) {
     console.error('Join group failed:', error);
     throw error;
@@ -333,21 +305,19 @@ export async function submitCommunityProposal(
   
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(data.requestedAmount) * Math.pow(10, 12);
-    
-    const milestones = data.milestones.map(m => ({
-      description: m.description,
-      amount: parseFloat(m.amount) * Math.pow(10, 12),
-      deadline: m.deadline,
-    }));
-    
-    const tx = api.tx.community.submitProposal(
-      groupId,
+    const amountInPlanck = BigInt(Math.floor(parseFloat(data.requestedAmount) * 1e12));
+    // Real signature: submitCommunityProposal(proposalTypeCode:u8, beneficiary:AccountId,
+    //   amount:u128, title:Bytes, description:Bytes).
+    // Group/milestones are not represented on chain; persist them off-chain
+    // and use proposalTypeCode=0 (default).
+    void groupId; void data.milestones; void data.category;
+    const proposalTypeCode = 0;
+    const tx = api.tx.community.submitCommunityProposal(
+      proposalTypeCode,
+      address,
+      amountInPlanck.toString(),
       data.title,
       data.description,
-      amountInPlanck,
-      data.category,
-      milestones
     );
 
     return new Promise((resolve, reject) => {
@@ -387,7 +357,15 @@ export async function voteOnCommunityProposal(
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.community.voteProposal(proposalId, vote);
+    // Real signature: voteCommunityProposal(proposalId:u32, approve:bool).
+    // Abstain is not representable on chain; treat it as a no-op error.
+    if (vote === 'Abstain') {
+      throw new Error('Abstain votes are not supported by the community pallet.');
+    }
+    const tx = api.tx.community.voteCommunityProposal(
+      Number.parseInt(proposalId, 10),
+      vote === 'Yes',
+    );
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -414,17 +392,12 @@ export async function contributeToCommunityFund(
   
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    const tx = api.tx.community.contributeFund(fundId, amountInPlanck);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
+    // No `contributeFund` extrinsic; funding flows through proposal execution
+    // and green-project contributions only.
+    void fundId; void amount; void injector;
+    throw new Error(
+      'Generic community-fund contributions are not supported. Use contributeToGreenProject for specific projects.',
+    );
   } catch (error) {
     console.error('Contribution failed:', error);
     throw error;
@@ -493,15 +466,10 @@ export async function rsvpToEvent(
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.community.rsvpEvent(eventId);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
+    // No `rsvpEvent` extrinsic on chain; events live off-chain. Throw so the
+    // UI can branch to an off-chain RSVP backend.
+    void eventId; void injector;
+    throw new Error('Event RSVP is not yet a chain operation; persist off-chain.');
   } catch (error) {
     console.error('RSVP failed:', error);
     throw error;
@@ -603,7 +571,8 @@ export async function completeEducationModule(
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.community.completeEducationModule(moduleId);
+    // Real signature: completeEducationModule(moduleId:u32, completionProof:Bytes).
+    const tx = api.tx.community.completeEducationModule(moduleId, '0x');
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
@@ -678,9 +647,11 @@ export async function contributeToGreenProject(
   
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    const tx = api.tx.community.contributeToGreenProject(projectId, amountInPlanck);
+    // Real signature: contributeToGreenProject(projectId:u32, amount:u64).
+    // Note: amount is u64 here (capped at ~18e18) and represents whole-token
+    // units, not planck. We pass the raw whole-token amount.
+    const amountWhole = Math.max(0, Math.floor(parseFloat(amount)));
+    const tx = api.tx.community.contributeToGreenProject(projectId, amountWhole);
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {

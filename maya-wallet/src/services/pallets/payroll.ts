@@ -383,37 +383,15 @@ export async function requestSalaryAdvance(
   amount: string,
   reason: string
 ): Promise<{ hash: string; requestId: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    const tx = api.tx.payroll.requestAdvance(amountInPlanck, reason);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let requestId = '';
-          
-          events.forEach(({ event }) => {
-            if (api.events.payroll?.AdvanceRequested?.is(event)) {
-              const [, reqId] = event.data;
-              requestId = reqId.toString();
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            requestId,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Request advance failed:', error);
-    throw error;
-  }
+  // The payroll pallet on BelizeChain is employer-driven: there is no
+  // employee-initiated advance extrinsic. Employees must request advances
+  // off-chain; the employer then issues a bonus via `payroll.issueBonus`.
+  void address; void amount; void reason;
+  await initializeApi();
+  throw new Error(
+    'Salary advances must be issued by the employer (payroll.issueBonus). ' +
+      'No employee-initiated advance extrinsic exists on chain.',
+  );
 }
 
 /**

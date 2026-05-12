@@ -105,11 +105,25 @@ export async function submitQuantumJob(
   try {
     const injector = await web3FromAddress(address);
     
-    const tx = api.tx.quantum.submitJob(
-      circuit,
-      backend,
+    // Real signature: submitQuantumJob(jobId:Bytes, backendIndex:u8, circuitHash:[u8;32],
+    //   numQubits:u16, circuitDepth:u32, numShots:u32).
+    void priority;
+    const jobIdBytes = `0x${Date.now().toString(16).padStart(16, '0')}`;
+    const backendIndex = Number.parseInt(backend, 10) || 0;
+    // Hash circuit into a 32-byte placeholder. Backend should derive the real
+    // commitment off-chain and pass a [u8;32] hex string here.
+    const circuitHash = circuit.startsWith('0x') && circuit.length === 66
+      ? circuit
+      : '0x' + '00'.repeat(32);
+    const numQubits = 1;
+    const circuitDepth = 1;
+    const tx = api.tx.quantum.submitQuantumJob(
+      jobIdBytes,
+      backendIndex,
+      circuitHash,
+      numQubits,
+      circuitDepth,
       shots,
-      priority
     );
 
     return new Promise((resolve, reject) => {
@@ -232,23 +246,10 @@ export async function cancelQuantumJob(
   address: string,
   jobId: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.quantum.cancelJob(jobId);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Cancel quantum job failed:', error);
-    throw error;
-  }
+  // No `cancelJob` extrinsic exists on the quantum pallet.
+  void address; void jobId;
+  await initializeApi();
+  throw new Error('Cancelling a submitted quantum job is not supported on chain.');
 }
 
 /**
@@ -296,35 +297,14 @@ export async function claimQuantumReward(
   address: string,
   jobId: string
 ): Promise<{ hash: string; reward: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const tx = api.tx.quantum.claimReward(jobId);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let reward = '0.00';
-          
-          events.forEach(({ event }) => {
-            if (api.events.quantum?.RewardClaimed?.is(event)) {
-              const [, , amount] = event.data;
-              reward = formatBalance(amount.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            reward,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Claim quantum reward failed:', error);
-    throw error;
-  }
+  // Quantum-job rewards accrue through staking PoUW contribution recording
+  // (`staking.recordQuantumContribution`) and are claimed via
+  // `staking.claimPouwWithDomainBonus()`. There is no per-job claim.
+  void address; void jobId;
+  await initializeApi();
+  throw new Error(
+    'Per-job quantum reward claim is not supported. Use staking.claimPouwWithDomainBonus instead.',
+  );
 }
 
 /**

@@ -114,18 +114,18 @@ export async function stakeDalla(
   
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    let tx;
-    if (validatorAddress) {
-      // Nominate a specific validator
-      tx = api.tx.staking.bond(amountInPlanck, 'Staked');
-      const nominateTx = api.tx.staking.nominate([validatorAddress]);
-      tx = api.tx.utility.batch([tx, nominateTx]);
-    } else {
-      // Simple bonding
-      tx = api.tx.staking.bond(amountInPlanck, 'Staked');
-    }
+    const amountInPlanck = BigInt(Math.floor(parseFloat(amount) * 1e12));
+
+    // Real signature: joinValidators(stake, computeCapacity, location:Bytes).
+    // PoUW staking on BelizeChain registers the caller as a validator with a
+    // compute-capacity weight; nominator-style staking is not supported.
+    const computeCapacity = 100;
+    const location = validatorAddress ?? 'wallet';
+    const tx = api.tx.staking.joinValidators(
+      amountInPlanck.toString(),
+      computeCapacity,
+      location,
+    );
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -151,9 +151,10 @@ export async function unstakeDalla(
   
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
-    
-    const tx = api.tx.staking.unbond(amountInPlanck);
+    // Real chain has no partial unbond; leaveValidators schedules the full
+    // stake for withdrawal after the unbonding period.
+    void amount;
+    const tx = api.tx.staking.leaveValidators();
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -176,7 +177,9 @@ export async function claimStakingRewards(address: string): Promise<{ hash: stri
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.staking.payoutStakers(address, 0); // Current era
+    // Real extrinsic: claimPouwWithDomainBonus() — distributes accumulated
+    // PoUW + staking rewards to caller.
+    const tx = api.tx.staking.claimPouwWithDomainBonus();
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
@@ -288,11 +291,17 @@ export async function reportTrainingContribution(
   
   try {
     const injector = await web3FromAddress(address);
-    const tx = api.tx.staking.reportTraining(
+    // Real signature: submitModelDelta(taskId, encryptedDelta, computationCommitment, computationLog).
+    // UI doesn't carry taskId/log yet, so we encode the model hash into commitment
+    // and pass empty delta/log placeholders. Nawal client should drive this directly
+    // with the full payload when wired.
+    void qualityScore; void timelinessScore; void honestyScore;
+    const taskId = 0;
+    const tx = api.tx.staking.submitModelDelta(
+      taskId,
+      '0x',
       modelHash,
-      qualityScore,
-      timelinessScore,
-      honestyScore
+      modelHash,
     );
 
     return new Promise((resolve, reject) => {

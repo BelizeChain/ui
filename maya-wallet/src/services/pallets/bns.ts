@@ -117,7 +117,7 @@ export async function registerDomain(
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
     
-    const tx = api.tx.bns.registerDomain(normalizedDomain, years);
+    const tx = api.tx.bns.registerDomain(normalizedDomain, Math.min(255, Math.max(1, years)));
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
@@ -188,7 +188,8 @@ export async function setDomainResolution(
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
     
-    const tx = api.tx.bns.setResolution(normalizedDomain, targetAddress);
+    // Real signature: setResolution(domainName, walletAddress?, contentHash?, metadata).
+    const tx = api.tx.bns.setResolution(normalizedDomain, targetAddress, null, '0x');
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -210,25 +211,11 @@ export async function setPrimaryDomain(
   address: string,
   domain: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const normalizedDomain = normalizeDomain(domain);
-    
-    const tx = api.tx.bns.setPrimaryDomain(normalizedDomain);
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Set primary domain failed:', error);
-    throw error;
-  }
+  // bns pallet has no `setPrimaryDomain` extrinsic. Reverse resolution is
+  // not yet wired on chain.
+  void address; void domain;
+  await initializeApi();
+  throw new Error('Primary/reverse domain assignment is not supported by the bns pallet.');
 }
 
 /**
@@ -246,13 +233,17 @@ export async function listDomainForSale(
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
-    const priceInPlanck = parseFloat(price) * Math.pow(10, 12);
-    
-    const tx = api.tx.bns.listForSale(
+    const priceInPlanck = BigInt(Math.floor(parseFloat(price) * 1e12));
+    // Real signature: listDomain(domainName, price, minOffer?, durationBlocks).
+    // Translate expiryDays ≈ expiryDays * 14400 blocks (6s blocks). Currency
+    // selection is not represented on chain (always native unit).
+    void currency;
+    const durationBlocks = (expiryDays ?? 30) * 14400;
+    const tx = api.tx.bns.listDomain(
       normalizedDomain,
-      priceInPlanck,
-      currency,
-      expiryDays
+      priceInPlanck.toString(),
+      null,
+      durationBlocks,
     );
 
     return new Promise((resolve, reject) => {
@@ -315,9 +306,8 @@ export async function purchaseDomain(
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
-    const priceInPlanck = parseFloat(price) * Math.pow(10, 12);
-    
-    const tx = api.tx.bns.purchaseDomain(normalizedDomain, priceInPlanck);
+    const priceInPlanck = BigInt(Math.floor(parseFloat(price) * 1e12));
+    const tx = api.tx.bns.buyDomain(normalizedDomain, priceInPlanck.toString());
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -347,7 +337,10 @@ export async function hostWebsite(
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
     
-    const tx = api.tx.bns.setWebsiteHosting(normalizedDomain, ipfsHash, siteHash);
+    // Real signature: activateHosting(domainName, tier, contentHash:[u8;32], autoRenew).
+    void siteHash;
+    const tier = 1;
+    const tx = api.tx.bns.activateHosting(normalizedDomain, tier, ipfsHash, true);
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
