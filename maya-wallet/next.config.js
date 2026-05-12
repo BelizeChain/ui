@@ -11,10 +11,6 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   transpilePackages: ['@belizechain/shared'],
-  eslint: {
-    // Don't fail build on ESLint warnings
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     // Don't fail build on TypeScript errors during builds (only show warnings)
     ignoreBuildErrors: false,

@@ -2,18 +2,16 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  swcMinify: true,
   transpilePackages: ['@belizechain/shared'],
-  eslint: {
-    // Don't fail build on ESLint warnings/errors (lint runs separately in CI)
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     // Don't fail build on TypeScript errors during builds
     ignoreBuildErrors: false,
   },
   images: {
-    domains: ['localhost'],
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'localhost' },
+    ],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
