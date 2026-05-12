@@ -1,6 +1,23 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { getDallaBalance } from '@/services/gem';
+
+const DALLA_PLANCK = 1_000_000_000_000n;
+const BALANCE_POLL_MS = 15_000;
+
+function formatPlanck(raw: string): string {
+  try {
+    const n = BigInt(raw.replace(/,/g, ''));
+    const whole = n / DALLA_PLANCK;
+    const frac = n % DALLA_PLANCK;
+    if (frac === 0n) return whole.toLocaleString();
+    const fracStr = frac.toString().padStart(12, '0').slice(0, 4).replace(/0+$/, '');
+    return fracStr ? `${whole.toLocaleString()}.${fracStr}` : whole.toLocaleString();
+  } catch {
+    return '0.00';
+  }
+}
 
 const subscribeToStakingRewards = async (address: string, callback: (reward: any) => void) => {
   return () => {};
@@ -38,27 +55,35 @@ export function useBalanceSubscription(address: string | null) {
   const [balance, setBalance] = useState<{dalla: string; bBZD: string; total: string;} | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   useEffect(() => {
     if (!address || typeof window === 'undefined') {
+      setBalance(null);
       setIsLoading(false);
       return;
     }
-    let unsub: (() => void) | null = null;
-    const sub = async () => {
+    let cancelled = false;
+    const fetchBalance = async () => {
       try {
-        setIsLoading(true);
-        unsub = await subscribeToBalanceChanges(address, (newBalance) => {
-          setBalance(newBalance);
-          setIsLoading(false);
-        });
+        const raw = await getDallaBalance(address, address);
+        if (cancelled) return;
+        const dalla = formatPlanck(raw);
+        // bBZD does not yet have a top-level balance store on-chain (used only
+        // inside the BelizeX AMM as an AssetId variant). Show 0 until a
+        // pallet/contract balance binding is published.
+        setBalance({ dalla, bBZD: '0.00', total: dalla });
+        setError(null);
+        setIsLoading(false);
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed');
         setIsLoading(false);
       }
     };
-    sub();
-    return () => { if (unsub) unsub(); };
+    setIsLoading(true);
+    void fetchBalance();
+    const interval = setInterval(() => { void fetchBalance(); }, BALANCE_POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [address]);
   return { balance, isLoading, error };
 }
