@@ -5,6 +5,10 @@ type PublicRuntimeEnv = {
   NEXT_PUBLIC_DALLA_CONTRACT?: string;
   NEXT_PUBLIC_DAO_CONTRACT?: string;
   NEXT_PUBLIC_FAUCET_CONTRACT?: string;
+  NEXT_PUBLIC_PSP37_CONTRACT?: string;
+  NEXT_PUBLIC_DEX_FACTORY_CONTRACT?: string;
+  NEXT_PUBLIC_DEX_ROUTER_CONTRACT?: string;
+  NEXT_PUBLIC_GEM_DEPLOYMENT_NETWORK?: string;
   NEXT_PUBLIC_IPFS_GATEWAY?: string;
   NEXT_PUBLIC_KINICH_API?: string;
   NEXT_PUBLIC_KINICH_API_URL?: string;
@@ -30,13 +34,45 @@ export interface RuntimeConfig {
     dalla?: string;
     dao?: string;
     faucet?: string;
+    psp37?: string;
+    dexFactory?: string;
+    dexRouter?: string;
   };
+  /**
+   * Identifier for the on-chain GEM deployment that `gemContracts` corresponds to.
+   * Matches the timestamped `deployment-*.json` artifact under `gem/`.
+   */
+  gemDeploymentId: string;
   ipfsGatewayUrl: string;
   kinichApiUrl: string;
   nawalApiUrl: string;
   networkName: string;
   pakitApiUrl: string;
 }
+
+/**
+ * Built-in Ceiba testnet deployment of GEM contracts.
+ * Sourced from `gem/deployment-1778612694168.json` (psp37) and
+ * `gem/deployment-1778612718117.json` (dex factory/router), both deployed
+ * 2026-05-12 on top of the existing dalla/beli_nft/dao/faucet set from
+ * `gem/deployment-1778544360130.json`.
+ *
+ * Override any of these via `NEXT_PUBLIC_*_CONTRACT` env vars.
+ *
+ * Note: the dex pair contract is uploaded as code only (factory instantiates
+ * pairs on demand via `create_pair`), so there is no fixed pair address.
+ */
+const CEIBA_GEM_DEPLOYMENT = {
+  id: '1778612718117',
+  dalla: 'r1Vkg9k4vy7YcgSES8HMPrbtAsr6QWZcCixDQ19saBYfQv9me',
+  beliNft: 'r1V67KtGB3i2mL4421WSd5WVfWPRuwwUVu6VMwDYfzobjVKHE',
+  dao: 'r1WcVzmmX6bXvX4wpoR1W8ffA3Chr8UU7PtxXE8JQG4RZkzSK',
+  faucet: 'r1WXkqkVdPb4ap9SYPi7zdKa2PXjYUGzve5HsPn6FaezKRJvX',
+  psp37: 'r1U6k8Unb1gbnhQ8KHmqxKQvmWEQ5nxqeSHPL7VBkiUGKRYwM',
+  dexFactory: 'r1UZZBGTX6cRLSYSvL2i6cCGXvRF9JY9TtM4rmaXtgAr73DGQ',
+  dexRouter: 'r1XKmdL9wopmVJedPepW76oPYTV1tFdTaPsHT73CqfZruPww1',
+  dexPairCodeHash: '0x96de81afced1e99600f0f54e513fcdb95d167c01a8a7c644c9f849f43f8a5c69',
+} as const;
 
 const localHostnames = new Set(['127.0.0.1', '::1', 'localhost']);
 
@@ -47,6 +83,10 @@ const publicEnv: PublicRuntimeEnv = {
   NEXT_PUBLIC_DALLA_CONTRACT: process.env.NEXT_PUBLIC_DALLA_CONTRACT,
   NEXT_PUBLIC_DAO_CONTRACT: process.env.NEXT_PUBLIC_DAO_CONTRACT,
   NEXT_PUBLIC_FAUCET_CONTRACT: process.env.NEXT_PUBLIC_FAUCET_CONTRACT,
+  NEXT_PUBLIC_PSP37_CONTRACT: process.env.NEXT_PUBLIC_PSP37_CONTRACT,
+  NEXT_PUBLIC_DEX_FACTORY_CONTRACT: process.env.NEXT_PUBLIC_DEX_FACTORY_CONTRACT,
+  NEXT_PUBLIC_DEX_ROUTER_CONTRACT: process.env.NEXT_PUBLIC_DEX_ROUTER_CONTRACT,
+  NEXT_PUBLIC_GEM_DEPLOYMENT_NETWORK: process.env.NEXT_PUBLIC_GEM_DEPLOYMENT_NETWORK,
   NEXT_PUBLIC_IPFS_GATEWAY: process.env.NEXT_PUBLIC_IPFS_GATEWAY,
   NEXT_PUBLIC_KINICH_API: process.env.NEXT_PUBLIC_KINICH_API,
   NEXT_PUBLIC_KINICH_API_URL: process.env.NEXT_PUBLIC_KINICH_API_URL,
@@ -128,6 +168,11 @@ export function getRuntimeConfig(): RuntimeConfig {
   const beliNftContract = readPublicEnv('NEXT_PUBLIC_BELI_NFT_CONTRACT');
   const daoContract = readPublicEnv('NEXT_PUBLIC_DAO_CONTRACT');
   const faucetContract = readPublicEnv('NEXT_PUBLIC_FAUCET_CONTRACT');
+  const psp37Contract = readPublicEnv('NEXT_PUBLIC_PSP37_CONTRACT');
+  const dexFactoryContract = readPublicEnv('NEXT_PUBLIC_DEX_FACTORY_CONTRACT');
+  const dexRouterContract = readPublicEnv('NEXT_PUBLIC_DEX_ROUTER_CONTRACT');
+  const gemDeploymentId =
+    readPublicEnv('NEXT_PUBLIC_GEM_DEPLOYMENT_NETWORK') || CEIBA_GEM_DEPLOYMENT.id;
 
   const hasProxyOrigin = Boolean(browserOrigin);
 
@@ -140,11 +185,15 @@ export function getRuntimeConfig(): RuntimeConfig {
       (browserOrigin ? toWebSocketUrl(browserOrigin, '/ws') : 'ws://127.0.0.1:9944'),
     endpointSource: getEndpointSource(Boolean(wsOverride || rpcOverride), hasProxyOrigin),
     gemContracts: {
-      beliNft: beliNftContract,
-      dalla: dallaContract,
-      dao: daoContract,
-      faucet: faucetContract,
+      beliNft: beliNftContract || CEIBA_GEM_DEPLOYMENT.beliNft,
+      dalla: dallaContract || CEIBA_GEM_DEPLOYMENT.dalla,
+      dao: daoContract || CEIBA_GEM_DEPLOYMENT.dao,
+      faucet: faucetContract || CEIBA_GEM_DEPLOYMENT.faucet,
+      psp37: psp37Contract || CEIBA_GEM_DEPLOYMENT.psp37,
+      dexFactory: dexFactoryContract || CEIBA_GEM_DEPLOYMENT.dexFactory,
+      dexRouter: dexRouterContract || CEIBA_GEM_DEPLOYMENT.dexRouter,
     },
+    gemDeploymentId,
     ipfsGatewayUrl:
       ipfsOverride ||
       (browserOrigin ? toHttpUrl(browserOrigin, '/ipfs') : 'http://127.0.0.1:8082/ipfs'),

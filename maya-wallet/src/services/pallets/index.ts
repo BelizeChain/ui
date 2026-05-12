@@ -36,8 +36,9 @@ export { getQuantumBackends, submitQuantumJob, getQuantumJob, getUserQuantumJobs
 // Community Governance
 export { getCommunityGroups, createCommunityGroup, joinCommunityGroup, getCommunityProposals, submitCommunityProposal, voteOnCommunityProposal, contributeToCommunityFund, getCommunityEvents, rsvpToEvent, getUserCommunityGroups } from './community';
 
-// Smart Contracts (GEM Platform)
-export { getPSP22Balance, transferPSP22, getPSP34Tokens, transferPSP34, getDAOProposals, submitDAOProposal, voteDAOProposal, executeDAOProposal, claimFromFaucet, checkFaucetEligibility, getDeployedContracts, deployContract, getGEMStats } from './contracts';
+// Smart Contracts (GEM Platform) — see src/services/gem.ts for the
+// ContractPromise-based implementation. The legacy ./contracts module
+// targeted a non-existent api.query.contracts.call() API and has been removed.
 
 // Type exports
 export type { BelizeID, SSNRecord, PassportRecord, KYCStatus } from './identity';
@@ -51,4 +52,4 @@ export type { PayrollRecord, SalaryPayment, SalarySlip } from './payroll';
 export type { Bridge, BridgeTransfer } from './interoperability';
 export type { QuantumJob, QuantumResult, QuantumWorkProof, QuantumBackend } from './quantum';
 export type { CommunityGroup, CommunityProposal, CommunityFund, CommunityEvent, Milestone } from './community';
-export type { PSP22Token, PSP34NFT, PSP34Token, DAOProposal, DeployedContract, FaucetClaim } from './contracts';
+

@@ -6,13 +6,14 @@ import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Cartesia
 import { GlassCard } from '@/components/ui/glass-card';
 import { useStaking } from '@/hooks/useStaking';
 import { useSystem } from '@/hooks/useSystem';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, use } from 'react';
 
 interface ValidatorDetailPageProps {
-  params: { address: string };
+  params: Promise<{ address: string }>;
 }
 
 export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps) {
+  const { address } = use(params);
   const router = useRouter();
   const { validators, isLoading } = useStaking();
   const { systemInfo } = useSystem();
@@ -20,8 +21,8 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
 
   // Find validator by address
   const validator = useMemo(() => 
-    validators.find(v => v.address === params.address),
-    [validators, params.address]
+    validators.find(v => v.address === address),
+    [validators, address]
   );
 
   // Mock historical data for charts (in production, fetch from blockchain)

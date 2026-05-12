@@ -1,9 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { GlassCard } from '@/components/ui';
 import { getRuntimeConfig } from '@belizechain/shared';
 import { useRouter } from 'next/navigation';
+import { useWallet } from '@/contexts/WalletContext';
+import {
+  claimFromFaucet,
+  getFaucetStatus,
+  getGemContractCatalog,
+  listDaoProposals,
+  voteOnDaoProposal,
+  getDallaBalance,
+  getBeliNftCollection,
+  getBeliNftBalanceOf,
+  type FaucetStatus,
+  type GemContractDescriptor,
+  type DaoProposal,
+} from '@/services/gem';
 import {
   FileCode,
   Code,
@@ -21,45 +35,139 @@ import {
 
 export default function GemPage() {
   const router = useRouter();
+  const { selectedAccount } = useWallet();
   const [activeTab, setActiveTab] = useState<'deploy' | 'contracts' | 'dao'>('deploy');
   const runtimeConfig = getRuntimeConfig();
   const formatAddress = (address?: string) =>
-    address ? `${address.slice(0, 8)}...${address.slice(-6)}` : 'Not configured';
+    address ? `${address.slice(0, 8)}…${address.slice(-6)}` : 'Not deployed';
 
-  const deployedContracts = [
-    {
-      name: 'DALLA Token',
-      type: 'PSP22',
-      address: formatAddress(runtimeConfig.gemContracts.dalla),
-      deployed: '2026-05-02',
-      calls: 0,
-      size: '10.5 KB'
-    },
-    {
-      name: 'BeliNFT Collection',
-      type: 'PSP34',
-      address: formatAddress(runtimeConfig.gemContracts.beliNft),
-      deployed: '2026-05-02',
-      calls: 0,
-      size: '14.9 KB'
-    },
-    {
-      name: 'Simple DAO',
-      type: 'DAO',
-      address: formatAddress(runtimeConfig.gemContracts.dao),
-      deployed: '2026-05-02',
-      calls: 0,
-      size: '12.9 KB'
-    },
-    {
-      name: 'Testnet Faucet',
-      type: 'Faucet',
-      address: formatAddress(runtimeConfig.gemContracts.faucet),
-      deployed: '2026-05-02',
-      calls: 0,
-      size: '7.5 KB'
+  const catalog: GemContractDescriptor[] = useMemo(() => getGemContractCatalog(), []);
+  const deployedCount = catalog.filter((c) => c.deployed).length;
+
+  const [faucetStatus, setFaucetStatus] = useState<FaucetStatus | null>(null);
+  const [faucetError, setFaucetError] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null);
+
+  const refreshFaucet = useCallback(async () => {
+    if (!selectedAccount?.address) return;
+    try {
+      const status = await getFaucetStatus(selectedAccount.address, selectedAccount.address);
+      setFaucetStatus(status);
+      setFaucetError(null);
+    } catch (err) {
+      setFaucetError(err instanceof Error ? err.message : 'Failed to read faucet status');
     }
-  ];
+  }, [selectedAccount?.address]);
+
+  useEffect(() => {
+    void refreshFaucet();
+  }, [refreshFaucet]);
+
+  const handleClaim = useCallback(async () => {
+    if (!selectedAccount?.address) {
+      setFaucetError('Connect a wallet account to claim from the faucet');
+      return;
+    }
+    setClaiming(true);
+    setFaucetError(null);
+    setClaimTxHash(null);
+    try {
+      const hash = await claimFromFaucet(selectedAccount.address);
+      setClaimTxHash(hash);
+      await refreshFaucet();
+    } catch (err) {
+      setFaucetError(err instanceof Error ? err.message : 'Faucet claim failed');
+    } finally {
+      setClaiming(false);
+    }
+  }, [selectedAccount?.address, refreshFaucet]);
+
+  // DAO state
+  const [daoProposals, setDaoProposals] = useState<DaoProposal[]>([]);
+  const [daoLoading, setDaoLoading] = useState(false);
+  const [daoError, setDaoError] = useState<string | null>(null);
+  const [votingPowerRaw, setVotingPowerRaw] = useState<bigint>(0n);
+  const [voteBusyId, setVoteBusyId] = useState<number | null>(null);
+
+  // BeliNFT state
+  const [nftCollection, setNftCollection] = useState<{ name: string; symbol: string; totalSupply: number } | null>(null);
+  const [nftBalance, setNftBalance] = useState<number>(0);
+
+  const refreshDao = useCallback(async () => {
+    if (!selectedAccount?.address) return;
+    setDaoLoading(true);
+    setDaoError(null);
+    try {
+      const [proposals, dallaBal] = await Promise.all([
+        listDaoProposals(selectedAccount.address, 10),
+        getDallaBalance(selectedAccount.address, selectedAccount.address),
+      ]);
+      setDaoProposals(proposals);
+      try {
+        setVotingPowerRaw(BigInt(dallaBal));
+      } catch {
+        setVotingPowerRaw(0n);
+      }
+    } catch (err) {
+      setDaoError(err instanceof Error ? err.message : 'Failed to load DAO data');
+    } finally {
+      setDaoLoading(false);
+    }
+  }, [selectedAccount?.address]);
+
+  const refreshNfts = useCallback(async () => {
+    if (!selectedAccount?.address) return;
+    try {
+      const [collection, balance] = await Promise.all([
+        getBeliNftCollection(selectedAccount.address),
+        getBeliNftBalanceOf(selectedAccount.address, selectedAccount.address),
+      ]);
+      setNftCollection(collection);
+      setNftBalance(balance);
+    } catch {
+      // best-effort; NFT panel is informational
+    }
+  }, [selectedAccount?.address]);
+
+  useEffect(() => {
+    void refreshDao();
+    void refreshNfts();
+  }, [refreshDao, refreshNfts]);
+
+  const handleVote = useCallback(
+    async (proposalId: number, support: boolean) => {
+      if (!selectedAccount?.address) {
+        setDaoError('Connect a wallet account to vote');
+        return;
+      }
+      setVoteBusyId(proposalId);
+      setDaoError(null);
+      try {
+        await voteOnDaoProposal(selectedAccount.address, proposalId, support);
+        await refreshDao();
+      } catch (err) {
+        setDaoError(err instanceof Error ? err.message : 'Vote failed');
+      } finally {
+        setVoteBusyId(null);
+      }
+    },
+    [selectedAccount?.address, refreshDao],
+  );
+
+  const votingPowerDisplay = useMemo(() => {
+    // DALLA has 12 decimals; show whole-token count with thousands separators.
+    const whole = votingPowerRaw / 1_000_000_000_000n;
+    return whole.toLocaleString();
+  }, [votingPowerRaw]);
+
+  const deployedContracts = catalog.map((entry) => ({
+    name: entry.label,
+    type: entry.type,
+    address: formatAddress(entry.address),
+    fullAddress: entry.address,
+    deployed: entry.deployed,
+  }));
 
   const templates = [
     {
@@ -92,32 +200,7 @@ export default function GemPage() {
     }
   ];
 
-  const daoProposals = [
-    {
-      id: 'PROP-124',
-      title: 'Increase Tourism Rewards to 10%',
-      dao: 'Tourism DAO',
-      votes: { yes: 1240, no: 340 },
-      status: 'active',
-      endsIn: '2 days'
-    },
-    {
-      id: 'PROP-125',
-      title: 'Fund Beach Cleanup Initiative',
-      dao: 'Community DAO',
-      votes: { yes: 2100, no: 180 },
-      status: 'active',
-      endsIn: '5 days'
-    },
-    {
-      id: 'PROP-123',
-      title: 'Update Treasury Multi-sig',
-      dao: 'Main DAO',
-      votes: { yes: 3450, no: 520 },
-      status: 'passed',
-      endsIn: 'Closed'
-    }
-  ];
+  // (DAO proposals now sourced from listDaoProposals(); see DAO tab.)
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -145,15 +228,17 @@ export default function GemPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
               <p className="text-xs text-gray-400 mb-1">Contracts</p>
-              <p className="text-2xl font-bold text-pink-400">{deployedContracts.length}</p>
+              <p className="text-2xl font-bold text-pink-400">{deployedCount}/{catalog.length}</p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Total Calls</p>
-              <p className="text-2xl font-bold text-blue-400">0</p>
+              <p className="text-xs text-gray-400 mb-1">Network</p>
+              <p className="text-sm font-bold text-blue-400 truncate" title={runtimeConfig.blockchainWsUrl}>
+                {runtimeConfig.networkName}
+              </p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Gas Saved</p>
-              <p className="text-2xl font-bold text-emerald-400">~40%</p>
+              <p className="text-xs text-gray-400 mb-1">Endpoint</p>
+              <p className="text-sm font-bold text-emerald-400 capitalize">{runtimeConfig.endpointSource}</p>
             </div>
           </div>
         </GlassCard>
@@ -217,15 +302,31 @@ export default function GemPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-bold text-white">Testnet Faucet</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Get 1000 DALLA every 10 minutes</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {faucetStatus
+                      ? `${(BigInt(faucetStatus.dripAmount) / 10n ** 12n).toString()} DALLA per claim, ${faucetStatus.cooldown}-block cooldown`
+                      : 'Get test DALLA from the on-chain faucet'}
+                  </p>
                 </div>
                 <Lightning size={32} className="text-amber-400" weight="fill" />
               </div>
-              <button className="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-400 text-white font-semibold rounded-lg hover:shadow-lg transition-shadow">
-                Claim Test DALLA
+              <button
+                onClick={handleClaim}
+                disabled={claiming || !selectedAccount?.address || (faucetStatus ? !faucetStatus.canClaim : false)}
+                className="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-400 text-white font-semibold rounded-lg hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {claiming ? 'Claiming…' : selectedAccount?.address ? 'Claim Test DALLA' : 'Connect Wallet to Claim'}
               </button>
               <p className="text-xs text-gray-400 text-center mt-2">
-                Next claim available in 8 minutes
+                {faucetError
+                  ? faucetError
+                  : claimTxHash
+                    ? `✅ Claim submitted: ${claimTxHash.slice(0, 14)}…`
+                    : faucetStatus
+                      ? faucetStatus.canClaim
+                        ? 'Ready to claim'
+                        : `Next claim available in ${faucetStatus.blocksUntilClaim} blocks`
+                      : 'Loading faucet status…'}
               </p>
             </GlassCard>
 
@@ -294,48 +395,44 @@ export default function GemPage() {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                         contract.type === 'PSP22' ? 'bg-blue-500/100/20 text-blue-400' :
                         contract.type === 'PSP34' ? 'bg-pink-100 text-pink-700' :
+                        contract.type === 'DEX' ? 'bg-cyan-100 text-cyan-700' :
+                        contract.type === 'PSP37' ? 'bg-amber-100 text-amber-700' :
                         'bg-purple-100 text-purple-700'
                       }`}>
                         {contract.type}
                       </span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${contract.deployed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                        {contract.deployed ? 'Live' : 'Pending'}
+                      </span>
                     </div>
-                    <p className="text-xs font-mono text-gray-400">{contract.address}</p>
+                    <p className="text-xs font-mono text-gray-400" title={contract.fullAddress}>{contract.address}</p>
                   </div>
-                  <button className="ml-2">
-                    <Code size={20} className="text-pink-400" weight="fill" />
+                  <button
+                    className="ml-2 disabled:opacity-40"
+                    disabled={!contract.fullAddress}
+                    onClick={() => contract.fullAddress && navigator.clipboard?.writeText(contract.fullAddress)}
+                    title="Copy full address"
+                  >
+                    <Copy size={20} className="text-pink-400" weight="fill" />
                   </button>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mb-3 text-xs">
-                  <div>
-                    <p className="text-gray-400">Deployed</p>
-                    <p className="font-semibold text-white">{contract.deployed}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Calls</p>
-                    <p className="font-semibold text-white">{contract.calls.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Size</p>
-                    <p className="font-semibold text-white">{contract.size}</p>
-                  </div>
                 </div>
 
                 <div className="flex space-x-2">
-                  <button className="flex-1 py-2 bg-gradient-to-r from-pink-400 to-red-400 text-white text-sm font-semibold rounded-lg hover:shadow-md transition-shadow">
-                    Interact
+                  <button
+                    className="flex-1 py-2 bg-gradient-to-r from-pink-400 to-red-400 text-white text-sm font-semibold rounded-lg hover:shadow-md transition-shadow disabled:opacity-50"
+                    disabled={!contract.deployed}
+                  >
+                    {contract.deployed ? 'Interact' : 'Deploy First'}
                   </button>
-                  <button className="px-4 py-2 bg-gray-200 text-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                  <button
+                    className="px-4 py-2 bg-gray-200 text-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    disabled={!contract.fullAddress}
+                  >
                     View
                   </button>
                 </div>
               </GlassCard>
             ))}
-
-            <button className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center space-x-2 text-gray-400 hover:border-pink-500 hover:text-pink-400 transition-colors">
-              <Rocket size={20} weight="bold" />
-              <span className="font-medium">Deploy New Contract</span>
-            </button>
           </div>
         )}
 
@@ -349,54 +446,95 @@ export default function GemPage() {
                 </div>
                 <Users size={32} className="text-purple-400" weight="fill" />
               </div>
-              <p className="text-3xl font-bold text-purple-400">5,234 votes</p>
+              <p className="text-3xl font-bold text-purple-400">
+                {selectedAccount?.address ? `${votingPowerDisplay} DALLA` : 'Connect wallet'}
+              </p>
+              {nftCollection && (
+                <p className="text-xs text-gray-400 mt-2">
+                  {nftCollection.name} ({nftCollection.symbol}): {nftBalance} held / {nftCollection.totalSupply} total
+                </p>
+              )}
             </GlassCard>
 
+            {daoError && (
+              <div className="text-xs text-red-400">{daoError}</div>
+            )}
+
             <div className="space-y-3">
-              {daoProposals.map((proposal, index) => (
-                <GlassCard key={index} variant="dark" blur="sm" className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-white">{proposal.title}</h4>
-                      <p className="text-xs text-gray-400 mt-0.5">{proposal.dao} • {proposal.id}</p>
-                    </div>
-                    <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ml-2 ${
-                      proposal.status === 'active' ? 'bg-blue-500/100/20 text-blue-400' :
-                      proposal.status === 'passed' ? 'bg-emerald-500/100/20 text-emerald-400' :
-                      'bg-red-500/100/20 text-red-400'
-                    }`}>
-                      {proposal.status}
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-400">For: {proposal.votes.yes.toLocaleString()}</span>
-                      <span className="text-gray-400">Against: {proposal.votes.no.toLocaleString()}</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-400 rounded-l-full"
-                        style={{ width: `${(proposal.votes.yes / (proposal.votes.yes + proposal.votes.no)) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">{proposal.endsIn}</span>
-                    {proposal.status === 'active' && (
-                      <div className="flex space-x-2">
-                        <button className="px-4 py-1.5 bg-emerald-400 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700">
-                          Vote For
-                        </button>
-                        <button className="px-4 py-1.5 bg-gray-200 text-gray-300 text-xs font-semibold rounded-lg hover:bg-gray-300">
-                          Against
-                        </button>
+              {daoLoading && daoProposals.length === 0 ? (
+                <p className="text-sm text-gray-400">Loading proposals…</p>
+              ) : daoProposals.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  {selectedAccount?.address
+                    ? 'No proposals yet. Submit one from the DAO contract.'
+                    : 'Connect a wallet to view DAO proposals.'}
+                </p>
+              ) : (
+                daoProposals.map((proposal) => {
+                  const yes = BigInt(proposal.votesFor || '0');
+                  const no = BigInt(proposal.votesAgainst || '0');
+                  const total = yes + no;
+                  const yesPct = total > 0n ? Number((yes * 10000n) / total) / 100 : 0;
+                  const isActive = proposal.status.toLowerCase() === 'active' || proposal.status.toLowerCase() === 'pending';
+                  const busy = voteBusyId === proposal.id;
+                  return (
+                    <GlassCard key={proposal.id} variant="dark" blur="sm" className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-white">
+                            {proposal.description || `Proposal #${proposal.id}`}
+                          </h4>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            ID #{proposal.id} • Ends @ block {proposal.endBlock.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ml-2 ${
+                          isActive ? 'bg-blue-500/20 text-blue-400' :
+                          proposal.status.toLowerCase() === 'passed' || proposal.status.toLowerCase() === 'executed' ? 'bg-emerald-500/20 text-emerald-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          {proposal.status}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </GlassCard>
-              ))}
+
+                      <div className="mb-3">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-400">For: {yes.toString()}</span>
+                          <span className="text-gray-400">Against: {no.toString()}</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-400 rounded-l-full"
+                            style={{ width: `${yesPct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Proposer: {proposal.proposer.slice(0, 8)}…{proposal.proposer.slice(-6)}</span>
+                        {isActive && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleVote(proposal.id, true)}
+                              disabled={busy || !selectedAccount?.address}
+                              className="px-4 py-1.5 bg-emerald-400 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {busy ? '…' : 'Vote For'}
+                            </button>
+                            <button
+                              onClick={() => handleVote(proposal.id, false)}
+                              disabled={busy || !selectedAccount?.address}
+                              className="px-4 py-1.5 bg-gray-200 text-gray-300 text-xs font-semibold rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {busy ? '…' : 'Against'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </GlassCard>
+                  );
+                })
+              )}
             </div>
           </>
         )}

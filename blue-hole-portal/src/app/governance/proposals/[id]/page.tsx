@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle, XCircle, Clock, ThumbsUp, ThumbsDown, Minus,
@@ -113,7 +113,9 @@ const relatedProposals = [
   { id: 12, title: 'Ministry Restructure', status: 'Failed' },
 ];
 
-export default function ProposalDetailPage({ params }: { params: { id: string } }) {
+export default function ProposalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // Unwrap Next 16 async params (currently unused but reserved for blockchain query).
+  void use(params);
   const router = useRouter();
   const { selectedAccount } = useWalletStore();
   const [proposal] = useState(mockProposal);

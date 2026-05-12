@@ -14,6 +14,20 @@ export {
   type RuntimeConfig,
 } from './lib/runtime-config';
 
+// GEM contract metadata (ink! ABIs) and address keys
+export {
+  gemAbis,
+  dallaAbi,
+  beliNftAbi,
+  daoAbi,
+  faucetAbi,
+  psp37Abi,
+  dexFactoryAbi,
+  dexPairAbi,
+  dexRouterAbi,
+  type GemContractKey,
+} from './lib/gem-abis';
+
 // Hooks (explicit re-exports for visibility)
 export { useWallet, useBalance, useNewBlocks, type UseWalletReturn, type WalletState } from './hooks/useWallet';
 export {
