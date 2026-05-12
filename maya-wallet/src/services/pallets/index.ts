@@ -6,8 +6,21 @@
 // Identity & Compliance
 export * from './identity';
 
-// Economy & Finance
-export { getAssets, getAssetBalance, getLiquidityPools, getSwapQuote, executeSwap, addLiquidity, removeLiquidity, getTradeHistory } from './belizex';
+// Economy & Finance — aligned with belizeX pallet (AssetId enum: DALLA|BBZD|TourismDALLA|WUSDC)
+export {
+  getTradingPairs,
+  findPair,
+  getSwapQuote,
+  executeSwap,
+  addLiquidity,
+  removeLiquidity,
+  getLpBalance,
+  getTradeHistory,
+  toPlanck,
+  fromPlanck,
+  ASSET_SYMBOLS,
+} from './belizex';
+export type { AssetSymbol, TradingPair, SwapQuote, SwapResult, TradeHistory } from './belizex';
 
 // Governance & Democracy
 export { getActiveProposals, submitProposal, voteOnProposal, getActiveReferenda, getDistrictCouncil, getVotingHistory, secondProposal } from './governance';
@@ -42,7 +55,7 @@ export { getCommunityGroups, createCommunityGroup, joinCommunityGroup, getCommun
 
 // Type exports
 export type { BelizeID, SSNRecord, PassportRecord, KYCStatus } from './identity';
-export type { Asset, LiquidityPool, SwapQuote, TradeHistory } from './belizex';
+// belizeX types are exported above alongside the runtime helpers.
 export type { Proposal, Referendum, DistrictCouncil, Motion, Vote } from './governance';
 export type { StakingInfo, PoUWContribution, Validator } from './staking';
 export type { LandTitle, Encumbrance, PropertyDocument, PropertyTransfer } from './landledger';

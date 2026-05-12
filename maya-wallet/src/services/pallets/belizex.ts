@@ -1,51 +1,273 @@
 /**
  * BelizeChain BelizeX Pallet Integration
- * Handles DEX operations, liquidity pools, and asset registry
+ *
+ * Pallet on chain exposes:
+ *   tx.belizeX.executeTrade(baseAsset, quoteAsset, amountIn, minAmountOut, isTourismTrade)
+ *   tx.belizeX.addLiquidity(baseAsset, quoteAsset, baseAmount, quoteAmount, minLpTokens)
+ *   tx.belizeX.removeLiquidity(baseAsset, quoteAsset, lpTokens, minBaseAmount, minQuoteAmount)
+ *   query.belizeX.tradingPairs((AssetId, AssetId)) -> TradingPair
+ *   query.belizeX.lpBalances((account, (AssetId, AssetId))) -> u128
+ *
+ * AssetId enum: DALLA | BBZD | TourismDALLA | WUSDC
  */
 
-import { ApiPromise } from '@polkadot/api';
+import type { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
-export interface Asset {
-  id: string;
-  symbol: string;
-  name: string;
-  decimals: number;
-  totalSupply: string;
-  price?: string; // Current market price (UI compatibility)
-  change?: number; // 24h price change percentage (UI compatibility)
-  volume?: string; // 24h trading volume (UI compatibility)
-  owner: string;
-  isFrozen: boolean;
-  metadata?: {
-    description: string;
-    website?: string;
-    icon?: string;
-  };
-}
+const PLANCK = 1_000_000_000_000n; // 12 decimals for all current belizeX assets
 
-export interface LiquidityPool {
-  id: string;
-  token0: string; // Asset symbol
-  token1: string;
-  reserve0: string;
-  reserve1: string;
-  totalLiquidity: string;
-  fee: number; // Percentage (e.g., 0.3 for 0.3%)
-  volume24h: string;
-  apy: number; // Annual percentage yield
+export type AssetSymbol = 'DALLA' | 'BBZD' | 'TourismDALLA' | 'WUSDC';
+export const ASSET_SYMBOLS: AssetSymbol[] = ['DALLA', 'BBZD', 'TourismDALLA', 'WUSDC'];
+
+/** belizeX pallet AssetId enum order — extrinsics accept the numeric index as u8. */
+export const ASSET_ID_BY_SYMBOL: Record<AssetSymbol, number> = {
+  DALLA: 0,
+  BBZD: 1,
+  TourismDALLA: 2,
+  WUSDC: 3,
+};
+
+export interface TradingPair {
+  baseAsset: AssetSymbol;
+  quoteAsset: AssetSymbol;
+  baseReserve: bigint;
+  quoteReserve: bigint;
+  totalLpTokens: bigint;
+  feeRateBps: number;
+  active: boolean;
 }
 
 export interface SwapQuote {
   inputAmount: string;
   outputAmount: string;
-  priceImpact: number; // Percentage
+  priceImpactPct: number;
   minimumReceived: string;
-  fee: string;
-  route: string[]; // Token symbols in swap path
+  feeAmount: string;
+  baseAsset: AssetSymbol;
+  quoteAsset: AssetSymbol;
+  /** True when swapping from base->quote, false for quote->base. */
+  baseToQuote: boolean;
 }
 
+export interface SwapResult {
+  hash: string;
+}
+
+export function toPlanck(amount: string | number): bigint {
+  const s = typeof amount === 'number' ? amount.toString() : amount.trim();
+  if (!s) return 0n;
+  const [whole, frac = ''] = s.split('.');
+  const fracPadded = (frac + '000000000000').slice(0, 12);
+  return BigInt(whole || '0') * PLANCK + BigInt(fracPadded || '0');
+}
+
+export function fromPlanck(planck: bigint | string, fractionDigits = 4): string {
+  const b = typeof planck === 'bigint' ? planck : BigInt(planck);
+  const negative = b < 0n;
+  const abs = negative ? -b : b;
+  const whole = abs / PLANCK;
+  const frac = abs % PLANCK;
+  const fracStr = frac.toString().padStart(12, '0').slice(0, fractionDigits);
+  const sign = negative ? '-' : '';
+  return fractionDigits > 0 ? `${sign}${whole.toString()}.${fracStr}` : `${sign}${whole.toString()}`;
+}
+
+export async function getTradingPairs(api?: ApiPromise): Promise<TradingPair[]> {
+  const a = api ?? (await initializeApi());
+  const entries = await a.query.belizeX.tradingPairs.entries();
+  return entries.map(([, value]) => {
+    const data: any = (value as any).toJSON ? (value as any).toJSON() : value;
+    return {
+      baseAsset: data.baseAsset as AssetSymbol,
+      quoteAsset: data.quoteAsset as AssetSymbol,
+      baseReserve: BigInt(data.baseReserve ?? 0),
+      quoteReserve: BigInt(data.quoteReserve ?? 0),
+      totalLpTokens: BigInt(data.totalLpTokens ?? 0),
+      feeRateBps: Number(data.feeRate ?? 0),
+      active: !!data.active,
+    } as TradingPair;
+  });
+}
+
+export async function findPair(
+  api: ApiPromise,
+  from: AssetSymbol,
+  to: AssetSymbol,
+): Promise<{ pair: TradingPair; baseToQuote: boolean } | null> {
+  if (from === to) return null;
+  const pairs = await getTradingPairs(api);
+  for (const p of pairs) {
+    if (p.baseAsset === from && p.quoteAsset === to) return { pair: p, baseToQuote: true };
+    if (p.baseAsset === to && p.quoteAsset === from) return { pair: p, baseToQuote: false };
+  }
+  return null;
+}
+
+export async function getSwapQuote(
+  from: AssetSymbol,
+  to: AssetSymbol,
+  inputAmount: string,
+  slippagePct = 0.5,
+  api?: ApiPromise,
+): Promise<SwapQuote> {
+  const a = api ?? (await initializeApi());
+  const located = await findPair(a, from, to);
+  if (!located) throw new Error(`No trading pair found for ${from}/${to}`);
+  const { pair, baseToQuote } = located;
+  if (!pair.active) throw new Error(`Pair ${pair.baseAsset}/${pair.quoteAsset} is paused`);
+
+  const reserveIn = baseToQuote ? pair.baseReserve : pair.quoteReserve;
+  const reserveOut = baseToQuote ? pair.quoteReserve : pair.baseReserve;
+  if (reserveIn === 0n || reserveOut === 0n) {
+    throw new Error(`Pair ${pair.baseAsset}/${pair.quoteAsset} has no liquidity`);
+  }
+
+  const amountIn = toPlanck(inputAmount);
+  if (amountIn <= 0n) throw new Error('Input amount must be positive');
+
+  const feeBps = BigInt(pair.feeRateBps);
+  const feeAmount = (amountIn * feeBps) / 10_000n;
+  const amountInAfterFee = amountIn - feeAmount;
+  const amountOut = (reserveOut * amountInAfterFee) / (reserveIn + amountInAfterFee);
+
+  const num = amountOut * reserveIn * 10_000n;
+  const den = amountIn * reserveOut;
+  const impactBps = den === 0n ? 0n : 10_000n - num / den;
+  const priceImpactPct = Number(impactBps) / 100;
+
+  const slipBps = BigInt(Math.max(0, Math.round(slippagePct * 100)));
+  const minOut = (amountOut * (10_000n - slipBps)) / 10_000n;
+
+  return {
+    inputAmount,
+    outputAmount: fromPlanck(amountOut),
+    priceImpactPct,
+    minimumReceived: fromPlanck(minOut),
+    feeAmount: fromPlanck(feeAmount),
+    baseAsset: pair.baseAsset,
+    quoteAsset: pair.quoteAsset,
+    baseToQuote,
+  };
+}
+
+export async function executeSwap(
+  address: string,
+  quote: SwapQuote,
+  isTourismTrade = false,
+): Promise<SwapResult> {
+  const api = await initializeApi();
+  const injector = await web3FromAddress(address);
+
+  const amountIn = toPlanck(quote.inputAmount);
+  const minOut = toPlanck(quote.minimumReceived);
+
+  const tx = api.tx.belizeX.executeTrade(
+    ASSET_ID_BY_SYMBOL[quote.baseAsset],
+    ASSET_ID_BY_SYMBOL[quote.quoteAsset],
+    amountIn.toString(),
+    minOut.toString(),
+    isTourismTrade,
+  );
+
+  return new Promise<SwapResult>((resolve, reject) => {
+    tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+      if (dispatchError) {
+        const msg = dispatchError.isModule
+          ? api.registry.findMetaError(dispatchError.asModule).docs.join(' ') || dispatchError.toString()
+          : dispatchError.toString();
+        reject(new Error(msg));
+        return;
+      }
+      if (status.isInBlock || status.isFinalized) {
+        resolve({ hash: txHash.toString() });
+      }
+    }).catch(reject);
+  });
+}
+
+export async function addLiquidity(
+  address: string,
+  baseAsset: AssetSymbol,
+  quoteAsset: AssetSymbol,
+  baseAmount: string,
+  quoteAmount: string,
+  minLpTokens = '0',
+): Promise<{ hash: string }> {
+  const api = await initializeApi();
+  const injector = await web3FromAddress(address);
+
+  const tx = api.tx.belizeX.addLiquidity(
+    ASSET_ID_BY_SYMBOL[baseAsset],
+    ASSET_ID_BY_SYMBOL[quoteAsset],
+    toPlanck(baseAmount).toString(),
+    toPlanck(quoteAmount).toString(),
+    toPlanck(minLpTokens).toString(),
+  );
+
+  return new Promise((resolve, reject) => {
+    tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+      if (dispatchError) {
+        reject(new Error(dispatchError.toString()));
+        return;
+      }
+      if (status.isInBlock || status.isFinalized) {
+        resolve({ hash: txHash.toString() });
+      }
+    }).catch(reject);
+  });
+}
+
+export async function removeLiquidity(
+  address: string,
+  baseAsset: AssetSymbol,
+  quoteAsset: AssetSymbol,
+  lpTokens: string,
+  minBaseAmount = '0',
+  minQuoteAmount = '0',
+): Promise<{ hash: string }> {
+  const api = await initializeApi();
+  const injector = await web3FromAddress(address);
+
+  const tx = api.tx.belizeX.removeLiquidity(
+    ASSET_ID_BY_SYMBOL[baseAsset],
+    ASSET_ID_BY_SYMBOL[quoteAsset],
+    toPlanck(lpTokens).toString(),
+    toPlanck(minBaseAmount).toString(),
+    toPlanck(minQuoteAmount).toString(),
+  );
+
+  return new Promise((resolve, reject) => {
+    tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+      if (dispatchError) {
+        reject(new Error(dispatchError.toString()));
+        return;
+      }
+      if (status.isInBlock || status.isFinalized) {
+        resolve({ hash: txHash.toString() });
+      }
+    }).catch(reject);
+  });
+}
+
+export async function getLpBalance(
+  address: string,
+  baseAsset: AssetSymbol,
+  quoteAsset: AssetSymbol,
+): Promise<bigint> {
+  const api = await initializeApi();
+  // Storage key uses the AssetId enum tuple — pass each variant as `{ DALLA: null }` form
+  // since polkadot.js cannot decode a bare symbol string for non-unit enum input.
+  const key: [object, object] = [{ [baseAsset]: null }, { [quoteAsset]: null }] as any;
+  const raw: any = await api.query.belizeX.lpBalances(address, key);
+  return BigInt(raw?.toString?.() ?? '0');
+}
+
+/**
+ * Trade history requires an indexer to be efficient; the pallet does not
+ * expose a per-account history query. Until an indexer is available this
+ * returns an empty list. Kept as an export so analytics pages keep compiling.
+ */
 export interface TradeHistory {
   hash: string;
   trader: string;
@@ -58,397 +280,6 @@ export interface TradeHistory {
   blockNumber: number;
 }
 
-/**
- * Get all registered assets
- */
-export async function getAssets(): Promise<Asset[]> {
-  const api = await initializeApi();
-  
-  try {
-    const assets: any = await api.query.belizeX?.assets.entries();
-    
-    if (!assets || assets.length === 0) {
-      return [];
-    }
-
-    return assets.map(([key, value]: [any, any]) => {
-      const id = key.args[0].toString();
-      const data = value.unwrap();
-      
-      return {
-        id,
-        symbol: data.symbol.toString(),
-        name: data.name.toString(),
-        decimals: data.decimals.toNumber(),
-        totalSupply: formatBalance(data.totalSupply.toString(), data.decimals.toNumber()),
-        owner: data.owner.toString(),
-        isFrozen: data.isFrozen.toHuman(),
-        metadata: data.metadata?.toHuman() as any,
-      };
-    });
-  } catch (error) {
-    console.error('Failed to fetch assets:', error);
-    return [];
-  }
-}
-
-/**
- * Get asset balance for an address
- */
-export async function getAssetBalance(address: string, assetId: string): Promise<string> {
-  const api = await initializeApi();
-  
-  try {
-    const balance: any = await api.query.belizeX?.assetBalances([assetId, address]);
-    
-    if (!balance || balance.isNone) {
-      return '0.00';
-    }
-
-    const asset: any = await api.query.belizeX?.assets(assetId);
-    const decimals = asset.unwrap().decimals.toNumber();
-
-    return formatBalance(balance.unwrap().toString(), decimals);
-  } catch (error) {
-    console.error('Failed to fetch asset balance:', error);
-    return '0.00';
-  }
-}
-
-/**
- * Get all liquidity pools
- */
-export async function getLiquidityPools(): Promise<LiquidityPool[]> {
-  const api = await initializeApi();
-  
-  try {
-    const pools: any = await api.query.belizeX?.liquidityPools.entries();
-    
-    if (!pools || pools.length === 0) {
-      return [];
-    }
-
-    return await Promise.all(
-      pools.map(async ([key, value]: [any, any]) => {
-        const id = key.args[0].toString();
-        const data = value.unwrap();
-        
-        // Get 24h volume and APY (would need indexer in production)
-        const volume24h = '0.00'; // Placeholder
-        const apy = 0; // Placeholder
-
-        return {
-          id,
-          token0: data.token0.toString(),
-          token1: data.token1.toString(),
-          reserve0: formatBalance(data.reserve0.toString()),
-          reserve1: formatBalance(data.reserve1.toString()),
-          totalLiquidity: formatBalance(data.totalLiquidity.toString()),
-          fee: data.fee.toNumber() / 10000, // Convert from basis points
-          volume24h,
-          apy,
-        };
-      })
-    );
-  } catch (error) {
-    console.error('Failed to fetch liquidity pools:', error);
-    return [];
-  }
-}
-
-/**
- * Get swap quote
- */
-export async function getSwapQuote(
-  inputToken: string,
-  outputToken: string,
-  inputAmount: string,
-  slippageTolerance: number = 0.5 // Default 0.5%
-): Promise<SwapQuote> {
-  const api = await initializeApi();
-  
-  try {
-    const inputInPlanck = parseFloat(inputAmount) * Math.pow(10, 12);
-    
-    // Call runtime API for quote calculation
-    // If a custom RPC is not available, throw a clear error for now
-    const rpcAny = (api.rpc as any);
-    if (!rpcAny?.belizeX?.getSwapQuote) {
-      throw new Error('Swap quote RPC not available');
-    }
-    const quote: any = await rpcAny.belizeX.getSwapQuote(
-      inputToken,
-      outputToken,
-      inputInPlanck
-    );
-
-    const outputAmount = formatBalance(quote.outputAmount.toString());
-    const fee = formatBalance(quote.fee.toString());
-    const priceImpact = quote.priceImpact.toNumber() / 100;
-    
-    // Calculate minimum received with slippage
-    const minimumReceived = (parseFloat(outputAmount) * (1 - slippageTolerance / 100)).toFixed(2);
-
-    return {
-      inputAmount,
-      outputAmount,
-      priceImpact,
-      minimumReceived,
-      fee,
-      route: quote.route.toHuman() as string[],
-    };
-  } catch (error) {
-    console.error('Failed to get swap quote:', error);
-    throw new Error('Unable to calculate swap quote');
-  }
-}
-
-/**
- * Execute token swap
- */
-export async function executeSwap(
-  address: string,
-  inputToken: string,
-  outputToken: string,
-  inputAmount: string,
-  minimumOutput: string
-): Promise<{ hash: string; outputAmount: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const inputInPlanck = parseFloat(inputAmount) * Math.pow(10, 12);
-    const minOutputInPlanck = parseFloat(minimumOutput) * Math.pow(10, 12);
-    
-    const tx = api.tx.belizeX.swap(
-      inputToken,
-      outputToken,
-      inputInPlanck,
-      minOutputInPlanck
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let outputAmount = '0.00';
-          
-          // Extract output amount from events
-          events.forEach(({ event }) => {
-            if (api.events.belizeX?.Swapped?.is(event)) {
-              const [, , , amount] = event.data;
-              outputAmount = formatBalance(amount.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            outputAmount,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Swap failed:', error);
-    throw error;
-  }
-}
-
-/**
- * Add liquidity to a pool
- */
-export async function addLiquidity(
-  address: string,
-  token0: string,
-  token1: string,
-  amount0: string,
-  amount1: string,
-  minLiquidity: string = '0'
-): Promise<{ hash: string; liquidityMinted: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const amount0InPlanck = parseFloat(amount0) * Math.pow(10, 12);
-    const amount1InPlanck = parseFloat(amount1) * Math.pow(10, 12);
-    const minLiquidityInPlanck = parseFloat(minLiquidity) * Math.pow(10, 12);
-    
-    const tx = api.tx.belizeX.addLiquidity(
-      token0,
-      token1,
-      amount0InPlanck,
-      amount1InPlanck,
-      minLiquidityInPlanck
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let liquidityMinted = '0.00';
-          
-          // Extract liquidity minted from events
-          events.forEach(({ event }) => {
-            if (api.events.belizeX?.LiquidityAdded?.is(event)) {
-              const [, , , , liquidity] = event.data;
-              liquidityMinted = formatBalance(liquidity.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            liquidityMinted,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Add liquidity failed:', error);
-    throw error;
-  }
-}
-
-/**
- * Remove liquidity from a pool
- */
-export async function removeLiquidity(
-  address: string,
-  token0: string,
-  token1: string,
-  liquidityAmount: string,
-  minAmount0: string = '0',
-  minAmount1: string = '0'
-): Promise<{ hash: string; amount0: string; amount1: string }> {
-  const api = await initializeApi();
-  
-  try {
-    const injector = await web3FromAddress(address);
-    const liquidityInPlanck = parseFloat(liquidityAmount) * Math.pow(10, 12);
-    const min0InPlanck = parseFloat(minAmount0) * Math.pow(10, 12);
-    const min1InPlanck = parseFloat(minAmount1) * Math.pow(10, 12);
-    
-    const tx = api.tx.belizeX.removeLiquidity(
-      token0,
-      token1,
-      liquidityInPlanck,
-      min0InPlanck,
-      min1InPlanck
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
-        if (status.isInBlock) {
-          let amount0 = '0.00';
-          let amount1 = '0.00';
-          
-          // Extract amounts from events
-          events.forEach(({ event }) => {
-            if (api.events.belizeX?.LiquidityRemoved?.is(event)) {
-              const [, , , amt0, amt1] = event.data;
-              amount0 = formatBalance(amt0.toString());
-              amount1 = formatBalance(amt1.toString());
-            }
-          });
-
-          resolve({
-            hash: txHash.toString(),
-            amount0,
-            amount1,
-          });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Remove liquidity failed:', error);
-    throw error;
-  }
-}
-
-/**
- * Get trade history for an address
- */
-export async function getTradeHistory(address: string, limit: number = 50): Promise<TradeHistory[]> {
-  const api = await initializeApi();
-  
-  try {
-    // In production, use an indexer. For now, scan recent blocks
-    const currentHeader = await api.rpc.chain.getHeader();
-    const currentBlock = currentHeader.number.toNumber();
-    const blocksToQuery = Math.min(1000, currentBlock);
-    const startBlock = Math.max(0, currentBlock - blocksToQuery);
-    
-    const trades: TradeHistory[] = [];
-
-    for (let blockNum = currentBlock; blockNum >= startBlock && trades.length < limit; blockNum--) {
-      try {
-        const blockHash = await api.rpc.chain.getBlockHash(blockNum);
-        const signedBlock = await api.rpc.chain.getBlock(blockHash);
-        const apiAt = await api.at(blockHash);
-        
-        const timestamp: any = await apiAt.query.timestamp.now();
-        const timestampMs = timestamp.toNumber ? timestamp.toNumber() : Date.now();
-
-        signedBlock.block.extrinsics.forEach((extrinsic) => {
-          const { method: { method, section } } = extrinsic;
-          const signer = extrinsic.signer?.toString();
-          
-          if (section === 'belizeX' && signer === address) {
-            if (method === 'swap') {
-              const [token0, token1, amount0, minOutput] = extrinsic.args;
-              trades.push({
-                hash: extrinsic.hash.toString(),
-                trader: signer,
-                type: 'Swap',
-                token0: token0.toString(),
-                token1: token1.toString(),
-                amount0: formatBalance(amount0.toString()),
-                amount1: formatBalance(minOutput.toString()),
-                timestamp: timestampMs,
-                blockNumber: blockNum,
-              });
-            } else if (method === 'addLiquidity') {
-              const [token0, token1, amount0, amount1] = extrinsic.args;
-              trades.push({
-                hash: extrinsic.hash.toString(),
-                trader: signer,
-                type: 'AddLiquidity',
-                token0: token0.toString(),
-                token1: token1.toString(),
-                amount0: formatBalance(amount0.toString()),
-                amount1: formatBalance(amount1.toString()),
-                timestamp: timestampMs,
-                blockNumber: blockNum,
-              });
-            } else if (method === 'removeLiquidity') {
-              const [token0, token1, liquidity] = extrinsic.args;
-              trades.push({
-                hash: extrinsic.hash.toString(),
-                trader: signer,
-                type: 'RemoveLiquidity',
-                token0: token0.toString(),
-                token1: token1.toString(),
-                amount0: formatBalance(liquidity.toString()),
-                amount1: '0.00',
-                timestamp: timestampMs,
-                blockNumber: blockNum,
-              });
-            }
-          }
-        });
-      } catch (error) {
-        console.debug(`Error querying block ${blockNum}:`, error);
-      }
-    }
-
-    return trades;
-  } catch (error) {
-    console.error('Failed to fetch trade history:', error);
-    return [];
-  }
-}
-
-/**
- * Format balance helper
- */
-function formatBalance(planck: string, decimals: number = 12): string {
-  const value = parseFloat(planck) / Math.pow(10, decimals);
-  return value.toFixed(2);
+export async function getTradeHistory(_address: string, _limit = 50): Promise<TradeHistory[]> {
+  return [];
 }
