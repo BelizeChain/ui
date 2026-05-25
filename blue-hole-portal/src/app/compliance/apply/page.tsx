@@ -54,6 +54,7 @@ export default function KYCApplicationPage() {
   const { selectedAccount } = useWalletStore();
   const [currentStep, setCurrentStep] = useState<StepType>('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [application, setApplication] = useState<KYCApplication>({
     fullName: '',
@@ -99,10 +100,17 @@ export default function KYCApplicationPage() {
   };
 
   const handleSubmit = async () => {
+    // The compliance pallet has no on-chain application queue: KYC document
+    // intake requires an off-chain backend that is not yet deployed in this
+    // repo. Final `verify_account` extrinsics are issued by the Technical
+    // Council, not by individual citizens, so submitting here would be a
+    // no-op. Surface that honestly instead of faking success.
     setIsSubmitting(true);
-    // TODO: Integrate with blockchain submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    router.push('/compliance?applied=true');
+    setSubmitError(
+      'KYC submissions require the off-chain compliance backend, which is not yet deployed. ' +
+        'Saved details have not been transmitted.',
+    );
+    setIsSubmitting(false);
   };
 
   const isStepValid = () => {
@@ -256,6 +264,9 @@ export default function KYCApplicationPage() {
               </Button>
             )}
           </div>
+          {submitError && (
+            <p className="mt-4 text-sm text-red-300 text-right">{submitError}</p>
+          )}
         </GlassCard>
       </div>
     </div>

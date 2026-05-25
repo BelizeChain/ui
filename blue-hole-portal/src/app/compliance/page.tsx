@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   ShieldCheck,
   Warning,
@@ -9,125 +8,87 @@ import {
   XCircle,
   Clock,
   User,
-  IdentificationCard,
-  MapPin,
-  Calendar,
   FunnelSimple,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
-import { Button } from '@/components/ui/button';
-import { useBlockchain } from '@/lib/blockchain/hooks';
+import {
+  getComplianceRecords,
+  getComplianceStats,
+  type ComplianceRecord,
+  type ComplianceStats,
+  type VerificationLevel,
+  type RiskLevel,
+} from '@/services/pallets/compliance';
 
-type KYCStatus = 'Pending' | 'Approved' | 'Rejected' | 'Flagged';
-type KYCLevel = 'Basic' | 'Standard' | 'Enhanced';
-
-interface KYCApplication {
-  id: number;
-  applicantName: string;
-  applicantAddress: string;
-  kycLevel: KYCLevel;
-  status: KYCStatus;
-  submittedAt: string;
-  reviewedAt?: string;
-  reviewedBy?: string;
-  district: string;
-  accountType: 'Citizen' | 'Business' | 'Tourism';
-  ssnVerified: boolean;
-  passportVerified: boolean;
-  addressVerified: boolean;
-  amlFlags: number;
-  riskScore: number;
-}
-
-const mockApplications: KYCApplication[] = [
-  {
-    id: 1,
-    applicantName: 'John Martinez',
-    applicantAddress: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-    kycLevel: 'Standard',
-    status: 'Pending',
-    submittedAt: '2026-01-24T10:00:00Z',
-    district: 'Belize',
-    accountType: 'Citizen',
-    ssnVerified: true,
-    passportVerified: false,
-    addressVerified: true,
-    amlFlags: 0,
-    riskScore: 15,
-  },
-  {
-    id: 2,
-    applicantName: 'Tropical Tours Ltd',
-    applicantAddress: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-    kycLevel: 'Enhanced',
-    status: 'Flagged',
-    submittedAt: '2026-01-23T14:30:00Z',
-    district: 'Cayo',
-    accountType: 'Tourism',
-    ssnVerified: false,
-    passportVerified: true,
-    addressVerified: false,
-    amlFlags: 2,
-    riskScore: 68,
-  },
-  {
-    id: 3,
-    applicantName: 'Maria Rodriguez',
-    applicantAddress: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy',
-    kycLevel: 'Basic',
-    status: 'Approved',
-    submittedAt: '2026-01-22T09:00:00Z',
-    reviewedAt: '2026-01-23T11:00:00Z',
-    reviewedBy: 'FSC Officer #42',
-    district: 'Corozal',
-    accountType: 'Citizen',
-    ssnVerified: true,
-    passportVerified: true,
-    addressVerified: true,
-    amlFlags: 0,
-    riskScore: 8,
-  },
+const VERIFICATION_FILTERS: Array<'All' | VerificationLevel> = [
+  'All',
+  'None',
+  'Basic',
+  'Standard',
+  'Enhanced',
+  'Government',
 ];
+const RISK_FILTERS: Array<'All' | RiskLevel> = ['All', 'Low', 'Medium', 'High', 'Prohibited'];
 
 export default function CompliancePage() {
-  const router = useRouter();
-  const { isReady } = useBlockchain();
-  const [applications, setApplications] = useState(mockApplications);
-  const [filterStatus, setFilterStatus] = useState<'All' | KYCStatus>('All');
-  const [filterRisk, setFilterRisk] = useState<'All' | 'Low' | 'Medium' | 'High'>('All');
+  const [records, setRecords] = useState<ComplianceRecord[]>([]);
+  const [stats, setStats] = useState<ComplianceStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filterVerification, setFilterVerification] = useState<'All' | VerificationLevel>('All');
+  const [filterRisk, setFilterRisk] = useState<'All' | RiskLevel>('All');
 
-  const filteredApplications = applications.filter((app) => {
-    const statusMatch = filterStatus === 'All' || app.status === filterStatus;
-    const riskMatch =
-      filterRisk === 'All' ||
-      (filterRisk === 'Low' && app.riskScore < 30) ||
-      (filterRisk === 'Medium' && app.riskScore >= 30 && app.riskScore < 70) ||
-      (filterRisk === 'High' && app.riskScore >= 70);
-    return statusMatch && riskMatch;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [recs, st] = await Promise.all([
+          getComplianceRecords(),
+          getComplianceStats(),
+        ]);
+        if (cancelled) return;
+        setRecords(recs);
+        setStats(st);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Failed to load compliance data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load compliance data');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    const timer = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const filtered = records.filter((r) => {
+    if (filterVerification !== 'All' && r.verificationLevel !== filterVerification) return false;
+    if (filterRisk !== 'All' && r.riskLevel !== filterRisk) return false;
+    return true;
   });
 
-  const handleApprove = (id: number) => {
-    // TODO: Submit approval extrinsic
-    alert(`Approved KYC application #${id}`);
-  };
-
-  const handleReject = (id: number) => {
-    // TODO: Submit rejection extrinsic
-    alert(`Rejected KYC application #${id}`);
-  };
-
-  const pendingCount = applications.filter((a) => a.status === 'Pending').length;
-  const flaggedCount = applications.filter((a) => a.status === 'Flagged').length;
-  const approvedCount = applications.filter((a) => a.status === 'Approved').length;
+  const verifiedCount = records.filter((r) => r.verificationLevel !== 'None').length;
+  const restrictedCount = records.filter((r) => r.restricted).length;
+  const highRiskCount = records.filter(
+    (r) => r.riskLevel === 'High' || r.riskLevel === 'Prohibited',
+  ).length;
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Compliance & KYC</h1>
+          <h1 className="text-2xl font-bold text-white">Compliance Registry</h1>
           <p className="text-sm text-gray-400">
-            {pendingCount} pending • {flaggedCount} flagged • {approvedCount} approved
+            {loading
+              ? 'Loading…'
+              : `${records.length} on-chain records • ${verifiedCount} verified • ${restrictedCount} restricted`}
           </p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 border border-blue-500/30 rounded-xl">
@@ -136,68 +97,89 @@ export default function CompliancePage() {
         </div>
       </div>
 
-      {/* Metrics */}
+      {/* On-chain caveat banner. Application intake (document upload, OCR,
+          PII collection) is not on-chain; it needs an off-chain backend that
+          is not yet wired. The mutation extrinsics
+          (verify_account/update_risk_level/restrict_account/...) require
+          `TechnicalCouncilSuperMajority`, not a citizen wallet — so this
+          dashboard is intentionally read-only. */}
+      <GlassCard variant="dark-medium" blur="lg" className="p-4">
+        <div className="flex gap-3">
+          <Warning size={20} className="text-amber-400 flex-shrink-0 mt-0.5" weight="fill" />
+          <div className="text-sm text-amber-100/90">
+            <p className="font-semibold mb-1">Read-only chain view</p>
+            <p className="text-xs text-amber-200/70">
+              On-chain compliance writes go through the Technical Council; the per-applicant
+              review queue depends on an off-chain KYC backend that is not yet deployed. Records
+              below come from <code className="text-amber-200">pallet_belize_compliance::ComplianceStatusOf</code>.
+            </p>
+          </div>
+        </div>
+      </GlassCard>
+
+      {error && (
+        <GlassCard variant="dark-medium" blur="lg" className="p-4">
+          <p className="text-sm text-red-300">{error}</p>
+        </GlassCard>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          icon={Clock}
-          iconColor="text-amber-400"
-          iconBg="bg-amber-500/20"
-          title="Pending Review"
-          value={pendingCount.toString()}
-          subtitle="Awaiting approval"
-        />
-        <MetricCard
-          icon={Warning}
-          iconColor="text-red-400"
-          iconBg="bg-red-500/20"
-          title="Flagged"
-          value={flaggedCount.toString()}
-          subtitle="AML alerts"
-        />
         <MetricCard
           icon={CheckCircle}
           iconColor="text-emerald-400"
           iconBg="bg-emerald-500/20"
-          title="Approved"
-          value={approvedCount.toString()}
-          subtitle="This month"
+          title="Verified Accounts"
+          value={stats ? stats.totalVerified.toString() : '—'}
+          subtitle="on-chain counter"
+        />
+        <MetricCard
+          icon={XCircle}
+          iconColor="text-red-400"
+          iconBg="bg-red-500/20"
+          title="Restricted"
+          value={stats ? stats.totalRestricted.toString() : '—'}
+          subtitle="restrict_account calls"
+        />
+        <MetricCard
+          icon={Warning}
+          iconColor="text-orange-400"
+          iconBg="bg-orange-500/20"
+          title="Sanctioned Entries"
+          value={stats ? stats.totalSanctioned.toString() : '—'}
+          subtitle="sanctions list size"
         />
         <MetricCard
           icon={ShieldCheck}
           iconColor="text-blue-400"
           iconBg="bg-blue-500/20"
-          title="Compliance Rate"
-          value="94.2%"
-          subtitle="Overall"
+          title="High Risk Accounts"
+          value={loading ? '—' : highRiskCount.toString()}
+          subtitle="High + Prohibited"
         />
       </div>
 
-      {/* Filters */}
       <GlassCard variant="dark-medium" blur="lg" className="p-4">
         <div className="flex flex-col md:flex-row md:items-center gap-4">
-          {/* Status Filter */}
           <div className="flex items-center gap-2 flex-wrap">
             <FunnelSimple size={20} className="text-gray-400" weight="bold" />
-            <span className="text-sm text-gray-400">Status:</span>
-            {(['All', 'Pending', 'Flagged', 'Approved', 'Rejected'] as const).map((status) => (
+            <span className="text-sm text-gray-400">Verification:</span>
+            {VERIFICATION_FILTERS.map((level) => (
               <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
+                key={level}
+                onClick={() => setFilterVerification(level)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  filterStatus === status
+                  filterVerification === level
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                {status}
+                {level}
               </button>
             ))}
           </div>
-
-          {/* Risk Filter */}
-          <div className="flex items-center gap-2 md:ml-auto">
+          <div className="flex items-center gap-2 md:ml-auto flex-wrap">
             <span className="text-sm text-gray-400">Risk:</span>
-            {(['All', 'Low', 'Medium', 'High'] as const).map((risk) => (
+            {RISK_FILTERS.map((risk) => (
               <button
                 key={risk}
                 onClick={() => setFilterRisk(risk)}
@@ -214,26 +196,27 @@ export default function CompliancePage() {
         </div>
       </GlassCard>
 
-      {/* Applications List */}
       <div className="space-y-4">
-        {filteredApplications.map((application) => (
-          <ApplicationCard
-            key={application.id}
-            application={application}
-            onApprove={handleApprove}
-            onReject={handleReject}
-          />
+        {loading && records.length === 0 && (
+          <GlassCard variant="dark-medium" blur="lg" className="p-8 text-center">
+            <p className="text-sm text-gray-400">Loading compliance records…</p>
+          </GlassCard>
+        )}
+        {!loading && filtered.length === 0 && (
+          <GlassCard variant="dark-medium" blur="lg" className="p-8 text-center">
+            <p className="text-sm text-gray-400">No matching records.</p>
+          </GlassCard>
+        )}
+        {filtered.map((record) => (
+          <RecordCard key={record.address} record={record} />
         ))}
       </div>
     </div>
   );
 }
 
-/**
- * Metric Card Component
- */
 interface MetricCardProps {
-  icon: any;
+  icon: React.ElementType;
   iconColor: string;
   iconBg: string;
   title: string;
@@ -256,178 +239,55 @@ function MetricCard({ icon: Icon, iconColor, iconBg, title, value, subtitle }: M
   );
 }
 
-/**
- * Application Card Component
- */
-interface ApplicationCardProps {
-  application: KYCApplication;
-  onApprove: (id: number) => void;
-  onReject: (id: number) => void;
-}
+function RecordCard({ record }: { record: ComplianceRecord }) {
+  const riskColor =
+    record.riskLevel === 'Prohibited'
+      ? { color: 'text-red-400', bg: 'bg-red-500/20' }
+      : record.riskLevel === 'High'
+      ? { color: 'text-orange-400', bg: 'bg-orange-500/20' }
+      : record.riskLevel === 'Medium'
+      ? { color: 'text-amber-400', bg: 'bg-amber-500/20' }
+      : { color: 'text-emerald-400', bg: 'bg-emerald-500/20' };
 
-function ApplicationCard({ application, onApprove, onReject }: ApplicationCardProps) {
-  const getRiskColor = (score: number) => {
-    if (score < 30) return { color: 'text-emerald-400', bg: 'bg-emerald-500/20', label: 'Low Risk' };
-    if (score < 70) return { color: 'text-amber-400', bg: 'bg-amber-500/20', label: 'Medium Risk' };
-    return { color: 'text-red-400', bg: 'bg-red-500/20', label: 'High Risk' };
-  };
-
-  const riskConfig = getRiskColor(application.riskScore);
+  const verifColor =
+    record.verificationLevel === 'None'
+      ? { color: 'text-gray-400', bg: 'bg-gray-500/20' }
+      : { color: 'text-blue-400', bg: 'bg-blue-500/20' };
 
   return (
     <GlassCard variant="dark-medium" blur="lg" className="p-6">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="text-lg font-bold text-white">{application.applicantName}</h3>
-              <StatusBadge status={application.status} />
-              <div className={`px-2 py-1 ${riskConfig.bg} rounded-lg`}>
-                <span className={`text-xs font-medium ${riskConfig.color}`}>{riskConfig.label}</span>
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 font-mono mb-2">
-              {application.applicantAddress.slice(0, 10)}...{application.applicantAddress.slice(-8)}
-            </p>
-            <div className="flex items-center gap-4 text-xs text-gray-400">
-              <div className="flex items-center gap-1.5">
-                <User size={14} weight="duotone" />
-                <span>{application.accountType}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <MapPin size={14} weight="duotone" />
-                <span>{application.district} District</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <IdentificationCard size={14} weight="duotone" />
-                <span>{application.kycLevel} KYC</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Verification Status */}
-        <div className="grid grid-cols-3 gap-3">
-          <VerificationBadge
-            label="SSN"
-            verified={application.ssnVerified}
-          />
-          <VerificationBadge
-            label="Passport"
-            verified={application.passportVerified}
-          />
-          <VerificationBadge
-            label="Address"
-            verified={application.addressVerified}
-          />
-        </div>
-
-        {/* AML Flags */}
-        {application.amlFlags > 0 && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <div className="flex items-center gap-2">
-              <Warning size={20} className="text-red-400" weight="fill" />
-              <span className="text-sm font-medium text-red-400">
-                {application.amlFlags} AML Flag{application.amlFlags > 1 ? 's' : ''} Detected
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <User size={16} className="text-gray-400" weight="duotone" />
+            <span className="font-mono text-xs text-gray-300 break-all">{record.address}</span>
+            <span className={`px-2 py-0.5 ${verifColor.bg} rounded-md text-xs ${verifColor.color}`}>
+              {record.verificationLevel}
+            </span>
+            <span className={`px-2 py-0.5 ${riskColor.bg} rounded-md text-xs ${riskColor.color}`}>
+              {record.riskLevel}
+            </span>
+            {record.whitelisted && (
+              <span className="px-2 py-0.5 bg-emerald-500/20 rounded-md text-xs text-emerald-400">
+                Whitelisted
               </span>
-            </div>
+            )}
+            {record.restricted && (
+              <span className="px-2 py-0.5 bg-red-500/20 rounded-md text-xs text-red-400">
+                Restricted
+              </span>
+            )}
           </div>
-        )}
-
-        {/* Actions */}
-        {application.status === 'Pending' || application.status === 'Flagged' ? (
-          <div className="flex items-center gap-3 pt-4 border-t border-gray-700/50">
-            <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <Calendar size={16} weight="duotone" />
-              <span>Submitted {formatDate(application.submittedAt)}</span>
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <Button
-                onClick={() => onReject(application.id)}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium flex items-center gap-2"
-              >
-                <XCircle size={16} weight="fill" />
-                Reject
-              </Button>
-              <Button
-                onClick={() => onApprove(application.id)}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center gap-2"
-              >
-                <CheckCircle size={16} weight="fill" />
-                Approve
-              </Button>
-            </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <Clock size={14} weight="duotone" />
+            <span>
+              {record.lastVerification > 0
+                ? `Last verified ${new Date(record.lastVerification * 1000).toLocaleString()}`
+                : 'Never verified'}
+            </span>
           </div>
-        ) : (
-          <div className="flex items-center gap-4 pt-4 border-t border-gray-700/50 text-xs text-gray-400">
-            <div className="flex items-center gap-1.5">
-              <Calendar size={16} weight="duotone" />
-              <span>Reviewed {formatDate(application.reviewedAt!)}</span>
-            </div>
-            {application.reviewedBy && <span>by {application.reviewedBy}</span>}
-          </div>
-        )}
+        </div>
       </div>
     </GlassCard>
   );
-}
-
-/**
- * Verification Badge Component
- */
-function VerificationBadge({ label, verified }: { label: string; verified: boolean }) {
-  return (
-    <div
-      className={`p-2 rounded-lg ${
-        verified
-          ? 'bg-emerald-500/20 border border-emerald-500/30'
-          : 'bg-gray-700 border border-gray-600'
-      }`}
-    >
-      <div className="flex items-center justify-center gap-1.5">
-        {verified ? (
-          <CheckCircle size={14} className="text-emerald-400" weight="fill" />
-        ) : (
-          <XCircle size={14} className="text-gray-500" weight="fill" />
-        )}
-        <span
-          className={`text-xs font-medium ${
-            verified ? 'text-emerald-400' : 'text-gray-500'
-          }`}
-        >
-          {label}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Status Badge Component
- */
-function StatusBadge({ status }: { status: string }) {
-  const config = {
-    Pending: { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/20' },
-    Approved: { icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-    Rejected: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/20' },
-    Flagged: { icon: Warning, color: 'text-orange-400', bg: 'bg-orange-500/20' },
-  }[status] || { icon: Clock, color: 'text-gray-400', bg: 'bg-gray-500/20' };
-
-  const Icon = config.icon;
-
-  return (
-    <div className={`inline-flex items-center gap-1.5 px-2 py-1 ${config.bg} rounded-lg`}>
-      <Icon size={14} className={config.color} weight="fill" />
-      <span className={`text-xs font-medium ${config.color}`}>{status}</span>
-    </div>
-  );
-}
-
-/**
- * Utility Functions
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }

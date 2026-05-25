@@ -25,22 +25,27 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
     [validators, address]
   );
 
-  // Mock historical data for charts (in production, fetch from blockchain)
+  // Placeholder historical chart data. BelizeChain does not expose per-day
+  // block production / uptime / PoUW history on a single storage map; this
+  // requires an indexer. The series below is deterministic (no Math.random /
+  // Date.now during render) so React purity is preserved, but the numbers
+  // are illustrative until the indexer ships.
   const performanceData = useMemo(() => {
     const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
     return Array.from({ length: days }, (_, i) => ({
-      date: new Date(Date.now() - (days - i) * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      blocks: Math.floor(Math.random() * 50) + 100,
-      uptime: 95 + Math.random() * 5,
-      pouwScore: 70 + Math.random() * 30,
-      pqwScore: 65 + Math.random() * 35,
+      date: `Day ${i + 1}`,
+      blocks: 0,
+      uptime: 0,
+      pouwScore: 0,
+      pqwScore: 0,
     }));
   }, [timeRange]);
 
   const commissionHistory = useMemo(() => {
+    const base = validator ? validator.commission : 0;
     return Array.from({ length: 12 }, (_, i) => ({
-      month: new Date(Date.now() - (11 - i) * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short' }),
-      commission: validator ? validator.commission + (Math.random() - 0.5) * 2 : 10,
+      month: `M${i + 1}`,
+      commission: base,
     }));
   }, [validator]);
 

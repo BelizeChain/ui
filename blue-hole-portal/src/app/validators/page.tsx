@@ -27,62 +27,18 @@ interface Validator {
   commission: number;
   totalStake: string;
   ownStake: string;
-  pouWScore: number;
-  pqwScore: number;
-  uptime: number;
-  blocksProduced: number;
-  slashes: number;
+  // PoUW / PQW scores, uptime, blocks-produced, and historical rewards are
+  // not exposed on a single storage map; they require an indexer or a custom
+  // RPC. Until that's in place we surface them as `null` and the UI renders
+  // a dash instead of a fabricated value.
+  pouWScore: number | null;
+  pqwScore: number | null;
+  uptime: number | null;
+  blocksProduced: number | null;
+  slashes: number | null;
   status: 'Active' | 'Waiting' | 'Inactive';
-  rewardsPaid: string;
+  rewardsPaid: string | null;
 }
-
-const mockValidators: Validator[] = [
-  {
-    id: 1,
-    address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-    name: 'BelizeCityNode',
-    commission: 10,
-    totalStake: '2,450,000',
-    ownStake: '500,000',
-    pouWScore: 95.2,
-    pqwScore: 88.7,
-    uptime: 99.8,
-    blocksProduced: 1234,
-    slashes: 0,
-    status: 'Active',
-    rewardsPaid: '45,600',
-  },
-  {
-    id: 2,
-    address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-    name: 'CorozalValidator',
-    commission: 8,
-    totalStake: '1,850,000',
-    ownStake: '400,000',
-    pouWScore: 92.5,
-    pqwScore: 91.3,
-    uptime: 99.5,
-    blocksProduced: 987,
-    slashes: 0,
-    status: 'Active',
-    rewardsPaid: '38,200',
-  },
-  {
-    id: 3,
-    address: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy',
-    name: 'OrangeWalkStaking',
-    commission: 12,
-    totalStake: '3,100,000',
-    ownStake: '750,000',
-    pouWScore: 89.1,
-    pqwScore: 85.4,
-    uptime: 98.2,
-    blocksProduced: 1456,
-    slashes: 1,
-    status: 'Active',
-    rewardsPaid: '52,300',
-  },
-];
 
 export default function ValidatorsPage() {
   const router = useRouter();
@@ -135,13 +91,15 @@ export default function ValidatorsPage() {
           commission,
           totalStake: formatBalance(total),
           ownStake: formatBalance(own),
-          pouWScore: 85 + Math.random() * 10,
-          pqwScore: 80 + Math.random() * 15,
-          uptime: 95 + Math.random() * 4.9,
-          blocksProduced: Math.floor(Math.random() * 2000),
-          slashes: 0,
+          // Per-validator PoUW/PQW/uptime/block-production/rewards history
+          // require an indexer; left null for the UI to render "—".
+          pouWScore: null,
+          pqwScore: null,
+          uptime: null,
+          blocksProduced: null,
+          slashes: null,
           status: activeSet.has(address) ? 'Active' : 'Waiting',
-          rewardsPaid: (Math.random() * 50000).toFixed(0),
+          rewardsPaid: null,
         });
       }
       
@@ -159,18 +117,20 @@ export default function ValidatorsPage() {
       case 'stake':
         return parseInt(b.totalStake.replace(/,/g, '')) - parseInt(a.totalStake.replace(/,/g, ''));
       case 'pouw':
-        return b.pouWScore - a.pouWScore;
+        return (b.pouWScore ?? -1) - (a.pouWScore ?? -1);
       case 'pqw':
-        return b.pqwScore - a.pqwScore;
+        return (b.pqwScore ?? -1) - (a.pqwScore ?? -1);
       case 'uptime':
-        return b.uptime - a.uptime;
+        return (b.uptime ?? -1) - (a.uptime ?? -1);
       default:
         return 0;
     }
   });
 
   const totalStake = validators.reduce((sum, v) => sum + parseInt(v.totalStake.replace(/,/g, '')), 0);
-  const avgCommission = validators.reduce((sum, v) => sum + v.commission, 0) / validators.length;
+  const avgCommission = validators.length > 0
+    ? validators.reduce((sum, v) => sum + v.commission, 0) / validators.length
+    : 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -234,8 +194,8 @@ export default function ValidatorsPage() {
           iconColor="text-amber-400"
           iconBg="bg-amber-500/20"
           title="Network Health"
-          value="98.5%"
-          subtitle="Overall uptime"
+          value="—"
+          subtitle="indexer required"
         />
       </div>
 
@@ -316,6 +276,8 @@ interface ValidatorCardProps {
 }
 
 function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
+  const fmt = (n: number | null, suffix = '') =>
+    n === null ? '—' : `${n.toFixed(n < 10 ? 1 : 0)}${suffix}`;
   return (
     <GlassCard variant="dark-medium" blur="lg" className="p-6">
       <div className="space-y-4">
@@ -357,11 +319,11 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">PoUW Score</p>
-            <p className="text-lg font-bold text-purple-400">{validator.pouWScore}%</p>
+            <p className="text-lg font-bold text-purple-400">{fmt(validator.pouWScore, '%')}</p>
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">PQW Score</p>
-            <p className="text-lg font-bold text-cyan-400">{validator.pqwScore}%</p>
+            <p className="text-lg font-bold text-cyan-400">{fmt(validator.pqwScore, '%')}</p>
           </div>
         </div>
 
@@ -370,12 +332,12 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
           <div>
             <div className="flex items-center justify-between text-xs mb-1">
               <span className="text-gray-400">Uptime</span>
-              <span className="text-white font-medium">{validator.uptime}%</span>
+              <span className="text-white font-medium">{fmt(validator.uptime, '%')}</span>
             </div>
             <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
-                style={{ width: `${validator.uptime}%` }}
+                style={{ width: `${validator.uptime ?? 0}%` }}
               />
             </div>
           </div>
@@ -384,10 +346,18 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
         {/* Stats Footer */}
         <div className="flex items-center justify-between pt-4 border-t border-gray-700/50 text-xs text-gray-400">
           <div>
-            <span>{validator.blocksProduced.toLocaleString()} blocks produced</span>
+            <span>
+              {validator.blocksProduced === null
+                ? '— blocks produced'
+                : `${validator.blocksProduced.toLocaleString()} blocks produced`}
+            </span>
           </div>
           <div>
-            <span>{validator.rewardsPaid} DALLA rewards paid</span>
+            <span>
+              {validator.rewardsPaid === null
+                ? '— DALLA rewards paid'
+                : `${validator.rewardsPaid} DALLA rewards paid`}
+            </span>
           </div>
         </div>
       </div>

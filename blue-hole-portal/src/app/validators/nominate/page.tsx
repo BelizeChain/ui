@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, MagnifyingGlass, ShieldCheck, Coin, TrendUp, 
@@ -9,6 +9,7 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
+import { blockchainService } from '@/services/blockchain';
 
 interface Validator {
   address: string;
@@ -16,60 +17,20 @@ interface Validator {
   commission: number; // Percentage
   totalStake: number; // DALLA
   ownStake: number; // DALLA
-  pouwScore: number; // Percentage
-  pqwScore: number; // Percentage
-  uptime: number; // Percentage
-  nominators: number;
   status: 'Active' | 'Waiting' | 'Inactive';
-  estimatedApy: number; // Percentage
 }
 
-// Mock validators (same as validators page)
-const MOCK_VALIDATORS: Validator[] = [
-  {
-    address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-    name: 'BelizeCityNode',
-    commission: 10,
-    totalStake: 2450000,
-    ownStake: 450000,
-    pouwScore: 95.2,
-    pqwScore: 88.7,
-    uptime: 99.8,
-    nominators: 142,
-    status: 'Active',
-    estimatedApy: 18.5,
-  },
-  {
-    address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-    name: 'CorozalValidator',
-    commission: 8,
-    totalStake: 1850000,
-    ownStake: 350000,
-    pouwScore: 92.5,
-    pqwScore: 91.3,
-    uptime: 99.5,
-    nominators: 98,
-    status: 'Active',
-    estimatedApy: 19.2,
-  },
-  {
-    address: '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y',
-    name: 'OrangeWalkStaking',
-    commission: 12,
-    totalStake: 3100000,
-    ownStake: 600000,
-    pouwScore: 89.1,
-    pqwScore: 85.4,
-    uptime: 98.2,
-    nominators: 175,
-    status: 'Active',
-    estimatedApy: 17.8,
-  },
-];
+// Direct delegation/nomination is NOT supported by the BelizeChain staking
+// pallet (`pallet_belize_staking`). Validators self-stake via
+// `joinValidators(stake, computeCapacity, location)` and there is no
+// `nominate` extrinsic. We keep the page so admins can browse the validator
+// set, but the submit action is disabled with an explanatory banner.
+const NOMINATION_DISABLED_REASON =
+  'BelizeChain uses direct PoUW validator-staking (pallet_belize_staking). Nominator-style delegation is not implemented on-chain; validators self-stake via joinValidators. Update this page when a delegation extrinsic ships.';
 
-const MIN_NOMINATION = 100; // 100 DALLA minimum
-const MAX_NOMINATION = 1000000; // 1M DALLA maximum
-const BOND_PERIOD = 28; // 28 days unbonding period
+const MIN_NOMINATION = 100;
+const MAX_NOMINATION = 1_000_000;
+const BOND_PERIOD = 28;
 
 export default function NominatePage() {
   const router = useRouter();
@@ -78,33 +39,79 @@ export default function NominatePage() {
   const [selectedValidator, setSelectedValidator] = useState<Validator | null>(null);
   const [nominationAmount, setNominationAmount] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isNominating, setIsNominating] = useState(false);
+  const [validators, setValidators] = useState<Validator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const availableBalance = parseFloat(balances.dalla) || 0;
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await blockchainService.initialize();
+        const api = await blockchainService.getApi();
+        const activeEra = await api.query.staking?.activeEra();
+        const currentEra = (activeEra as { unwrap?: () => { index: { toNumber(): number } } })
+          ?.unwrap?.()?.index?.toNumber() ?? 0;
+        const entries = (await api.query.staking?.validators.entries()) ?? [];
+        const sessionValidators = await api.query.session?.validators();
+        const activeSet = new Set(
+          (sessionValidators as unknown as { toString(): string }[] | undefined)?.map((v) => v.toString()) ?? [],
+        );
+        const out: Validator[] = [];
+        for (const [key, prefs] of entries) {
+          const address = (key as { args: { toString(): string }[] }).args[0].toString();
+          const commission =
+            (prefs as unknown as { commission: { toNumber(): number } }).commission.toNumber() / 1e7;
+          const exposure = (await api.query.staking?.erasStakers(currentEra, address)) as
+            | { total?: { toString(): string }; own?: { toString(): string } }
+            | undefined;
+          const totalDalla = Number(BigInt(exposure?.total?.toString() ?? '0') / 1_000_000_000_000n);
+          const ownDalla = Number(BigInt(exposure?.own?.toString() ?? '0') / 1_000_000_000_000n);
+          out.push({
+            address,
+            name: `${address.slice(0, 8)}…${address.slice(-6)}`,
+            commission,
+            totalStake: totalDalla,
+            ownStake: ownDalla,
+            status: activeSet.has(address) ? 'Active' : 'Waiting',
+          });
+        }
+        if (!cancelled) setValidators(out);
+      } catch (error) {
+        console.error('Failed to load validators:', error);
+        if (!cancelled) setLoadError('Failed to load validators from chain.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredValidators = useMemo(() => {
-    return MOCK_VALIDATORS.filter(v => 
-      v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.address.toLowerCase().includes(searchQuery.toLowerCase())
-    ).filter(v => v.status === 'Active'); // Only show active validators
-  }, [searchQuery]);
+    return validators
+      .filter(
+        (v) =>
+          v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          v.address.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+      .filter((v) => v.status === 'Active');
+  }, [searchQuery, validators]);
 
   const parsedAmount = parseFloat(nominationAmount) || 0;
-  const estimatedRewards = selectedValidator 
-    ? (parsedAmount * (selectedValidator.estimatedApy / 100))
-    : 0;
 
   const isValidAmount = parsedAmount >= MIN_NOMINATION && 
                         parsedAmount <= MAX_NOMINATION && 
                         parsedAmount <= availableBalance;
 
-  const handleNominate = async () => {
-    if (!selectedValidator || !isValidAmount) return;
-    
-    setIsNominating(true);
-    // TODO: Integrate with blockchain transaction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    router.push('/validators?nominated=true');
+  // Nomination is unsupported by the on-chain pallet (see
+  // NOMINATION_DISABLED_REASON). We intentionally do not submit any extrinsic
+  // here; the button is wired only to surface the explanation.
+  const handleNominate = () => {
+    setShowConfirmation(false);
   };
 
   return (
@@ -134,6 +141,18 @@ export default function NominatePage() {
       </div>
 
       <div className="p-6 max-w-6xl mx-auto">
+        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex gap-3">
+          <Warning size={20} className="text-amber-400 flex-shrink-0 mt-0.5" weight="fill" />
+          <div className="text-sm text-amber-100/90">
+            <p className="font-semibold mb-1">Direct nomination is not yet supported</p>
+            <p className="text-xs text-amber-200/70">{NOMINATION_DISABLED_REASON}</p>
+          </div>
+        </div>
+        {loadError && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-200">
+            {loadError}
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Validator Selection */}
           <div className="space-y-6">
@@ -180,16 +199,26 @@ export default function NominatePage() {
                         <p className="font-semibold text-white">{validator.commission}%</p>
                       </div>
                       <div>
-                        <p className="text-gray-500">APY</p>
-                        <p className="font-semibold text-emerald-400">{validator.estimatedApy}%</p>
+                        <p className="text-gray-500">Own Stake</p>
+                        <p className="font-semibold text-white">
+                          {validator.ownStake.toLocaleString()} DALLA
+                        </p>
                       </div>
                       <div>
-                        <p className="text-gray-500">Uptime</p>
-                        <p className="font-semibold text-white">{validator.uptime}%</p>
+                        <p className="text-gray-500">Status</p>
+                        <p className="font-semibold text-emerald-400">{validator.status}</p>
                       </div>
                     </div>
                   </button>
                 ))}
+                {!loading && filteredValidators.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-8">
+                    {loadError ? 'Unable to load validators.' : 'No active validators found.'}
+                  </p>
+                )}
+                {loading && (
+                  <p className="text-sm text-gray-500 text-center py-8">Loading validators…</p>
+                )}
               </div>
             </GlassCard>
           </div>
@@ -214,20 +243,22 @@ export default function NominatePage() {
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Total Stake</p>
                       <p className="text-sm font-semibold text-white">
-                        {(selectedValidator.totalStake / 1000000).toFixed(2)}M DALLA
+                        {selectedValidator.totalStake.toLocaleString()} DALLA
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Nominators</p>
-                      <p className="text-sm font-semibold text-white">{selectedValidator.nominators}</p>
+                      <p className="text-xs text-gray-500 mb-1">Own Stake</p>
+                      <p className="text-sm font-semibold text-white">
+                        {selectedValidator.ownStake.toLocaleString()} DALLA
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">PoUW Score</p>
-                      <p className="text-sm font-semibold text-purple-400">{selectedValidator.pouwScore}%</p>
+                      <p className="text-xs text-gray-500 mb-1">Commission</p>
+                      <p className="text-sm font-semibold text-white">{selectedValidator.commission}%</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">PQW Score</p>
-                      <p className="text-sm font-semibold text-cyan-400">{selectedValidator.pqwScore}%</p>
+                      <p className="text-xs text-gray-500 mb-1">Status</p>
+                      <p className="text-sm font-semibold text-emerald-400">{selectedValidator.status}</p>
                     </div>
                   </div>
                 </GlassCard>
@@ -278,21 +309,8 @@ export default function NominatePage() {
                       ))}
                     </div>
 
-                    {/* Estimated Rewards */}
-                    {parsedAmount > 0 && (
-                      <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <TrendUp size={16} className="text-emerald-400" weight="bold" />
-                          <span className="text-xs font-medium text-emerald-300">Estimated Annual Rewards</span>
-                        </div>
-                        <p className="text-2xl font-bold text-emerald-400">
-                          {estimatedRewards.toLocaleString(undefined, { maximumFractionDigits: 2 })} DALLA
-                        </p>
-                        <p className="text-xs text-emerald-300/70 mt-1">
-                          ~{selectedValidator.estimatedApy}% APY after {selectedValidator.commission}% commission
-                        </p>
-                      </div>
-                    )}
+                    {/* Estimated rewards display removed: APY is not exposed
+                        on-chain without an indexer. */}
 
                     {/* Validation Errors */}
                     {parsedAmount > 0 && !isValidAmount && (
@@ -334,15 +352,15 @@ export default function NominatePage() {
                   </ul>
                 </GlassCard>
 
-                {/* Nominate Button */}
+                {/* Nominate Button (disabled — on-chain delegation unsupported) */}
                 <Button
                   onClick={() => setShowConfirmation(true)}
-                  disabled={!selectedAccount || !isValidAmount || !parsedAmount}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 py-4"
+                  disabled
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 py-4 opacity-60 cursor-not-allowed"
                   size="lg"
                 >
                   <Lightning size={20} weight="fill" />
-                  Nominate {parsedAmount > 0 && `${parsedAmount.toLocaleString()} DALLA`}
+                  Nominate (unavailable)
                 </Button>
               </>
             ) : (
@@ -373,10 +391,6 @@ export default function NominatePage() {
                 <p className="text-xs text-gray-500 mb-1">Nomination Amount</p>
                 <p className="text-lg font-bold text-emerald-400">{parsedAmount.toLocaleString()} DALLA</p>
               </div>
-              <div className="p-3 bg-gray-800/50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Estimated Annual Rewards</p>
-                <p className="text-base font-semibold text-white">{estimatedRewards.toLocaleString(undefined, { maximumFractionDigits: 2 })} DALLA</p>
-              </div>
             </div>
 
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg mb-6">
@@ -395,10 +409,10 @@ export default function NominatePage() {
               </Button>
               <Button
                 onClick={handleNominate}
-                disabled={isNominating}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                disabled
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 opacity-60 cursor-not-allowed"
               >
-                {isNominating ? 'Processing...' : 'Confirm'}
+                Unavailable
               </Button>
             </div>
           </GlassCard>

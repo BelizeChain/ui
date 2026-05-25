@@ -9,6 +9,7 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
+import { proposeTreasurySpend } from '@/services/pallets/treasury';
 
 type StepType = 'details' | 'beneficiary' | 'approvers' | 'preview';
 
@@ -47,6 +48,7 @@ export default function NewSpendProposalPage() {
   const { selectedAccount } = useWalletStore();
   const [currentStep, setCurrentStep] = useState<StepType>('details');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [proposal, setProposal] = useState<SpendProposal>({
     title: '',
@@ -89,10 +91,35 @@ export default function NewSpendProposalPage() {
   };
 
   const handleSubmit = async () => {
+    setSubmitError(null);
+    if (!selectedAccount) {
+      setSubmitError('Connect a wallet account before submitting.');
+      return;
+    }
+    if (proposal.currency !== 'DALLA') {
+      setSubmitError(
+        'On-chain treasury spends are denominated in DALLA. bBZD spends require a separate flow that is not yet wired.',
+      );
+      return;
+    }
     setIsSubmitting(true);
-    // TODO: Integrate with blockchain transaction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    router.push('/treasury?submitted=true');
+    try {
+      const result = await proposeTreasurySpend(selectedAccount.address, {
+        beneficiary: proposal.beneficiary.address,
+        amountDalla: proposal.amount,
+        title: proposal.title,
+        description: proposal.description,
+        districtIndex: null,
+      });
+      const target = result.proposalIndex >= 0
+        ? `/treasury/proposals/${result.proposalIndex}`
+        : `/treasury?submitted=true`;
+      router.push(target);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Submission failed.';
+      setSubmitError(message);
+      setIsSubmitting(false);
+    }
   };
 
   const isStepValid = () => {
@@ -214,6 +241,9 @@ export default function NewSpendProposalPage() {
               </Button>
             )}
           </div>
+          {submitError && (
+            <p className="mt-4 text-sm text-red-300">{submitError}</p>
+          )}
         </GlassCard>
       </div>
     </div>

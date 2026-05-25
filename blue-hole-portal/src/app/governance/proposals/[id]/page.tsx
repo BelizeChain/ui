@@ -1,14 +1,20 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle, XCircle, Clock, ThumbsUp, ThumbsDown, Minus,
-  User, FileText, CalendarBlank, Coin, ChatCircle, TrendUp, ShareNetwork
+  User, FileText, CalendarBlank, Coin, ChatCircle
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
+import { useBlockchain } from '@/lib/blockchain/hooks';
+import {
+  getProposalById,
+  voteOnProposal,
+  type Proposal as ChainProposal,
+} from '@/services/pallets/governance';
 
 interface Proposal {
   id: number;
@@ -35,108 +41,155 @@ interface Proposal {
   executedAt?: string;
 }
 
-// Mock proposal data (will be replaced with blockchain queries)
-const mockProposal: Proposal = {
-  id: 1,
-  title: 'Treasury Allocation for Q1 2026',
-  description: `# Proposal Summary
+function mapStatus(raw: string): Proposal['status'] {
+  switch (raw) {
+    case 'Approved':
+    case 'Passed':
+      return 'Passed';
+    case 'Executed':
+      return 'Executed';
+    case 'Rejected':
+      return 'Rejected';
+    case 'Failed':
+    case 'Cancelled':
+      return 'Failed';
+    default:
+      return 'Active';
+  }
+}
 
-This proposal requests allocation of **2,500,000 DALLA** from the National Treasury for Q1 2026 operational expenses across all government departments.
+function mapCategory(raw: string): Proposal['category'] {
+  if (raw === 'Treasury' || raw === 'Policy' || raw === 'Technical' || raw === 'Emergency') {
+    return raw;
+  }
+  return 'Policy';
+}
 
-## Budget Breakdown
-
-### Ministry Allocations
-- **Finance & Economic Development**: 750,000 DALLA (30%)
-- **Education**: 625,000 DALLA (25%)
-- **Health & Wellness**: 500,000 DALLA (20%)
-- **Infrastructure & Public Works**: 375,000 DALLA (15%)
-- **Tourism & Culture**: 250,000 DALLA (10%)
-
-### Justification
-
-The proposed allocation aligns with our national priorities:
-
-1. **Economic Recovery**: Post-hurricane infrastructure repairs require immediate funding
-2. **Education Excellence**: New school year preparations and teacher training programs
-3. **Healthcare Access**: Expanding rural clinic operations
-4. **Tourism Growth**: Marketing campaigns for high season
-
-### Expected Outcomes
-
-- **GDP Growth**: Projected 4.5% increase through Q1
-- **Employment**: Creation of 150+ government positions
-- **Infrastructure**: Completion of 5 major road projects
-- **Tourism**: 20% increase in visitor arrivals
-
-## Timeline
-
-- **Approval Deadline**: February 15, 2026
-- **Disbursement**: March 1, 2026
-- **Reporting**: Monthly expenditure reports to Foundation Board
-
-## Risk Mitigation
-
-Multi-sig approval from Foundation Board (4/7 required) ensures transparent fund management and accountability.`,
-  proposer: {
-    address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-    name: 'Minister of Finance',
-    department: 'Finance & Economic Development',
-  },
-  status: 'Active',
-  category: 'Treasury',
-  votes: {
-    aye: 3250000,
-    nay: 875000,
-    abstain: 450000,
-    total: 4575000,
-  },
-  threshold: 66,
-  amount: '2,500,000',
-  currency: 'DALLA',
-  createdAt: '2026-01-20',
-  endsAt: '2026-02-15',
-};
-
-// Mock vote history timeline
-const voteHistory = [
-  { voter: 'BelizeCityNode', vote: 'Aye', amount: '1.2M DALLA', timestamp: '2026-01-21 10:30' },
-  { voter: 'CorozalValidator', vote: 'Aye', amount: '950K DALLA', timestamp: '2026-01-22 14:15' },
-  { voter: 'OrangeWalkStaking', vote: 'Nay', amount: '875K DALLA', timestamp: '2026-01-22 16:45' },
-  { voter: 'StannCreekNode', vote: 'Aye', amount: '1.1M DALLA', timestamp: '2026-01-23 09:20' },
-  { voter: 'ToledoValidator', vote: 'Abstain', amount: '450K DALLA', timestamp: '2026-01-24 11:00' },
-];
-
-// Mock related proposals
-const relatedProposals = [
-  { id: 2, title: 'Q4 2025 Treasury Report', status: 'Passed' },
-  { id: 7, title: 'Budget Transparency Policy', status: 'Active' },
-  { id: 12, title: 'Ministry Restructure', status: 'Failed' },
-];
+function chainToUiProposal(p: ChainProposal): Proposal {
+  const aye = p.voteCount.ayes;
+  const nay = p.voteCount.nays;
+  return {
+    id: p.index,
+    title: p.title || `Proposal #${p.index}`,
+    description: p.description || '',
+    proposer: {
+      address: p.proposer,
+      name: p.proposer ? `${p.proposer.slice(0, 6)}\u2026${p.proposer.slice(-4)}` : 'Unknown',
+      department: p.category || 'General',
+    },
+    status: mapStatus(p.status),
+    category: mapCategory(p.category),
+    votes: { aye, nay, abstain: 0, total: aye + nay },
+    threshold: 66,
+    amount: p.value && p.value !== '0' ? p.value : undefined,
+    currency: p.value && p.value !== '0' ? 'DALLA' : undefined,
+    // Block numbers, not unix ms \u2014 surface them as-is for now.
+    createdAt: String(p.createdAt),
+    endsAt: String(p.voteEnd),
+  };
+}
 
 export default function ProposalDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  // Unwrap Next 16 async params (currently unused but reserved for blockchain query).
-  void use(params);
+  // Unwrap Next 16 async params; the id is the on-chain proposal index.
+  const { id: idParam } = use(params);
+  const proposalId = Number.parseInt(idParam, 10);
   const router = useRouter();
+  const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
-  const [proposal] = useState(mockProposal);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [userVote, setUserVote] = useState<'Aye' | 'Nay' | 'Abstain' | null>(null);
-  const [voteAmount, setVoteAmount] = useState('');
+  const [voteError, setVoteError] = useState<string | null>(null);
   const [isVoting, setIsVoting] = useState(false);
 
-  const approvalPercentage = (proposal.votes.aye / proposal.votes.total) * 100;
-  const daysRemaining = Math.ceil(
-    (new Date(proposal.endsAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-  );
+  // Poll the on-chain proposal every 15s. We deliberately ignore the legacy
+  // `voteAmount` UI field below \u2014 `pallet_governance::castVote` weights by
+  // stake, not arbitrary planck input.
+  useEffect(() => {
+    if (!isReady || !Number.isFinite(proposalId)) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const live = await getProposalById(proposalId);
+        if (cancelled) return;
+        if (!live) {
+          setLoadError(`Proposal #${proposalId} not found on chain.`);
+          setProposal(null);
+        } else {
+          setLoadError(null);
+          setProposal(chainToUiProposal(live));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('getProposalById failed:', err);
+          setLoadError(err instanceof Error ? err.message : 'Failed to load proposal.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isReady, proposalId]);
+
+  const approvalPercentage = proposal && proposal.votes.total > 0
+    ? (proposal.votes.aye / proposal.votes.total) * 100
+    : 0;
 
   const handleVote = async (vote: 'Aye' | 'Nay' | 'Abstain') => {
-    if (!selectedAccount || !voteAmount) return;
-    
+    setVoteError(null);
+    if (!selectedAccount) {
+      setVoteError('Connect a wallet account to vote.');
+      return;
+    }
+    if (vote === 'Abstain') {
+      setVoteError('Abstain is not supported by pallet_governance::castVote.');
+      return;
+    }
+    if (!proposal) return;
     setIsVoting(true);
-    // TODO: Integrate with blockchain transaction signing
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate transaction
-    setUserVote(vote);
-    setIsVoting(false);
+    try {
+      await voteOnProposal(selectedAccount.address, proposal.id, vote);
+      setUserVote(vote);
+      // Refresh immediately so the tally reflects this vote.
+      const live = await getProposalById(proposal.id);
+      if (live) setProposal(chainToUiProposal(live));
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : 'Vote submission failed.');
+    } finally {
+      setIsVoting(false);
+    }
   };
+
+  if (loading && !proposal) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <GlassCard variant="dark-medium" blur="lg" className="p-8 text-center">
+          <p className="text-gray-300">Loading proposal #{proposalId}\u2026</p>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  if (!proposal) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <GlassCard variant="dark-medium" blur="lg" className="p-8 text-center max-w-md">
+          <XCircle size={48} className="text-red-400 mx-auto mb-4" weight="duotone" />
+          <p className="text-lg font-medium text-white mb-2">Proposal unavailable</p>
+          <p className="text-sm text-gray-400 mb-4">{loadError ?? 'Unknown error.'}</p>
+          <Button onClick={() => router.push('/governance/proposals')}>Back to proposals</Button>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  const daysRemaining = 0; // voteEnd is a block number; UI fallback until block-to-time helper lands.
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -231,37 +284,16 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </GlassCard>
 
-            {/* Vote History Timeline */}
+            {/* Vote History Timeline (pending on-chain index) */}
             <GlassCard variant="dark-medium" blur="lg" className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <ChatCircle size={24} className="text-blue-400" weight="duotone" />
                 <h3 className="text-lg font-bold text-white">Vote History</h3>
               </div>
-              <div className="space-y-3">
-                {voteHistory.map((vote, idx) => (
-                  <div key={idx} className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg">
-                    <div className={`p-2 rounded-lg ${
-                      vote.vote === 'Aye' ? 'bg-emerald-500/20' :
-                      vote.vote === 'Nay' ? 'bg-red-500/20' : 'bg-gray-500/20'
-                    }`}>
-                      {vote.vote === 'Aye' ? <ThumbsUp size={20} className="text-emerald-400" weight="fill" /> :
-                       vote.vote === 'Nay' ? <ThumbsDown size={20} className="text-red-400" weight="fill" /> :
-                       <Minus size={20} className="text-gray-400" weight="bold" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-white">{vote.voter}</p>
-                      <p className="text-xs text-gray-400">{vote.timestamp}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-300">{vote.amount}</p>
-                      <p className={`text-xs font-semibold ${
-                        vote.vote === 'Aye' ? 'text-emerald-400' :
-                        vote.vote === 'Nay' ? 'text-red-400' : 'text-gray-400'
-                      }`}>{vote.vote}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-gray-400">
+                Individual vote history is not yet indexed from chain events. Live tallies are shown
+                in the &ldquo;Vote Breakdown&rdquo; panel.
+              </p>
             </GlassCard>
           </div>
 
@@ -291,22 +323,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Vote Weight (DALLA)
-                      </label>
-                      <input
-                        type="text"
-                        value={voteAmount}
-                        onChange={(e) => setVoteAmount(e.target.value)}
-                        placeholder="Enter amount..."
-                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
+                    <p className="text-xs text-gray-500">
+                      Vote weight is determined by your on-chain stake; no manual amount is
+                      required. Abstain is not supported by <code>pallet_governance::castVote</code>.
+                    </p>
+                    {voteError && (
+                      <p className="text-xs text-red-300">{voteError}</p>
+                    )}
                     <div className="grid grid-cols-1 gap-2">
                       <Button
                         onClick={() => handleVote('Aye')}
-                        disabled={!voteAmount || isVoting}
+                        disabled={isVoting}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         <ThumbsUp size={16} weight="fill" />
@@ -314,7 +341,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                       </Button>
                       <Button
                         onClick={() => handleVote('Nay')}
-                        disabled={!voteAmount || isVoting}
+                        disabled={isVoting}
                         className="bg-red-600 hover:bg-red-700 text-white"
                       >
                         <ThumbsDown size={16} weight="fill" />
@@ -322,7 +349,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                       </Button>
                       <Button
                         onClick={() => handleVote('Abstain')}
-                        disabled={!voteAmount || isVoting}
+                        disabled={isVoting}
                         variant="secondary"
                       >
                         <Minus size={16} weight="bold" />
@@ -376,28 +403,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </GlassCard>
 
-            {/* Related Proposals */}
-            <GlassCard variant="dark-medium" blur="lg" className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ShareNetwork size={20} className="text-purple-400" weight="duotone" />
-                <h3 className="text-base font-bold text-white">Related Proposals</h3>
-              </div>
-              <div className="space-y-2">
-                {relatedProposals.map((related) => (
-                  <button
-                    key={related.id}
-                    onClick={() => router.push(`/governance/proposals/${related.id}`)}
-                    className="w-full flex items-center justify-between p-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition-colors text-left"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-white line-clamp-1">{related.title}</p>
-                      <p className="text-xs text-gray-500">Proposal #{related.id}</p>
-                    </div>
-                    <StatusBadge status={related.status as any} size="sm" />
-                  </button>
-                ))}
-              </div>
-            </GlassCard>
+            {/* Related Proposals: not indexed yet \u2014 hidden until tagging lands. */}
           </div>
         </div>
       </div>

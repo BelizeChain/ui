@@ -21,9 +21,84 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { useBlockchain } from '@/lib/blockchain/hooks';
 import { useWalletStore } from '@/store/wallet';
+import {
+  getActiveProposals,
+  voteOnProposal,
+  type Proposal as ChainProposal,
+} from '@/services/pallets/governance';
 
 type ProposalStatus = 'Active' | 'Passed' | 'Failed' | 'Rejected';
 type VoteType = 'Aye' | 'Nay' | 'Abstain';
+
+/**
+ * Map raw on-chain `ProposalStatus` variant names to the UI's compressed
+ * status set. Anything we don't recognise is treated as `Active` so the row
+ * still renders with vote controls instead of disappearing.
+ */
+function mapStatus(raw: string): ProposalStatus {
+  switch (raw) {
+    case 'Approved':
+    case 'Executed':
+    case 'Passed':
+      return 'Passed';
+    case 'Rejected':
+      return 'Rejected';
+    case 'Failed':
+    case 'Cancelled':
+      return 'Failed';
+    default:
+      return 'Active';
+  }
+}
+
+/**
+ * Map raw on-chain `ProposalType` variant names to the UI category set. The
+ * portal only renders four buckets; everything unknown maps to `Policy`.
+ */
+function mapCategory(raw: string): Proposal['category'] {
+  if (raw === 'Treasury' || raw === 'Emergency' || raw === 'Technical' || raw === 'Policy') {
+    return raw;
+  }
+  if (raw === 'Department' || raw === 'Council' || raw === 'Community') return 'Policy';
+  return 'Policy';
+}
+
+function chainToUiProposal(p: ChainProposal): Proposal {
+  const ayeVotes = p.voteCount.ayes;
+  const nayVotes = p.voteCount.nays;
+  const totalVotes = ayeVotes + nayVotes;
+  const amountDALLA =
+    p.value && p.value !== '0' ? p.value : undefined;
+  // Convert block-number timestamps (best-effort): the on-chain `voting_start`
+  // and `voting_end` are block numbers, not unix times. Show them as a ISO
+  // date only when they fit a plausible unix-ms range; otherwise fall back
+  // to "now" so the sort/filter logic keeps working.
+  const toIso = (n: number): string => {
+    if (!Number.isFinite(n) || n <= 0) return new Date().toISOString();
+    // Heuristic: > 10^12 looks like a millisecond timestamp; smaller values
+    // are block numbers and we just leave them as "now" for display.
+    if (n > 1_000_000_000_000) return new Date(n).toISOString();
+    return new Date().toISOString();
+  };
+  return {
+    id: p.index,
+    title: p.title || `Proposal #${p.index}`,
+    description: p.description || '',
+    proposer: p.proposer,
+    proposerName: p.proposer ? `${p.proposer.slice(0, 6)}…${p.proposer.slice(-4)}` : 'Unknown',
+    department: p.category || 'General',
+    status: mapStatus(p.status),
+    ayeVotes,
+    nayVotes,
+    abstainVotes: 0,
+    totalVotes,
+    threshold: 66,
+    amountDALLA,
+    createdAt: toIso(p.createdAt),
+    endsAt: toIso(p.voteEnd),
+    category: mapCategory(p.category),
+  };
+}
 
 interface Proposal {
   id: number;
@@ -45,123 +120,50 @@ interface Proposal {
   category: 'Treasury' | 'Policy' | 'Technical' | 'Emergency';
 }
 
-// Mock data - will be replaced with real blockchain data
-const mockProposals: Proposal[] = [
-  {
-    id: 1,
-    title: 'Treasury Allocation Q1 2026 - Education Infrastructure',
-    description: 'Proposal to allocate 2.5M DALLA for upgrading educational infrastructure across 6 districts, including new computer labs, internet connectivity, and teacher training programs.',
-    proposer: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-    proposerName: 'Ministry of Education',
-    department: 'Education',
-    status: 'Active',
-    ayeVotes: 28,
-    nayVotes: 5,
-    abstainVotes: 2,
-    totalVotes: 35,
-    threshold: 66,
-    amountDALLA: '2,500,000',
-    category: 'Treasury',
-    createdAt: '2026-01-20T10:00:00Z',
-    endsAt: '2026-01-27T23:59:59Z',
-  },
-  {
-    id: 2,
-    title: 'Validator Commission Rate Adjustment',
-    description: 'Reduce maximum validator commission from 20% to 15% to incentivize better returns for delegators and promote network decentralization.',
-    proposer: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-    proposerName: 'Network Governance Council',
-    department: 'Network Operations',
-    status: 'Active',
-    ayeVotes: 42,
-    nayVotes: 8,
-    abstainVotes: 1,
-    totalVotes: 51,
-    threshold: 66,
-    category: 'Policy',
-    createdAt: '2026-01-18T14:30:00Z',
-    endsAt: '2026-01-26T23:59:59Z',
-  },
-  {
-    id: 3,
-    title: 'Tourism Cashback Program Expansion',
-    description: 'Increase tourism merchant cashback rewards from 5-8% to 7-10% for Q1-Q2 2026 to boost adoption and attract more international visitors.',
-    proposer: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy',
-    proposerName: 'Tourism Board',
-    department: 'Tourism',
-    status: 'Passed',
-    ayeVotes: 67,
-    nayVotes: 3,
-    abstainVotes: 2,
-    totalVotes: 72,
-    threshold: 66,
-    amountDALLA: '500,000',
-    category: 'Treasury',
-    createdAt: '2026-01-10T09:00:00Z',
-    endsAt: '2026-01-17T23:59:59Z',
-  },
-  {
-    id: 4,
-    title: 'Emergency Hurricane Relief Fund',
-    description: 'Establish emergency fund of 5M DALLA for rapid hurricane disaster response, accessible via multi-sig approval from Prime Minister and Finance Minister.',
-    proposer: '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y',
-    proposerName: 'National Emergency Management',
-    department: 'Emergency Services',
-    status: 'Passed',
-    ayeVotes: 89,
-    nayVotes: 1,
-    abstainVotes: 0,
-    totalVotes: 90,
-    threshold: 66,
-    amountDALLA: '5,000,000',
-    category: 'Emergency',
-    createdAt: '2026-01-05T11:00:00Z',
-    endsAt: '2026-01-12T23:59:59Z',
-  },
-  {
-    id: 5,
-    title: 'Quantum Node Hardware Upgrade',
-    description: 'Upgrade Kinich quantum computing nodes to support 127-qubit systems for improved PQW verification and national research capabilities.',
-    proposer: '5HGjWAeFDfFCWPsjFQdVV2Msvz2XtMktvgocEZcCj68kUMaw',
-    proposerName: 'Science & Technology Division',
-    department: 'Technology',
-    status: 'Active',
-    ayeVotes: 15,
-    nayVotes: 12,
-    abstainVotes: 5,
-    totalVotes: 32,
-    threshold: 66,
-    amountDALLA: '1,200,000',
-    category: 'Technical',
-    createdAt: '2026-01-22T16:00:00Z',
-    endsAt: '2026-01-29T23:59:59Z',
-  },
-  {
-    id: 6,
-    title: 'BNS Domain Price Reduction',
-    description: 'Reduce .bz domain registration fee from 100 DALLA to 50 DALLA to encourage adoption of decentralized web hosting.',
-    proposer: '5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL',
-    proposerName: 'Digital Infrastructure Team',
-    department: 'Technology',
-    status: 'Failed',
-    ayeVotes: 22,
-    nayVotes: 48,
-    abstainVotes: 10,
-    totalVotes: 80,
-    threshold: 66,
-    category: 'Policy',
-    createdAt: '2026-01-08T13:00:00Z',
-    endsAt: '2026-01-15T23:59:59Z',
-  },
-];
+// Proposal data is fetched live from `pallet_governance::Proposals` via
+// `getActiveProposals()` below — no hardcoded fixtures.
 
 export default function GovernanceProposalsPage() {
   const router = useRouter();
   const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
-  const [proposals, setProposals] = useState<Proposal[]>(mockProposals);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [voteError, setVoteError] = useState<string | null>(null);
+  const [submittingVoteFor, setSubmittingVoteFor] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'All'>('All');
   const [sortBy, setSortBy] = useState<'newest' | 'ending' | 'votes'>('newest');
+
+  // Poll `pallet_governance::Proposals` every 15s while the page is open.
+  // We keep the last successful snapshot on transient errors so the list does
+  // not flicker to empty between connection blips.
+  useEffect(() => {
+    if (!isReady) return;
+    let cancelled = false;
+    let lastGood: Proposal[] | null = null;
+
+    const tick = async () => {
+      try {
+        const live = await getActiveProposals();
+        if (cancelled) return;
+        const mapped = live.map(chainToUiProposal);
+        lastGood = mapped;
+        setProposals(mapped);
+      } catch (err) {
+        console.error('getActiveProposals failed:', err);
+        if (lastGood && !cancelled) setProposals(lastGood);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isReady]);
 
   // Filter and sort proposals
   const filteredProposals = proposals
@@ -176,16 +178,32 @@ export default function GovernanceProposalsPage() {
       }
     });
 
-  // Vote on proposal
+  // Vote on proposal — submits `governance.castVote(id, aye|nay, conviction=0)`.
+  // Abstain is not supported by the on-chain pallet; we surface a clear error
+  // rather than silently dropping the click.
   const handleVote = async (proposalId: number, vote: VoteType) => {
+    setVoteError(null);
     if (!selectedAccount) {
-      alert('Please connect your wallet to vote');
+      setVoteError('Connect a wallet account to vote.');
       return;
     }
-
-    // TODO: Submit vote extrinsic to blockchain
-    console.log(`Voting ${vote} on proposal ${proposalId}`);
-    alert(`Vote ${vote} submitted for Proposal #${proposalId}`);
+    if (vote === 'Abstain') {
+      setVoteError('Abstain is not supported by pallet_governance::castVote.');
+      return;
+    }
+    setSubmittingVoteFor(proposalId);
+    try {
+      const { hash } = await voteOnProposal(selectedAccount.address, proposalId, vote);
+      console.log(`Vote ${vote} for proposal ${proposalId} in block`, hash);
+      // Optimistic refresh: pick up the new tally on the next poll tick.
+      const refreshed = await getActiveProposals();
+      setProposals(refreshed.map(chainToUiProposal));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Vote submission failed';
+      setVoteError(message);
+    } finally {
+      setSubmittingVoteFor(null);
+    }
   };
 
   return (
@@ -253,10 +271,16 @@ export default function GovernanceProposalsPage() {
 
       {/* Proposals List */}
       <div className="space-y-4">
+        {voteError && (
+          <GlassCard variant="dark-medium" blur="lg" className="p-4 border border-red-500/30">
+            <p className="text-sm text-red-300">{voteError}</p>
+          </GlassCard>
+        )}
         {filteredProposals.map((proposal) => (
           <ProposalCard
             key={proposal.id}
             proposal={proposal}
+            disabled={submittingVoteFor === proposal.id}
             onVote={handleVote}
             onViewDetails={() => router.push(`/governance/proposals/${proposal.id}`)}
           />
@@ -265,11 +289,15 @@ export default function GovernanceProposalsPage() {
         {filteredProposals.length === 0 && (
           <GlassCard variant="dark-medium" blur="lg" className="p-12 text-center">
             <FileText size={48} className="text-gray-600 mx-auto mb-4" weight="duotone" />
-            <p className="text-lg font-medium text-gray-400">No proposals found</p>
+            <p className="text-lg font-medium text-gray-400">
+              {loading ? 'Loading proposals…' : 'No proposals found'}
+            </p>
             <p className="text-sm text-gray-500 mt-2">
-              {filterStatus === 'All'
-                ? 'No proposals have been created yet'
-                : `No ${filterStatus.toLowerCase()} proposals`}
+              {loading
+                ? 'Querying pallet_governance::Proposals…'
+                : filterStatus === 'All'
+                  ? 'No proposals have been created yet'
+                  : `No ${filterStatus.toLowerCase()} proposals`}
             </p>
           </GlassCard>
         )}
@@ -283,11 +311,12 @@ export default function GovernanceProposalsPage() {
  */
 interface ProposalCardProps {
   proposal: Proposal;
+  disabled?: boolean;
   onVote: (proposalId: number, vote: VoteType) => void;
   onViewDetails: () => void;
 }
 
-function ProposalCard({ proposal, onVote, onViewDetails }: ProposalCardProps) {
+function ProposalCard({ proposal, disabled, onVote, onViewDetails }: ProposalCardProps) {
   const votePercentage = proposal.totalVotes > 0 ? (proposal.ayeVotes / proposal.totalVotes) * 100 : 0;
   const isPassing = votePercentage >= proposal.threshold;
   const timeRemaining = getTimeRemaining(proposal.endsAt);
@@ -393,21 +422,24 @@ function ProposalCard({ proposal, onVote, onViewDetails }: ProposalCardProps) {
             <div className="flex items-center gap-2 ml-auto" onClick={(e) => e.stopPropagation()}>
               <Button
                 onClick={() => onVote(proposal.id, 'Aye')}
-                className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                disabled={disabled}
+                className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
               >
                 <ThumbsUp size={14} weight="fill" />
                 Aye
               </Button>
               <Button
                 onClick={() => onVote(proposal.id, 'Nay')}
-                className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                disabled={disabled}
+                className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
               >
                 <ThumbsDown size={14} weight="fill" />
                 Nay
               </Button>
               <Button
                 onClick={() => onVote(proposal.id, 'Abstain')}
-                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                disabled={disabled}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Minus size={14} weight="bold" />
                 Abstain
