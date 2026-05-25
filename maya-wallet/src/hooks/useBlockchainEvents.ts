@@ -120,12 +120,31 @@ export function useGovernanceProposalsSubscription() {
   const [proposals, setProposals] = useState<Array<{proposalIndex: number; proposer: string; value: string; title: string; timestamp: number;}>>([]);
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    let unsub: (() => void) | null = null;
-    const sub = async () => {
-      try { unsub = await subscribeToGovernanceProposals((proposal) => { setProposals(prev => [{...proposal, timestamp: Date.now()}, ...prev].slice(0, 20)); }); } catch (err) {}
+    let cancelled = false;
+    const POLL_MS = 15_000;
+    const refresh = async () => {
+      try {
+        // Lazy-import to keep the bundle slim and avoid pulling @polkadot/api
+        // into the initial chunk when the hook is unused.
+        const { getActiveProposals } = await import('@/services/pallets');
+        const onChain = await getActiveProposals();
+        if (cancelled) return;
+        setProposals(
+          onChain.map((p) => ({
+            proposalIndex: p.index,
+            proposer: p.proposer,
+            value: p.value,
+            title: p.title || `Proposal #${p.index}`,
+            timestamp: Date.now(),
+          })),
+        );
+      } catch {
+        // Keep last successful snapshot on transient errors.
+      }
     };
-    sub();
-    return () => { if (unsub) unsub(); };
+    void refresh();
+    const interval = setInterval(() => { void refresh(); }, POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
   return proposals;
 }

@@ -23,7 +23,7 @@ export {
 export type { AssetSymbol, TradingPair, SwapQuote, SwapResult, TradeHistory } from './belizex';
 
 // Governance & Democracy
-export { getActiveProposals, submitProposal, voteOnProposal, getActiveReferenda, getDistrictCouncil, getVotingHistory, secondProposal } from './governance';
+export { getActiveProposals, getProposalById, submitProposal, voteOnProposal, getActiveReferenda, getDistrictCouncil, getVotingHistory, secondProposal } from './governance';
 
 // Staking & Rewards
 export { getStakingInfo, stakeDalla, unstakeDalla, claimStakingRewards, getPoUWContributions, getActiveValidators, reportTrainingContribution, calculatePoUWReward } from './staking';

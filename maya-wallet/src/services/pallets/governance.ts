@@ -16,8 +16,10 @@ export interface Proposal {
   bond: string;
   title: string;
   description: string;
-  category: 'Infrastructure' | 'Development' | 'Community' | 'Emergency' | 'Other';
-  status: 'Proposed' | 'Voting' | 'Approved' | 'Rejected' | 'Executed';
+  /** Raw on-chain `ProposalType` variant name (e.g. `Treasury`, `Council`, `Community`, `Department`, `Emergency`). */
+  category: string;
+  /** Raw on-chain `ProposalStatus` variant name (`Pending`, `Voting`, `Approved`, `Rejected`, `Cancelled`, `Executed`). */
+  status: string;
   voteCount: {
     ayes: number;
     nays: number;
@@ -74,46 +76,133 @@ export interface Vote {
 }
 
 /**
- * Get all active proposals
+ * Decode a `BoundedVec<u8, _>` (Substrate Bytes) into a UTF-8 string.
+ * Returns the original hex with `0x` prefix if decoding produces non-printable
+ * bytes, so callers always get something displayable.
+ */
+function bytesToString(raw: unknown): string {
+  if (raw == null) return '';
+  const codec = raw as { toU8a?: () => Uint8Array; toString?: () => string };
+  let bytes: Uint8Array | null = null;
+  try {
+    if (typeof codec.toU8a === 'function') {
+      bytes = codec.toU8a();
+    }
+  } catch {
+    bytes = null;
+  }
+  if (!bytes || bytes.length === 0) {
+    return typeof codec.toString === 'function' ? codec.toString() : '';
+  }
+  try {
+    const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    // If decode produced any unprintable bytes (other than common whitespace), fall back to hex.
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u0008\u000B-\u000C\u000E-\u001F]/.test(decoded)) {
+      return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+    }
+    return decoded;
+  } catch {
+    return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  }
+}
+
+/**
+ * Read a single on-chain `Proposal` (StorageMap u32 -> Proposal) by its
+ * numeric ID. Returns `null` when the proposal does not exist.
+ *
+ * The chain stores `Proposals: StorageMap<u32, Proposal<AccountId, BlockNumber, Balance>>`
+ * with title/description as `BoundedVec<u8, _>` (raw bytes). We decode bytes to
+ * UTF-8 strings and convert enums via `.toString()`.
+ */
+export async function getProposalById(proposalId: number): Promise<Proposal | null> {
+  const api = await initializeApi();
+  try {
+    const opt: any = await api.query.governance.proposals(proposalId);
+    if (!opt || (typeof opt.isNone === 'boolean' && opt.isNone)) return null;
+    const p: any = typeof opt.unwrap === 'function' ? opt.unwrap() : opt;
+    if (!p) return null;
+    return mapOnChainProposal(p, proposalId);
+  } catch (error) {
+    console.error(`Failed to fetch proposal ${proposalId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Map a raw on-chain `Proposal` codec into the UI `Proposal` shape used by
+ * `ProposalCard` and the proposal detail page.
+ */
+function mapOnChainProposal(p: any, idHint?: number): Proposal {
+  const tally = p.vote_tally ?? p.voteTally ?? {};
+  const status = String(p.status?.toString?.() ?? p.status ?? 'Voting');
+  const id = typeof idHint === 'number' ? idHint : Number(p.id?.toString?.() ?? p.id ?? 0);
+
+  // Map on-chain ProposalAction.TreasurySpend (if present) into UI `value`/`beneficiary`.
+  let value = '0';
+  let beneficiary = '';
+  try {
+    const action = p.action;
+    const actionInner = action && typeof action.isSome === 'boolean' && action.isSome
+      ? action.unwrap()
+      : action;
+    if (actionInner && (actionInner.isTreasurySpend || actionInner.type === 'TreasurySpend')) {
+      const inner = actionInner.asTreasurySpend ?? actionInner.value ?? actionInner;
+      if (inner?.amount) value = formatBalance(inner.amount.toString());
+      if (inner?.beneficiary) beneficiary = inner.beneficiary.toString();
+    }
+  } catch {
+    // Non-treasury proposals leave value/beneficiary as defaults.
+  }
+
+  return {
+    index: id,
+    hash: `proposal-${id}`,
+    proposer: p.proposer?.toString?.() ?? String(p.proposer ?? ''),
+    value,
+    beneficiary,
+    bond: p.deposit ? formatBalance(p.deposit.toString()) : '0',
+    title: bytesToString(p.title),
+    description: bytesToString(p.description),
+    category: (p.proposal_type?.toString?.() ?? p.proposalType?.toString?.() ?? 'Other') as Proposal['category'],
+    status: status as Proposal['status'],
+    voteCount: {
+      ayes: Number(tally.ayes?.toString?.() ?? tally.ayes ?? 0),
+      nays: Number(tally.nays?.toString?.() ?? tally.nays ?? 0),
+    },
+    voteEnd: Number(p.voting_end?.toString?.() ?? p.votingEnd?.toString?.() ?? 0),
+    createdAt: Number(p.voting_start?.toString?.() ?? p.votingStart?.toString?.() ?? 0),
+  };
+}
+
+/**
+ * Get all on-chain proposals from `pallet_governance::Proposals`.
+ *
+ * The on-chain map is keyed by `u32` proposal ID (NOT by hash); we iterate
+ * all entries, decode each `Proposal` struct, and return them in ascending ID
+ * order. Returns `[]` on any error so the UI keeps rendering gracefully.
  */
 export async function getActiveProposals(): Promise<Proposal[]> {
   const api = await initializeApi();
-  
   try {
-    const proposals: any = await api.query.governance?.proposals();
-    
-    if (!proposals || proposals.length === 0) {
-      return [];
+    if (!api.query.governance?.proposals) return [];
+    const entries: any[] = await api.query.governance.proposals.entries();
+    if (!entries || entries.length === 0) return [];
+
+    const results: Proposal[] = [];
+    for (const [key, opt] of entries) {
+      try {
+        const args = (key as any).args;
+        const id = Number(args?.[0]?.toString?.() ?? args?.[0] ?? 0);
+        const raw: any = typeof opt.unwrap === 'function' ? opt.unwrap() : opt;
+        if (!raw) continue;
+        results.push(mapOnChainProposal(raw, id));
+      } catch (innerError) {
+        console.warn('Failed to decode proposal entry; skipping:', innerError);
+      }
     }
-
-    return await Promise.all(
-      proposals.map(async (proposalHash: any, index: number) => {
-        const proposalData: any = await api.query.governance.proposalOf(proposalHash);
-        const votingData: any = await api.query.governance.voting(index);
-        
-        const data = proposalData.unwrap();
-        const voting = votingData?.unwrap();
-
-        return {
-          index,
-          hash: proposalHash.toString(),
-          proposer: data.proposer.toString(),
-          value: formatBalance(data.value.toString()),
-          beneficiary: data.beneficiary.toString(),
-          bond: formatBalance(data.bond.toString()),
-          title: data.title.toString(),
-          description: data.description.toString(),
-          category: data.category.toString() as any,
-          status: data.status.toString() as any,
-          voteCount: {
-            ayes: voting?.ayes?.length || 0,
-            nays: voting?.nays?.length || 0,
-          },
-          voteEnd: data.voteEnd.toNumber(),
-          createdAt: data.createdAt.toNumber(),
-        };
-      })
-    );
+    results.sort((a, b) => a.index - b.index);
+    return results;
   } catch (error) {
     console.error('Failed to fetch proposals:', error);
     return [];

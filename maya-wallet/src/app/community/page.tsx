@@ -123,42 +123,9 @@ export default function CommunityPage() {
     });
   };
 
-  // Mock data - will be replaced with real blockchain queries
-  const proposals = [
-    {
-      id: 42,
-      title: 'Build Community Center in Orange Walk',
-      district: 'Orange Walk',
-      value: 50000,
-      status: 'passed' as const,
-      votesFor: 1250,
-      votesAgainst: 340,
-      deadline: 'Ended 2 days ago',
-      href: '/proposal/42'
-    },
-    {
-      id: 43,
-      title: 'Increase Tourism Cashback to 10%',
-      district: 'Belize City',
-      value: 0,
-      status: 'voting' as const,
-      votesFor: 890,
-      votesAgainst: 560,
-      deadline: '3 days left',
-      href: '/proposal/43'
-    },
-    {
-      id: 44,
-      title: 'Solar Panel Installation in Schools',
-      district: 'Cayo',
-      value: 75000,
-      status: 'voting' as const,
-      votesFor: 2100,
-      votesAgainst: 450,
-      deadline: '5 days left',
-      href: '/proposal/44'
-    }
-  ];
+  // Proposals are sourced live from `pallet_governance` via the
+  // `useGovernanceProposalsSubscription` hook above; no mock list.
+  // ProposalCard props are derived inside the Governance tab below.
 
   const badges = [
     {
@@ -313,7 +280,7 @@ export default function CommunityPage() {
                 </GlassCard>
 
                 {/* Live Proposals */}
-                {liveProposals.length > 0 && (
+                {liveProposals.length > 0 ? (
                   <>
                     <div className="flex items-center space-x-2 mt-4 mb-2">
                       <div className="w-2 h-2 rounded-full bg-emerald-500/100 animate-pulse" />
@@ -325,20 +292,23 @@ export default function CommunityPage() {
                         id={proposal.proposalIndex}
                         title={proposal.title}
                         district="On-Chain"
-                        value={parseFloat(proposal.value)}
+                        value={parseFloat(proposal.value) || 0}
                         status="voting"
                         votesFor={0}
                         votesAgainst={0}
                         deadline="Live"
+                        href={`/proposal/${proposal.proposalIndex}`}
                       />
                     ))}
                   </>
+                ) : (
+                  <div className="mt-4 p-6 rounded-xl border border-dashed border-gray-700/60 bg-gray-900/30 text-center">
+                    <p className="text-sm text-gray-300 font-medium mb-1">No active proposals</p>
+                    <p className="text-xs text-gray-500">
+                      Once a governance proposal is submitted on-chain it will appear here within ~15 seconds.
+                    </p>
+                  </div>
                 )}
-
-                {/* Mock Proposals */}
-                {proposals.map(proposal => (
-                  <ProposalCard key={proposal.id} {...proposal} />
-                ))}
               </div>
             </TabsContent>
 
