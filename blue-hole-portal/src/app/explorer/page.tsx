@@ -2,100 +2,61 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MagnifyingGlass, Cube, ArrowsLeftRight, Clock, Hash, CheckCircle, XCircle } from 'phosphor-react';
+import { ArrowLeft, MagnifyingGlass, Cube, ArrowsLeftRight, Clock, Hash, CheckCircle } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
+import { useRecentBlocks, useBlockNumber } from '@/lib/blockchain/hooks';
+
+function shortenHash(value: string, lead = 10, tail = 8): string {
+  if (!value) return '';
+  if (value.length <= lead + tail) return value;
+  return `${value.slice(0, lead)}...${value.slice(-tail)}`;
+}
+
+function timeAgo(timestamp: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+}
 
 export default function ExplorerPage() {
   const router = useRouter();
   const [searchValue, setSearchValue] = useState('');
   const [activeTab, setActiveTab] = useState<'blocks' | 'transactions'>('blocks');
 
-  // Mock data - replace with real blockchain queries
-  const recentBlocks = [
-    {
-      number: 1234567,
-      hash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-      timestamp: '2 mins ago',
-      extrinsics: 8,
-      validator: '5GrwvaEF...HGKutQY',
-      finalized: true,
-    },
-    {
-      number: 1234566,
-      hash: '0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c',
-      timestamp: '8 mins ago',
-      extrinsics: 12,
-      validator: '5FHnei...9KutQY',
-      finalized: true,
-    },
-    {
-      number: 1234565,
-      hash: '0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d',
-      timestamp: '14 mins ago',
-      extrinsics: 6,
-      validator: '5DTestD...MutQY',
-      finalized: true,
-    },
-    {
-      number: 1234564,
-      hash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e',
-      timestamp: '20 mins ago',
-      extrinsics: 15,
-      validator: '5GrwvaEF...HGKutQY',
-      finalized: true,
-    },
-  ];
+  const { blocks, txs, finalizedNumber, loading } = useRecentBlocks(15);
+  const { blockNumber: latestBlock } = useBlockNumber();
 
-  const recentTransactions = [
-    {
-      hash: '0xabc123def456...xyz789',
-      block: 1234567,
-      timestamp: '1 min ago',
-      from: '5GrwvaEF...HGKutQY',
-      to: '5FHnei...9KutQY',
-      value: '1,000 DALLA',
-      status: 'success',
-      type: 'Transfer',
-    },
-    {
-      hash: '0xdef456abc123...xyz456',
-      block: 1234567,
-      timestamp: '3 mins ago',
-      from: '5DTestD...MutQY',
-      to: '5GrwvaEF...HGKutQY',
-      value: '500 DALLA',
-      status: 'success',
-      type: 'Transfer',
-    },
-    {
-      hash: '0xghi789jkl012...xyz123',
-      block: 1234566,
-      timestamp: '9 mins ago',
-      from: '5FHnei...9KutQY',
-      to: '5DTestD...MutQY',
-      value: '2,500 DALLA',
-      status: 'failed',
-      type: 'Transfer',
-    },
-    {
-      hash: '0xmno345pqr678...xyz890',
-      block: 1234565,
-      timestamp: '15 mins ago',
-      from: '5GrwvaEF...HGKutQY',
-      to: '5FHnei...9KutQY',
-      value: '750 DALLA',
-      status: 'success',
-      type: 'Staking',
-    },
-  ];
+  // Average block time from the timestamps of recently observed blocks.
+  let avgBlockTime = 0;
+  if (blocks.length >= 2) {
+    const newest = blocks[0].timestamp;
+    const oldest = blocks[blocks.length - 1].timestamp;
+    avgBlockTime = (newest - oldest) / 1000 / (blocks.length - 1);
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchValue) {
-      // Detect what type of search (block number, hash, address, etc.)
-      console.log('Searching for:', searchValue);
-    }
+    if (!searchValue.trim()) return;
+    // Detail routes (block/tx/account) are not built yet; filter the in-memory
+    // feed so a search still narrows the visible list instead of 404-ing.
+    setActiveTab('transactions');
   };
+
+  const filteredTxs = searchValue.trim()
+    ? txs.filter((t) => {
+        const q = searchValue.trim().toLowerCase();
+        return (
+          t.hash.toLowerCase().includes(q) ||
+          t.method.toLowerCase().includes(q) ||
+          (t.signer?.toLowerCase().includes(q) ?? false) ||
+          String(t.block) === q
+        );
+      })
+    : txs;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -146,7 +107,9 @@ export default function ExplorerPage() {
               <Cube size={24} className="text-blue-400" weight="duotone" />
               <div>
                 <p className="text-xs text-gray-400">Latest Block</p>
-                <p className="text-lg font-bold text-white">1,234,567</p>
+                <p className="text-lg font-bold text-white">
+                  {latestBlock ? `#${latestBlock.toLocaleString()}` : '—'}
+                </p>
               </div>
             </div>
           </GlassCard>
@@ -155,8 +118,8 @@ export default function ExplorerPage() {
             <div className="flex items-center gap-3">
               <ArrowsLeftRight size={24} className="text-emerald-400" weight="duotone" />
               <div>
-                <p className="text-xs text-gray-400">Total TXs</p>
-                <p className="text-lg font-bold text-white">8.2M</p>
+                <p className="text-xs text-gray-400">Recent TXs</p>
+                <p className="text-lg font-bold text-white">{txs.length}</p>
               </div>
             </div>
           </GlassCard>
@@ -166,7 +129,9 @@ export default function ExplorerPage() {
               <Clock size={24} className="text-purple-400" weight="duotone" />
               <div>
                 <p className="text-xs text-gray-400">Avg Block Time</p>
-                <p className="text-lg font-bold text-white">6.2s</p>
+                <p className="text-lg font-bold text-white">
+                  {avgBlockTime > 0 ? `${avgBlockTime.toFixed(1)}s` : '—'}
+                </p>
               </div>
             </div>
           </GlassCard>
@@ -176,7 +141,9 @@ export default function ExplorerPage() {
               <CheckCircle size={24} className="text-emerald-400" weight="duotone" />
               <div>
                 <p className="text-xs text-gray-400">Finalized</p>
-                <p className="text-lg font-bold text-white">1,234,560</p>
+                <p className="text-lg font-bold text-white">
+                  {finalizedNumber ? `#${finalizedNumber.toLocaleString()}` : '—'}
+                </p>
               </div>
             </div>
           </GlassCard>
@@ -215,7 +182,13 @@ export default function ExplorerPage() {
         {/* Blocks List */}
         {activeTab === 'blocks' && (
           <div className="space-y-3">
-            {recentBlocks.map((block) => (
+            {loading && blocks.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-8">Connecting to the network…</p>
+            )}
+            {!loading && blocks.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-8">No blocks observed yet.</p>
+            )}
+            {blocks.map((block) => (
               <GlassCard
                 key={block.number}
                 variant="dark-medium"
@@ -230,16 +203,18 @@ export default function ExplorerPage() {
                       {block.finalized && (
                         <CheckCircle size={16} className="text-emerald-400" weight="fill" />
                       )}
-                      <span className="text-xs text-gray-400">{block.timestamp}</span>
+                      <span className="text-xs text-gray-400">{timeAgo(block.timestamp)}</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
                       <div>
                         <span className="text-gray-400">Hash: </span>
-                        <code className="text-blue-400">{block.hash.slice(0, 18)}...</code>
+                        <code className="text-blue-400">{shortenHash(block.hash, 18, 0)}</code>
                       </div>
                       <div>
                         <span className="text-gray-400">Validator: </span>
-                        <code className="text-emerald-400">{block.validator}</code>
+                        <code className="text-emerald-400">
+                          {block.author ? shortenHash(block.author) : 'unknown'}
+                        </code>
                       </div>
                       <div>
                         <span className="text-gray-400">Extrinsics: </span>
@@ -256,9 +231,15 @@ export default function ExplorerPage() {
         {/* Transactions List */}
         {activeTab === 'transactions' && (
           <div className="space-y-3">
-            {recentTransactions.map((tx) => (
+            {loading && txs.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-8">Connecting to the network…</p>
+            )}
+            {!loading && filteredTxs.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-8">No signed transactions observed yet.</p>
+            )}
+            {filteredTxs.map((tx) => (
               <GlassCard
-                key={tx.hash}
+                key={`${tx.block}-${tx.index}`}
                 variant="dark-medium"
                 blur="lg"
                 className="p-4 hover:border-blue-500/50 transition-colors cursor-pointer"
@@ -267,35 +248,25 @@ export default function ExplorerPage() {
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-3">
                       <Hash size={20} className="text-purple-400" weight="duotone" />
-                      <code className="text-sm text-blue-400">{tx.hash}</code>
-                      {tx.status === 'success' ? (
-                        <CheckCircle size={16} className="text-emerald-400" weight="fill" />
-                      ) : (
-                        <XCircle size={16} className="text-red-400" weight="fill" />
-                      )}
+                      <code className="text-sm text-blue-400">{shortenHash(tx.hash, 12, 8)}</code>
+                      <CheckCircle size={16} className="text-emerald-400" weight="fill" />
                       <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded">
-                        {tx.type}
+                        {tx.method}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                       <div>
                         <span className="text-gray-400">Block: </span>
                         <span className="text-white font-medium">#{tx.block.toLocaleString()}</span>
                       </div>
                       <div>
-                        <span className="text-gray-400">From: </span>
-                        <code className="text-emerald-400">{tx.from}</code>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">To: </span>
-                        <code className="text-emerald-400">{tx.to}</code>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Value: </span>
-                        <span className="text-white font-medium">{tx.value}</span>
+                        <span className="text-gray-400">Signer: </span>
+                        <code className="text-emerald-400">
+                          {tx.signer ? shortenHash(tx.signer) : '—'}
+                        </code>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-400">{tx.timestamp}</p>
+                    <p className="text-xs text-gray-400">{timeAgo(tx.timestamp)}</p>
                   </div>
                 </div>
               </GlassCard>

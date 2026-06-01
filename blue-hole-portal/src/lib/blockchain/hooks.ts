@@ -371,3 +371,107 @@ export function useBalance(address: string | null) {
 
   return { balance, loading: dallaLoading || bBzdLoading };
 }
+
+/**
+ * Recent block / transaction feed for the explorer.
+ *
+ * Subscribes to new heads (via the derive API so we also get the block author),
+ * fetches each block's extrinsics, and tracks the finalized head to mark blocks
+ * as finalized. Returns the most recent `limit` blocks and signed extrinsics.
+ */
+export interface ExplorerBlock {
+  number: number;
+  hash: string;
+  timestamp: number;
+  extrinsics: number;
+  author?: string;
+  finalized: boolean;
+}
+
+export interface ExplorerTx {
+  hash: string;
+  block: number;
+  index: number;
+  method: string;
+  signer?: string;
+  timestamp: number;
+}
+
+export function useRecentBlocks(limit = 10) {
+  const { api, isReady } = useBlockchain();
+  const [blocks, setBlocks] = useState<ExplorerBlock[]>([]);
+  const [txs, setTxs] = useState<ExplorerTx[]>([]);
+  const [finalizedNumber, setFinalizedNumber] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isReady || !api) {
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const unsubs: Array<() => void> = [];
+
+    const start = async () => {
+      try {
+        const unsubHeads = await api.derive.chain.subscribeNewHeads(async (header) => {
+          try {
+            const number = header.number.toNumber();
+            const hash = header.hash.toHex();
+            const author = (header as any).author?.toString();
+            const signedBlock = await api.rpc.chain.getBlock(header.hash);
+            const exts = signedBlock.block.extrinsics;
+            const now = Date.now();
+            const block: ExplorerBlock = {
+              number,
+              hash,
+              timestamp: now,
+              extrinsics: exts.length,
+              author,
+              finalized: false,
+            };
+            const blockTxs: ExplorerTx[] = exts
+              .map((ex, index) => ({
+                hash: ex.hash.toHex(),
+                block: number,
+                index,
+                method: `${ex.method.section}.${ex.method.method}`,
+                signer: ex.isSigned ? ex.signer.toString() : undefined,
+                timestamp: now,
+              }))
+              .filter((t) => t.signer);
+
+            if (!isMounted) return;
+            setBlocks((prev) => [block, ...prev.filter((b) => b.number !== number)].slice(0, limit));
+            setTxs((prev) => [...blockTxs, ...prev].slice(0, limit));
+            setLoading(false);
+          } catch (err) {
+            console.error('Failed to process new head:', err);
+          }
+        });
+        unsubs.push(unsubHeads as unknown as () => void);
+
+        const unsubFinal = await api.rpc.chain.subscribeFinalizedHeads((header) => {
+          if (!isMounted) return;
+          const fnum = header.number.toNumber();
+          setFinalizedNumber(fnum);
+          setBlocks((prev) => prev.map((b) => (b.finalized ? b : { ...b, finalized: b.number <= fnum })));
+        });
+        unsubs.push(unsubFinal as unknown as () => void);
+      } catch (err) {
+        console.error('Failed to subscribe to blocks:', err);
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    start();
+
+    return () => {
+      isMounted = false;
+      unsubs.forEach((u) => u && u());
+    };
+  }, [api, isReady, limit]);
+
+  return { blocks, txs, finalizedNumber, loading };
+}
