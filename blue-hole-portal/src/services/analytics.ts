@@ -322,14 +322,20 @@ class AnalyticsService {
       ? totalResolutionTime / resolvedProposals.length
       : 0;
 
-    // Calculate participation rate (mock for now, will use real voting data)
-    const participationRate = 68; // Will be calculated from real voting records
-
-    // District-level analytics
-    const proposalsByDistrict = this.analyzeProposalsByDistrict(proposals);
-
-    // Voting patterns
+    // Voting patterns from real on-chain tallies (ayes/nays/abstentions).
     const votingPatterns = await this.analyzeVotingPatterns(proposals);
+    const votingByProposal = new Map<number, VotingPatternData>(
+      votingPatterns.map((v) => [v.proposalId, v])
+    );
+
+    // Participation rate is derived from real vote records: the share of
+    // proposals that actually drew votes and reached quorum. We avoid a fixed
+    // electorate denominator because the chain does not expose a stable
+    // "eligible voter" count, so quorum attainment is the honest proxy.
+    const participationRate = this.computeParticipationRate(votingPatterns);
+
+    // District-level analytics (uses the same real voting map for turnout).
+    const proposalsByDistrict = this.analyzeProposalsByDistrict(proposals, votingByProposal);
 
     return {
       totalProposals,
@@ -344,7 +350,24 @@ class AnalyticsService {
     };
   }
 
-  private analyzeProposalsByDistrict(proposals: any[]): DistrictProposalData[] {
+  /**
+   * Compute participation as the percentage of proposals that received votes
+   * and met quorum, using only real on-chain vote tallies. Returns 0 when no
+   * proposal has any recorded votes.
+   */
+  private computeParticipationRate(patterns: VotingPatternData[]): number {
+    const withVotes = patterns.filter(
+      (p) => p.votesFor + p.votesAgainst + p.abstentions > 0
+    );
+    if (withVotes.length === 0) return 0;
+    const quorumReached = withVotes.filter((p) => p.quorumMet).length;
+    return (quorumReached / withVotes.length) * 100;
+  }
+
+  private analyzeProposalsByDistrict(
+    proposals: any[],
+    votingByProposal: Map<number, VotingPatternData>
+  ): DistrictProposalData[] {
     const districts = [
       'Belize District',
       'Cayo District',
@@ -368,13 +391,20 @@ class AnalyticsService {
         ? (proposalsPassed / proposalsSubmitted) * 100
         : 0;
 
+      // Real per-district turnout: quorum-attainment share over this
+      // district's proposals that have on-chain vote records.
+      const districtPatterns = districtProposals
+        .map((p: any) => votingByProposal.get(p.id))
+        .filter((v): v is VotingPatternData => Boolean(v));
+      const participationRate = this.computeParticipationRate(districtPatterns);
+
       return {
         district,
         proposalsSubmitted,
         proposalsPassed,
         proposalsRejected,
         successRate,
-        participationRate: 65 + Math.random() * 15, // Will be real voting data
+        participationRate,
       };
     });
   }

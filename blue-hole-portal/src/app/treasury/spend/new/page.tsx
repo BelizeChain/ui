@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle, Coin, Users, FileText, Warning, 
@@ -10,6 +10,7 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
 import { proposeTreasurySpend } from '@/services/pallets/treasury';
+import { blockchainService } from '@/services/blockchain';
 
 type StepType = 'details' | 'beneficiary' | 'approvers' | 'preview';
 
@@ -32,20 +33,56 @@ interface SpendProposal {
 const CATEGORIES = ['Infrastructure', 'Social', 'Economic', 'Emergency'] as const;
 const BENEFICIARY_TYPES = ['Individual', 'Organization', 'Ministry'] as const;
 
-// Mock Foundation Board members (7 total, 4/7 required for approval)
-const BOARD_MEMBERS = [
-  { address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', name: 'Founder', role: 'Founder & CEO' },
-  { address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty', name: 'Tech Steward', role: 'CTO' },
-  { address: '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y', name: 'FSC Rep', role: 'FSC Representative' },
-  { address: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy', name: 'BTB Rep', role: 'Tourism Board' },
-  { address: '5HGjWAeFDfFCWPsjFQdVV2Msvz2XtMktvgocEZcCj68kUMaw', name: 'Citizen Rep', role: 'Citizen Representative' },
-  { address: '5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL', name: 'Auditor', role: 'National Auditor' },
-  { address: '5HpG9w8EBLe5XCrbczpwq5TSXvedjrBGCwqxK1iQ7qUsSWFc', name: 'Culture Rep', role: 'Cultural Affairs' },
-];
+// Foundation Board = the on-chain GovernanceCouncil collective. Member
+// addresses come from `governanceCouncil.members()`; friendly names/roles are
+// not stored on-chain, so we render a generic label + shortened address.
+interface BoardMember {
+  address: string;
+  name: string;
+  role: string;
+}
+
+function shortenAddress(address: string): string {
+  return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
+}
+
+async function loadBoardMembers(): Promise<BoardMember[]> {
+  try {
+    const api = await blockchainService.getApi();
+    const raw: any = await api.query.governanceCouncil?.members?.();
+    if (!raw) return [];
+    const addresses: string[] = raw.map((m: any) => m.toString());
+    return addresses.map((address, i) => ({
+      address,
+      name: `Council Member ${i + 1}`,
+      role: shortenAddress(address),
+    }));
+  } catch (error) {
+    console.error('Failed to load governance council members:', error);
+    return [];
+  }
+}
+
+function useBoardMembers(): BoardMember[] {
+  const [members, setMembers] = useState<BoardMember[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    loadBoardMembers().then((m) => {
+      if (!cancelled) setMembers(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return members;
+}
 
 export default function NewSpendProposalPage() {
   const router = useRouter();
   const { selectedAccount } = useWalletStore();
+  const boardMembers = useBoardMembers();
+  const requiredApprovers =
+    boardMembers.length > 0 ? Math.floor(boardMembers.length / 2) + 1 : 1;
   const [currentStep, setCurrentStep] = useState<StepType>('details');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -129,7 +166,7 @@ export default function NewSpendProposalPage() {
       case 'beneficiary':
         return proposal.beneficiary.name && proposal.beneficiary.address;
       case 'approvers':
-        return proposal.approvers.length >= 4; // Minimum 4/7 required
+        return proposal.approvers.length >= requiredApprovers;
       case 'preview':
         return true;
       default:
@@ -209,10 +246,10 @@ export default function NewSpendProposalPage() {
             <BeneficiaryStep proposal={proposal} setProposal={setProposal} />
           )}
           {currentStep === 'approvers' && (
-            <ApproversStep proposal={proposal} setProposal={setProposal} />
+            <ApproversStep proposal={proposal} setProposal={setProposal} boardMembers={boardMembers} requiredApprovers={requiredApprovers} />
           )}
           {currentStep === 'preview' && (
-            <PreviewStep proposal={proposal} />
+            <PreviewStep proposal={proposal} boardMembers={boardMembers} />
           )}
 
           {/* Navigation Buttons */}
@@ -460,9 +497,11 @@ function BeneficiaryStep({ proposal, setProposal }: {
 /**
  * Step 3: Multi-Sig Approvers Selection
  */
-function ApproversStep({ proposal, setProposal }: { 
+function ApproversStep({ proposal, setProposal, boardMembers, requiredApprovers }: { 
   proposal: SpendProposal; 
-  setProposal: React.Dispatch<React.SetStateAction<SpendProposal>> 
+  setProposal: React.Dispatch<React.SetStateAction<SpendProposal>>;
+  boardMembers: BoardMember[];
+  requiredApprovers: number;
 }) {
   const toggleApprover = (address: string) => {
     if (proposal.approvers.includes(address)) {
@@ -482,7 +521,7 @@ function ApproversStep({ proposal, setProposal }: {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white mb-2">Multi-Signature Approvers</h2>
-        <p className="text-sm text-gray-400">Select Foundation Board members to approve this proposal (minimum 4 of 7)</p>
+        <p className="text-sm text-gray-400">Select Governance Council members to approve this proposal (minimum {requiredApprovers} of {boardMembers.length})</p>
       </div>
 
       <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
@@ -490,25 +529,28 @@ function ApproversStep({ proposal, setProposal }: {
           <div className="flex items-center gap-2">
             <ShieldCheck size={20} className="text-blue-400" weight="fill" />
             <span className="text-sm font-medium text-blue-300">
-              {proposal.approvers.length} of 7 selected
+              {proposal.approvers.length} of {boardMembers.length} selected
             </span>
           </div>
           <span className={`text-xs font-semibold ${
-            proposal.approvers.length >= 4 ? 'text-emerald-400' : 'text-amber-400'
+            proposal.approvers.length >= requiredApprovers ? 'text-emerald-400' : 'text-amber-400'
           }`}>
-            {proposal.approvers.length >= 4 ? '✓ Minimum met' : `Need ${4 - proposal.approvers.length} more`}
+            {proposal.approvers.length >= requiredApprovers ? '✓ Minimum met' : `Need ${requiredApprovers - proposal.approvers.length} more`}
           </span>
         </div>
         <div className="mt-2 h-2 bg-gray-700/50 rounded-full overflow-hidden">
           <div 
             className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
-            style={{ width: `${(proposal.approvers.length / 7) * 100}%` }}
+            style={{ width: `${boardMembers.length > 0 ? (proposal.approvers.length / boardMembers.length) * 100 : 0}%` }}
           />
         </div>
       </div>
 
       <div className="space-y-3">
-        {BOARD_MEMBERS.map((member) => {
+        {boardMembers.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-4">Loading council members…</p>
+        )}
+        {boardMembers.map((member) => {
           const isSelected = proposal.approvers.includes(member.address);
           
           return (
@@ -548,7 +590,7 @@ function ApproversStep({ proposal, setProposal }: {
 /**
  * Step 4: Preview & Submit
  */
-function PreviewStep({ proposal }: { proposal: SpendProposal }) {
+function PreviewStep({ proposal, boardMembers }: { proposal: SpendProposal; boardMembers: BoardMember[] }) {
   return (
     <div className="space-y-6">
       <div>
@@ -591,9 +633,9 @@ function PreviewStep({ proposal }: { proposal: SpendProposal }) {
         </div>
 
         <div className="p-4 bg-gray-800/50 rounded-lg">
-          <p className="text-xs text-gray-500 mb-2">Required Approvers ({proposal.approvers.length}/7)</p>
+          <p className="text-xs text-gray-500 mb-2">Required Approvers ({proposal.approvers.length}/{boardMembers.length})</p>
           <div className="flex flex-wrap gap-2">
-            {BOARD_MEMBERS.filter(m => proposal.approvers.includes(m.address)).map((member) => (
+            {boardMembers.filter(m => proposal.approvers.includes(m.address)).map((member) => (
               <div key={member.address} className="px-3 py-1.5 bg-emerald-500/20 rounded-lg">
                 <span className="text-xs font-medium text-emerald-300">{member.name}</span>
               </div>
