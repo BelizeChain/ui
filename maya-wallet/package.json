@@ -4,8 +4,8 @@
   "description": "Maya Wallet - Citizen blockchain experience for Belize",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
-    "build": "next build",
+    "dev": "next dev --webpack -p 3001",
+    "build": "next build --webpack",
     "start": "next start -p 3001",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
