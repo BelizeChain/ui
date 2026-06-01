@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Badge, useI18n } from '@belizechain/shared';
+import { TransactionIndexer, type Transaction } from '@belizechain/shared';
+import { initializeApi } from '@/services/blockchain';
 import { useAccountStore } from '@/store/account';
 import { 
   PaperPlaneTilt, 
@@ -21,14 +23,95 @@ import {
 } from 'phosphor-react';
 import Link from 'next/link';
 
+interface RecentActivityItem {
+  id: string;
+  type: string;
+  description: string;
+  amount: number;
+  currency: string | null;
+  time: string;
+}
+
+function shortenAddress(value: string): string {
+  if (!value) return '';
+  return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
+}
+
+function relativeTime(timestamp: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function mapTransaction(tx: Transaction, address: string): RecentActivityItem {
+  const sent = tx.from === address;
+  const numeric = parseFloat(tx.amount) || 0;
+  let type = 'payment';
+  if (tx.type === 'reward') type = 'reward';
+  else if (tx.type === 'governance' || tx.type === 'staking') type = 'governance';
+
+  const description =
+    tx.metadata?.description ||
+    (tx.type === 'governance' || tx.type === 'staking'
+      ? tx.metadata?.method || 'On-chain activity'
+      : sent
+        ? `Sent to ${shortenAddress(tx.to)}`
+        : `Received from ${shortenAddress(tx.from)}`);
+
+  const amount = type === 'governance' ? 0 : sent ? -numeric : numeric;
+
+  return {
+    id: `${tx.blockNumber}-${tx.hash}`,
+    type,
+    description,
+    amount,
+    currency: amount === 0 ? null : tx.asset,
+    time: relativeTime(tx.timestamp),
+  };
+}
+
 export function DashboardHome() {
   const { t } = useI18n();
   const { account } = useAccountStore();
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+
+  useEffect(() => {
+    if (!account?.address) {
+      setRecentActivity([]);
+      return;
+    }
+
+    let cancelled = false;
+    const address = account.address;
+
+    (async () => {
+      try {
+        const api = await initializeApi();
+        const indexer = new TransactionIndexer(api);
+        const txs = await indexer.getAccountHistory(address, { type: 'all', limit: 5 });
+        if (!cancelled) {
+          setRecentActivity(txs.slice(0, 5).map((tx) => mapTransaction(tx, address)));
+        }
+      } catch (err) {
+        console.error('Failed to load recent activity:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address]);
 
   if (!account) return null;
 
-  // Mock data - will be replaced with real blockchain queries
+  // Engagement stats remain placeholder until the governance/rewards pallets
+  // expose per-account aggregates; recent activity below is live chain data.
   const stats = {
     compliance: { status: 'verified', level: 3 },
     activeProposals: 2,
@@ -37,12 +120,6 @@ export function DashboardHome() {
     monthlySpending: 450,
     budgetLimit: 1000,
   };
-
-  const recentActivity = [
-    { id: '1', type: 'payment', description: 'Sent to Maria Garcia', amount: -50, currency: 'DALLA', time: '2h ago' },
-    { id: '2', type: 'reward', description: 'Tourism cashback', amount: 8.5, currency: 'DALLA', time: '1d ago' },
-    { id: '3', type: 'governance', description: 'Voted on Proposal #45', amount: 0, currency: null, time: '2d ago' },
-  ];
 
   return (
     <div className="min-h-screen bg-sand-50 pb-20">
@@ -235,9 +312,15 @@ export function DashboardHome() {
         </div>
 
         <div className="space-y-3">
-          {recentActivity.map((activity) => (
-            <ActivityItem key={activity.id} activity={activity} />
-          ))}
+          {recentActivity.length === 0 ? (
+            <Card className="p-4">
+              <p className="text-sm text-bluehole-600 text-center">No recent activity yet.</p>
+            </Card>
+          ) : (
+            recentActivity.map((activity) => (
+              <ActivityItem key={activity.id} activity={activity} />
+            ))
+          )}
         </div>
       </div>
     </div>
