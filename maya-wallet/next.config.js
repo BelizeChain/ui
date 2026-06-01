@@ -1,10 +1,12 @@
 /** @type {import('next').NextConfig} */
-const withPWA = require('next-pwa')({
+const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   register: true,
-  skipWaiting: true,
   // Disable PWA in development AND during production build (SSR issues)
   disable: process.env.NODE_ENV === 'development' || process.env.BUILDING === 'true',
+  workboxOptions: {
+    skipWaiting: true,
+  },
 });
 
 const nextConfig = {
