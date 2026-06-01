@@ -120,7 +120,7 @@ export class FSCExporter {
           kycStatus: kycStatus?.toString() as any || 'Pending',
           kycDate: new Date(), // Extract from KYC data
           verifiedBy: kycData?.verifier?.toString() || 'System',
-          riskLevel: this.calculateRiskLevel(accountId),
+          riskLevel: await this.calculateRiskLevel(accountId),
         });
       }
     } catch (error) {
@@ -230,13 +230,76 @@ export class FSCExporter {
   }
 
   /**
-   * Detect AML alert indicators
+   * Detect AML alert indicators by scanning recent blocks.
+   *
+   *  - highValueTransactions: token transfers at/above the high-value threshold
+   *  - rapidTransactions: transfers from a sender within RAPID_WINDOW of their
+   *    previous transfer (velocity / structuring signal)
+   *  - crossBorderTransactions: cross-chain / bridge extrinsics (interoperability)
    */
   private async detectAMLAlerts(startDate: Date, endDate: Date) {
+    const DALLA = BigInt(10 ** 12);
+    const HIGH_VALUE_THRESHOLD = DALLA * BigInt(100000); // 100k DALLA
+    const RAPID_WINDOW_MS = 60 * 1000; // consecutive transfers within 60s
+    const CROSS_BORDER_SECTIONS = new Set([
+      'interoperability',
+      'bridge',
+      'xcmpQueue',
+      'polkadotXcm',
+      'xcmPallet',
+    ]);
+
+    let highValueTransactions = 0;
+    let rapidTransactions = 0;
+    let crossBorderTransactions = 0;
+    const lastTransferAt = new Map<string, number>();
+
+    try {
+      const currentBlock = await this.api.rpc.chain.getHeader();
+      const currentBlockNum = currentBlock.number.toNumber();
+
+      for (let i = Math.max(0, currentBlockNum - 10000); i <= currentBlockNum; i++) {
+        const blockHash = await this.api.rpc.chain.getBlockHash(i);
+        const signedBlock = await this.api.rpc.chain.getBlock(blockHash);
+        const apiAt = await this.api.at(blockHash);
+        const timestamp = await apiAt.query.timestamp.now();
+        const blockTimeMs = (timestamp as any).toNumber();
+        const blockDate = new Date(blockTimeMs);
+
+        if (blockDate < startDate || blockDate > endDate) continue;
+
+        signedBlock.block.extrinsics.forEach((extrinsic) => {
+          const { method, signer } = extrinsic;
+
+          // Cross-border: cross-chain / bridge transfers.
+          if (CROSS_BORDER_SECTIONS.has(method.section)) {
+            crossBorderTransactions++;
+          }
+
+          // Value- and velocity-based detection on token transfers.
+          if (method.section === 'balances' || method.section === 'economy') {
+            const amount = BigInt(method.args[1]?.toString() || '0');
+            if (amount >= HIGH_VALUE_THRESHOLD) {
+              highValueTransactions++;
+            }
+
+            const sender = signer.toString();
+            const previous = lastTransferAt.get(sender);
+            if (previous !== undefined && blockTimeMs - previous <= RAPID_WINDOW_MS) {
+              rapidTransactions++;
+            }
+            lastTransferAt.set(sender, blockTimeMs);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error detecting AML alerts:', error);
+    }
+
     return {
-      highValueTransactions: 0, // TODO: Implement detection logic
-      rapidTransactions: 0,
-      crossBorderTransactions: 0,
+      highValueTransactions,
+      rapidTransactions,
+      crossBorderTransactions,
     };
   }
 
@@ -365,11 +428,35 @@ export class FSCExporter {
   }
 
   /**
-   * Helper: Calculate risk level based on account activity
+   * Helper: Calculate risk level based on account holdings and history.
+   *
+   * Heuristic combining balance exposure with slashing history:
+   *  - High:   >= 1M DALLA total, or any recorded slashing span
+   *  - Medium: >= 100k DALLA total
+   *  - Low:    otherwise
    */
-  private calculateRiskLevel(accountId: string): 'Low' | 'Medium' | 'High' {
-    // TODO: Implement actual risk scoring logic
-    return 'Low';
+  private async calculateRiskLevel(accountId: string): Promise<'Low' | 'Medium' | 'High'> {
+    try {
+      const DALLA = BigInt(10 ** 12);
+      const HIGH_BALANCE = DALLA * BigInt(1000000); // 1M DALLA
+      const MEDIUM_BALANCE = DALLA * BigInt(100000); // 100k DALLA
+
+      const account: any = await this.api.query.system.account(accountId);
+      const free = BigInt(account?.data?.free?.toString() || '0');
+      const reserved = BigInt(account?.data?.reserved?.toString() || '0');
+      const total = free + reserved;
+
+      // Slashing history is a strong negative signal for staked accounts.
+      const slashingSpans: any = await this.api.query.staking?.slashingSpans?.(accountId);
+      const hasSlashing = !!slashingSpans && !slashingSpans.isNone && !slashingSpans.isEmpty;
+
+      if (hasSlashing || total >= HIGH_BALANCE) return 'High';
+      if (total >= MEDIUM_BALANCE) return 'Medium';
+      return 'Low';
+    } catch (error) {
+      console.error('Error calculating risk level:', error);
+      return 'Low';
+    }
   }
 
   /**
