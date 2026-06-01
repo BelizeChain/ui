@@ -1,9 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { ApiPromise } from '@polkadot/api';
 import { bluetoothMeshService, type MeshMessage } from '@/services/bluetooth-mesh.service';
 import { pakitBridgeService } from '@/services/pakit-bridge.service';
 import { blockchainProofService, type EmergencyBroadcast } from '@/services/blockchain-proof.service';
+import { getDisplayName } from '@/services/pallets/identity';
+import { initializeApi } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
 
 // Lazy load XMTP service to avoid SSR WASM issues
@@ -70,9 +73,24 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [isXMTPConnected, setIsXMTPConnected] = useState(false);
   const [isMeshAvailable, setIsMeshAvailable] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  
-  // TODO: Connect to Polkadot API for blockchain operations
-  const api = null;
+
+  // Polkadot API connection for blockchain proof / emergency broadcasts.
+  // Connects lazily on mount; stays null until ready so dependent actions guard on it.
+  const [api, setApi] = useState<ApiPromise | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    initializeApi()
+      .then((connected) => {
+        if (!cancelled) setApi(connected);
+      })
+      .catch((err) => {
+        console.warn('MessagingContext: blockchain API connection failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Initialize XMTP
   const initializeXMTP = useCallback(async () => {
@@ -138,10 +156,14 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       const mappedConvos: Conversation[] = await Promise.all(
         xmtpConvos.map(async (conv: any) => {
           const messages = await xmtpService.getMessages(conv.peerAddress, 50);
-          
+
+          // Resolve a human-readable name from the Identity pallet (falls back
+          // to undefined -> UI shows shortened address).
+          const peerName = await getDisplayName(conv.peerAddress);
+
           return {
             peerAddress: conv.peerAddress,
-            peerName: undefined, // TODO: Lookup from Identity pallet
+            peerName,
             lastMessage: messages.length > 0 ? {
               id: messages[0].id,
               content: typeof messages[0].content === 'string' 

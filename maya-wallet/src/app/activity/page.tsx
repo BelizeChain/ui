@@ -61,7 +61,57 @@ export default function ActivityPage() {
     }
   }
 
-  // Calculate stats from real transactions
+  // Export the currently loaded transactions to a downloadable CSV file.
+  function exportActivityCsv() {
+    if (transactions.length === 0) return;
+
+    const escape = (value: string | number) => {
+      const str = String(value ?? '');
+      // Quote fields containing comma, quote, or newline; escape embedded quotes.
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+
+    const header = [
+      'Date',
+      'Type',
+      'Asset',
+      'Amount',
+      'From',
+      'To',
+      'Status',
+      'Fee',
+      'Block',
+      'Hash',
+    ];
+
+    const rows = transactions.map((tx) => [
+      new Date(tx.timestamp).toISOString(),
+      tx.type,
+      tx.asset,
+      tx.amount,
+      tx.from,
+      tx.to,
+      tx.status,
+      tx.fee,
+      tx.blockNumber,
+      tx.hash,
+    ]);
+
+    const csv = [header, ...rows]
+      .map((row) => row.map(escape).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    link.download = `maya-activity-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
   const stats = React.useMemo(() => {
     const sent = transactions
       .filter(tx => tx.from === selectedAccount?.address && tx.type === 'transfer')
@@ -285,11 +335,9 @@ export default function ActivityPage() {
 
         {/* Export Button */}
         <button 
-          onClick={() => {
-            // TODO: Implement CSV export
-            alert('Export functionality coming soon!');
-          }}
-          className="w-full py-3 bg-gray-900/70 border-2 border-forest-500 hover:bg-forest-50 text-forest-400 hover:text-forest-600 font-semibold rounded-xl transition-all"
+          onClick={exportActivityCsv}
+          disabled={transactions.length === 0}
+          className="w-full py-3 bg-gray-900/70 border-2 border-forest-500 hover:bg-forest-50 text-forest-400 hover:text-forest-600 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Export Activity Report
         </button>

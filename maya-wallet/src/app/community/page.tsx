@@ -123,6 +123,25 @@ export default function CommunityPage() {
     });
   };
 
+  // Share a post via the Web Share API, falling back to clipboard copy.
+  const handleSharePost = async (postAuthor: string, postContent: string) => {
+    const shareText = `${postAuthor} on Maya Wallet Community:\n\n${postContent}`;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title: 'Maya Wallet Community', text: shareText });
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareText);
+        alert('Post copied to clipboard');
+        return;
+      }
+    } catch (err) {
+      // User cancelled the share sheet or the API rejected — non-fatal.
+      console.debug('Share cancelled or failed:', err);
+    }
+  };
+
   // Proposals are sourced live from `pallet_governance` via the
   // `useGovernanceProposalsSubscription` hook above; no mock list.
   // ProposalCard props are derived inside the Governance tab below.
@@ -258,10 +277,7 @@ export default function CommunityPage() {
                     key={post.id} 
                     post={post}
                     onComment={() => handleOpenComments(post.id, post.author.name, post.content)}
-                    onShare={() => {
-                      // TODO: Implement share functionality
-                      console.log('Sharing post:', post.id);
-                    }}
+                    onShare={() => handleSharePost(post.author.name, post.content)}
                   />
                 ))}
               </div>

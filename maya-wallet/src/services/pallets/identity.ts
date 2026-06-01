@@ -87,6 +87,41 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
 }
 
 /**
+ * Resolve a human-readable display name for an address from the Identity pallet.
+ *
+ * Tries the BelizeID record (firstName + lastName) first, then falls back to the
+ * standard Substrate identity (`identity.identityOf` display field). Returns
+ * `undefined` when no on-chain identity exists so callers can fall back to a
+ * shortened address.
+ */
+export async function getDisplayName(address: string): Promise<string | undefined> {
+  try {
+    const api = await initializeApi();
+
+    // 1. BelizeID record (sovereign identity)
+    const belizeId: any = await api.query.identity?.identities?.(address);
+    if (belizeId && !belizeId.isNone) {
+      const data = belizeId.unwrap();
+      const first = data.firstName?.toString?.() || '';
+      const last = data.lastName?.toString?.() || '';
+      const full = `${first} ${last}`.trim();
+      if (full) return full;
+    }
+
+    // 2. Standard Substrate identity (identityOf -> info.display.Raw)
+    const standard: any = await api.query.identity?.identityOf?.(address);
+    const json = standard?.toJSON?.() as any;
+    const display = json?.info?.display?.Raw || json?.display;
+    if (display) return String(display);
+
+    return undefined;
+  } catch (error) {
+    console.debug('getDisplayName lookup failed:', error);
+    return undefined;
+  }
+}
+
+/**
  * Register a new BelizeID
  */
 export async function registerBelizeID(

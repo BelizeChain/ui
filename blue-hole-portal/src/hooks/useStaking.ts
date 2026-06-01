@@ -69,13 +69,15 @@ export function useStaking() {
 
         // Fetch detailed validator info
         const validatorPromises = validatorAddresses.map(async (address: string) => {
-          const [prefs, exposure, pouwScore, pqwScore, uptime, blocks]: any[] = await Promise.all([
+          const [prefs, exposure, pouwScore, pqwScore, uptime, blocks, identityRaw, slashingSpan]: any[] = await Promise.all([
             api.query.belizeStaking?.validators(address),
             api.query.belizeStaking?.erasStakers(eraNumber, address),
             api.query.belizeStaking?.pouwScores(address), // Proof of Useful Work
             api.query.belizeConsensus?.pqwScores(address), // Proof of Quantum Work
             api.query.belizeStaking?.validatorUptime(address),
             api.query.belizeStaking?.blocksProduced(address),
+            api.query.identity?.identityOf?.(address), // On-chain display name
+            (api.query.belizeStaking?.slashingSpans || api.query.staking?.slashingSpans)?.(address), // Slash history
           ]);
 
           const commission = prefs ? parseInt(prefs.commission?.toString() || '100000000') / 1e7 : 10; // Perbill to percentage
@@ -83,9 +85,21 @@ export function useStaking() {
           const ownStake = exposure?.own ? BigInt(exposure.own.toString()) : 0n;
           const nominators = exposure?.others?.length || 0;
 
+          // Resolve on-chain identity display, falling back to a shortened address
+          const identity = identityRaw?.toJSON?.() as any;
+          const displayName =
+            identity?.info?.display?.Raw ||
+            identity?.display ||
+            identity?.name ||
+            `Validator ${address.slice(0, 8)}`;
+
+          // Slash count = number of prior spans (+ current span if any)
+          const slashSpans = slashingSpan?.toJSON?.() as any;
+          const slashes = slashSpans?.prior ? slashSpans.prior.length + 1 : 0;
+
           return {
             address,
-            name: `Validator ${address.slice(0, 8)}`, // TODO: Query identity pallet
+            name: displayName,
             commission,
             totalStake,
             ownStake,
@@ -96,7 +110,7 @@ export function useStaking() {
             estimatedApy: calculateApy(commission, totalStake),
             status: 'Active' as const,
             blocksProduced: blocks ? parseInt(blocks.toString()) : 0,
-            slashes: 0, // TODO: Query slashing spans
+            slashes,
           };
         });
 

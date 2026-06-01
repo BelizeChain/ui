@@ -339,7 +339,12 @@ export function useBlockNumber() {
  * Hook to fetch account balance (DALLA + bBZD)
  */
 export function useBalance(address: string | null) {
-  const { data: accountData, loading } = useStorage('system', 'account', [address], {
+  const { data: accountData, loading: dallaLoading } = useStorage('system', 'account', [address], {
+    skip: !address,
+  });
+  // bBZD lives in the economy pallet (economy.bBzdBalances). Skip gracefully if
+  // the runtime doesn't expose it so DALLA still renders.
+  const { data: bBzdData, loading: bBzdLoading } = useStorage('economy', 'bBzdBalances', [address], {
     skip: !address,
   });
 
@@ -350,17 +355,19 @@ export function useBalance(address: string | null) {
   });
 
   useEffect(() => {
-    if (accountData) {
-      // Extract balance from account data
-      const free = (accountData as any).data?.free?.toString() || '0';
-      // TODO: Query bBZD balance from economy pallet
-      setBalance({
-        dalla: free,
-        bBZD: '0', // Will be implemented when economy pallet is integrated
-        total: free,
-      });
+    // Extract DALLA free balance from system.account
+    const free = accountData ? (accountData as any).data?.free?.toString() || '0' : '0';
+    // Extract bBZD from economy pallet; tolerate missing/empty values
+    let bBZD = '0';
+    if (bBzdData && !(bBzdData as any).isEmpty) {
+      bBZD = (bBzdData as any).toString() || '0';
     }
-  }, [accountData]);
+    setBalance({
+      dalla: free,
+      bBZD,
+      total: free,
+    });
+  }, [accountData, bBzdData]);
 
-  return { balance, loading };
+  return { balance, loading: dallaLoading || bBzdLoading };
 }

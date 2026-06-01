@@ -1,8 +1,75 @@
-# UI Wiring Progress Summary
+# UI Wiring Status — Verified Audit
 
-**Date:** January 25, 2026  
-**Status:** ✅ 4 of 14 High-Priority Pages Complete  
-**Next Steps:** Testing + Remaining Pages
+**Last verified:** May 31, 2026 (source-of-truth: live `src/` scan, not historical notes)
+**Scope:** `maya-wallet` + `blue-hole-portal` + `shared`
+**CI:** Blue Hole Portal, Maya Wallet, and Security Audits workflows all green on `main`.
+
+> ⚠️ The older "4 of 14 pages" framing below (and the `WIRING_COMPLETE_REPORT`
+> note) is contradictory and out of date. The audit in this top section reflects an
+> actual code scan and is the current source of truth. The historical detail further
+> down is retained for reference only.
+
+---
+
+## Method
+
+Direct scan of `**/src/**/*.{ts,tsx}` for `mock`, `TODO`, `FIXME`, `coming soon`,
+`placeholder`, and `hardcoded`. The ~110 `placeholder="..."` HTML input attributes
+were filtered out as false positives. What remains below are the genuine gaps.
+
+## 🟢 Recently wired (latest pass)
+
+| Location | What changed |
+|----------|--------------|
+| `blue-hole-portal/src/lib/blockchain/hooks.ts` (`useBalance`) | bBZD now read from `economy.bBzdBalances` (was hardcoded `'0'`). Mirrors the verified `maya-wallet/src/services/blockchain.ts` query. |
+| `blue-hole-portal/src/hooks/useStaking.ts` | Validator `name` now resolved from `identity.identityOf` (was `Validator <addr8>`); `slashes` now derived from `belizeStaking/staking.slashingSpans` (was hardcoded `0`). |
+| `maya-wallet/src/services/pallets/identity.ts` (`getDisplayName`) | New helper resolving a human name from BelizeID / standard `identityOf`. |
+| `maya-wallet/src/contexts/MessagingContext.tsx` | `peerName` now resolved via `getDisplayName` (was `undefined`); Polkadot `api` now connects via `initializeApi()` (was `null`, which dead-locked emergency broadcasts + proof service). |
+| `maya-wallet/src/app/activity/page.tsx` | Real CSV export with download (was an "coming soon" alert). |
+| `maya-wallet/src/app/community/page.tsx` | Real share via Web Share API + clipboard fallback (was a `console.log` stub). |
+
+## 🔴 Still on mock data (real, actionable)
+
+| Location | Note |
+|----------|------|
+| `blue-hole-portal/src/app/explorer/page.tsx:13` | "Mock data - replace with real blockchain queries" |
+| `maya-wallet/src/components/dashboard/DashboardHome.tsx:31` | "Mock data - will be replaced with real blockchain queries" |
+| `blue-hole-portal/src/store/admin.ts:63` | Placeholder admin profile pending governance-pallet role verification |
+
+## 🟡 Real pallet-wiring TODOs (working pages, missing on-chain reads)
+
+| Location | Note |
+|----------|------|
+| `blue-hole-portal/src/services/fsc-exporter.ts:237` | High-value transaction detection logic |
+| `blue-hole-portal/src/services/fsc-exporter.ts:371` | Risk scoring logic |
+| `maya-wallet/src/services/pakit-bridge.service.ts:207` | Submit to interoperability/messaging pallet |
+| `maya-wallet/src/services/qrcode.ts:254` | SVG placeholder — needs real QR library |
+
+## ⚪ Intentional stubs (documented or unsupported on-chain — not bugs)
+
+| Location | Reason |
+|----------|--------|
+| `blue-hole-portal/src/app/validators/nominate/page.tsx:29` | Nominator-style delegation not implemented on-chain (self-stake only) |
+| `blue-hole-portal/src/app/validators/[address]/page.tsx:28` | Chain does not expose per-day historical series |
+| `blue-hole-portal/src/app/analytics/page.tsx:199` | Awaiting indexer-backed dashboards |
+| `maya-wallet/src/services/oracle.ts:71` | Hardcoded FX rates used only as fallback when Oracle unavailable |
+| Various "Coming Soon" UI | exchange, settings (notifications/security/appearance system-mode), community/education, BNS CDN |
+
+## Deferred (need external services, not UI work)
+
+- **Pakit** — IPFS/Arweave storage integration
+- **Nawal** — federated-learning server UI
+- **Kinich** — quantum job submission
+
+## Next candidates
+
+1. `explorer/page.tsx` + `DashboardHome.tsx` — replace mock data with real queries (highest user-facing impact).
+2. `MessagingContext.tsx` — wire to Polkadot API + Identity pallet.
+3. `fsc-exporter.ts` detection/scoring — compliance reporting completeness.
+
+---
+
+# Historical (January 2026 snapshot — reference only)
 
 ## 🎯 Completed Wiring (4 Pages)
 
