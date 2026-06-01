@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -8,64 +8,130 @@ import {
   ArrowLeft,
   CheckCircle,
   XCircle,
-  MapPin,
-  Calendar,
   Coins,
   ChartBar,
-  Users
+  Users,
+  Calendar,
 } from 'phosphor-react';
+import { getProposalById, voteOnProposal, type Proposal } from '@/services/pallets';
+import { useWallet } from '@/contexts/WalletContext';
+import { useToast } from '@/contexts/ToastContext';
+
+type UiStatus = 'voting' | 'passed' | 'rejected';
+
+function mapStatusForUi(chainStatus: string): UiStatus {
+  const s = chainStatus.toLowerCase();
+  if (s === 'approved' || s === 'executed') return 'passed';
+  if (s === 'rejected' || s === 'cancelled') return 'rejected';
+  return 'voting';
+}
+
+function shortAddress(addr: string): string {
+  if (!addr) return '';
+  return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+}
 
 export default function ProposalDetailPage() {
   const params = useParams();
   const proposalId = params.id as string;
+  const proposalIdNum = Number.parseInt(proposalId, 10);
+
+  const { selectedAccount } = useWallet();
+  const { showToast } = useToast();
+
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [userVote, setUserVote] = useState<'approve' | 'reject' | null>(null);
+  const [isVoting, setIsVoting] = useState(false);
 
-  // Mock proposal data - would come from blockchain
-  const proposal = {
-    id: parseInt(proposalId),
-    title: proposalId === '42' ? 'Build Community Center in Orange Walk' : 
-           proposalId === '43' ? 'Increase Tourism Cashback to 10%' :
-           'Solar Panel Installation in Schools',
-    description: `This proposal aims to ${proposalId === '42' ? 'construct a new community center in Orange Walk that will serve as a hub for local events, education programs, and community gatherings. The facility will include a multipurpose hall, computer lab, and meeting rooms.' :
-      proposalId === '43' ? 'increase the tourism cashback reward from 7% to 10% to further incentivize spending at verified merchants and boost the local economy.' :
-      'install solar panels on all public schools across Cayo district, reducing energy costs and promoting renewable energy education.'}`,
-    district: proposalId === '42' ? 'Orange Walk' : proposalId === '43' ? 'Belize City' : 'Cayo',
-    value: proposalId === '42' ? 50000 : proposalId === '43' ? 0 : 75000,
-    status: proposalId === '42' ? 'passed' : 'voting' as 'voting' | 'passed' | 'rejected',
-    votesFor: proposalId === '42' ? 1250 : proposalId === '43' ? 890 : 2100,
-    votesAgainst: proposalId === '42' ? 340 : proposalId === '43' ? 560 : 450,
-    deadline: proposalId === '42' ? 'Ended 2 days ago' : proposalId === '43' ? '3 days left' : '5 days left',
-    proposer: {
-      name: 'John Martinez',
-      avatar: '👨🏾',
-      address: '5Fj8x...9Kp2'
-    },
-    createdAt: '2026-01-10',
-    details: {
-      budget: proposalId === '42' ? [
-        { item: 'Construction Materials', amount: 25000 },
-        { item: 'Labor Costs', amount: 15000 },
-        { item: 'Equipment', amount: 8000 },
-        { item: 'Permits & Legal', amount: 2000 }
-      ] : proposalId === '43' ? [] : [
-        { item: 'Solar Panels', amount: 45000 },
-        { item: 'Installation', amount: 20000 },
-        { item: 'Maintenance Training', amount: 5000 },
-        { item: 'Monitoring Systems', amount: 5000 }
-      ],
-      timeline: '6 months',
-      beneficiaries: proposalId === '42' ? '5,000+ residents' : proposalId === '43' ? 'All tourists' : '2,500+ students'
+  useEffect(() => {
+    if (!Number.isFinite(proposalIdNum)) {
+      setLoadError('Invalid proposal ID');
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const POLL_MS = 15_000;
+    const refresh = async () => {
+      try {
+        const result = await getProposalById(proposalIdNum);
+        if (cancelled) return;
+        if (!result) {
+          setProposal(null);
+          setLoadError(`Proposal #${proposalIdNum} not found on-chain`);
+        } else {
+          setProposal(result);
+          setLoadError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(err instanceof Error ? err.message : 'Failed to load proposal');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    setIsLoading(true);
+    void refresh();
+    const interval = setInterval(() => { void refresh(); }, POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [proposalIdNum]);
+
+  const handleVote = async (vote: 'approve' | 'reject') => {
+    if (!selectedAccount) {
+      showToast({ type: 'warning', message: 'Connect a wallet account to vote.' });
+      return;
+    }
+    if (!proposal) return;
+    try {
+      setIsVoting(true);
+      const { hash } = await voteOnProposal(
+        selectedAccount.address,
+        proposal.index,
+        vote === 'approve' ? 'Aye' : 'Nay',
+        'None',
+      );
+      setUserVote(vote);
+      setHasVoted(true);
+      showToast({
+        type: 'success',
+        message: `Vote ${vote === 'approve' ? 'APPROVE' : 'REJECT'} submitted (${hash.slice(0, 10)}…).`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Vote submission failed';
+      showToast({ type: 'error', message });
+    } finally {
+      setIsVoting(false);
     }
   };
 
-  const totalVotes = proposal.votesFor + proposal.votesAgainst;
-  const approvalPercentage = totalVotes > 0 ? Math.round((proposal.votesFor / totalVotes) * 100) : 0;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
+        <p className="text-gray-400 text-sm">Loading proposal #{proposalId}…</p>
+      </div>
+    );
+  }
 
-  const handleVote = (vote: 'approve' | 'reject') => {
-    setUserVote(vote);
-    setHasVoted(true);
-  };
+  if (loadError || !proposal) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 px-6">
+        <p className="text-red-400 text-sm mb-3">{loadError ?? 'Proposal unavailable'}</p>
+        <Link href="/community" className="text-emerald-400 underline text-sm">Back to Community</Link>
+      </div>
+    );
+  }
+
+  const uiStatus = mapStatusForUi(proposal.status);
+  const votesFor = proposal.voteCount.ayes;
+  const votesAgainst = proposal.voteCount.nays;
+  const totalVotes = votesFor + votesAgainst;
+  const approvalPercentage = totalVotes > 0 ? Math.round((votesFor / totalVotes) * 100) : 0;
+  const numericValue = Number.parseFloat(proposal.value) || 0;
+  const displayTitle = proposal.title || `Proposal #${proposal.index}`;
+  const displayDescription = proposal.description || 'No description provided on-chain.';
+  const categoryLabel = proposal.category || 'General';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -82,9 +148,9 @@ export default function ProposalDetailPage() {
             </motion.button>
           </Link>
           <div>
-            <h1 className="text-white text-xl font-bold">Proposal #{proposal.id}</h1>
+            <h1 className="text-white text-xl font-bold">Proposal #{proposal.index}</h1>
             <p className="text-gray-400 text-sm">
-              {proposal.status === 'voting' ? 'Active Vote' : proposal.status === 'passed' ? 'Passed' : 'Rejected'}
+              {uiStatus === 'voting' ? 'Active Vote' : uiStatus === 'passed' ? 'Passed' : 'Rejected'}
             </p>
           </div>
         </div>
@@ -99,14 +165,14 @@ export default function ProposalDetailPage() {
           className="mb-4"
         >
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${
-            proposal.status === 'passed' ? 'bg-emerald-500/100/20 text-emerald-400 border border-emerald-500/30' :
-            proposal.status === 'rejected' ? 'bg-red-500/100/20 text-red-400 border border-red-500/30' :
+            uiStatus === 'passed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+            uiStatus === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
             'bg-amber-500/20 text-amber-400 border border-amber-500/30'
           }`}>
-            {proposal.status === 'passed' ? <CheckCircle size={20} weight="fill" /> :
-             proposal.status === 'rejected' ? <XCircle size={20} weight="fill" /> :
+            {uiStatus === 'passed' ? <CheckCircle size={20} weight="fill" /> :
+             uiStatus === 'rejected' ? <XCircle size={20} weight="fill" /> :
              <ChartBar size={20} weight="fill" />}
-            <span className="font-semibold">{proposal.status === 'voting' ? 'Active Voting' : proposal.status === 'passed' ? 'Proposal Passed' : 'Proposal Rejected'}</span>
+            <span className="font-semibold">{uiStatus === 'voting' ? 'Active Voting' : uiStatus === 'passed' ? 'Proposal Passed' : 'Proposal Rejected'}</span>
           </div>
         </motion.div>
 
@@ -117,33 +183,39 @@ export default function ProposalDetailPage() {
           transition={{ delay: 0.1 }}
           className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 mb-4"
         >
-          <h2 className="text-white text-2xl font-bold mb-4">{proposal.title}</h2>
-          
+          <h2 className="text-white text-2xl font-bold mb-4">{displayTitle}</h2>
+
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="flex items-center gap-2 text-gray-400">
-              <MapPin size={18} weight="fill" />
-              <span className="text-sm">{proposal.district}</span>
+              <ChartBar size={18} weight="fill" />
+              <span className="text-sm">{categoryLabel}</span>
             </div>
             <div className="flex items-center gap-2 text-gray-400">
               <Calendar size={18} weight="fill" />
-              <span className="text-sm">{proposal.createdAt}</span>
+              <span className="text-sm">Block #{proposal.createdAt.toLocaleString()}</span>
             </div>
-            {proposal.value > 0 && (
+            {numericValue > 0 && (
               <>
                 <div className="flex items-center gap-2 text-emerald-400">
                   <Coins size={18} weight="fill" />
-                  <span className="text-sm font-semibold">Ɗ{proposal.value.toLocaleString()} DALLA</span>
+                  <span className="text-sm font-semibold">Ɗ{numericValue.toLocaleString()} DALLA</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <Users size={18} weight="fill" />
-                  <span className="text-sm">{proposal.details.beneficiaries}</span>
+                  <span className="text-sm font-mono">{shortAddress(proposal.beneficiary)}</span>
                 </div>
               </>
             )}
           </div>
 
           <div className="pt-4 border-t border-gray-700">
-            <p className="text-gray-300 leading-relaxed">{proposal.description}</p>
+            <p className="text-gray-300 leading-relaxed whitespace-pre-line">{displayDescription}</p>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-gray-700 flex items-center gap-2 text-gray-400">
+            <Users size={16} weight="fill" />
+            <span className="text-xs">Proposed by</span>
+            <span className="text-xs font-mono text-gray-300">{shortAddress(proposal.proposer)}</span>
           </div>
         </motion.div>
 
@@ -155,7 +227,7 @@ export default function ProposalDetailPage() {
           className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 mb-4"
         >
           <h3 className="text-white text-lg font-bold mb-4">Voting Results</h3>
-          
+
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -163,10 +235,10 @@ export default function ProposalDetailPage() {
                   <CheckCircle size={20} weight="fill" className="text-emerald-400" />
                   <span className="text-white font-semibold">Approve</span>
                 </div>
-                <span className="text-emerald-400 font-bold">{proposal.votesFor.toLocaleString()} votes ({approvalPercentage}%)</span>
+                <span className="text-emerald-400 font-bold">{votesFor.toLocaleString()} votes ({approvalPercentage}%)</span>
               </div>
               <div className="w-full bg-gray-700/50 rounded-full h-3">
-                <div 
+                <div
                   className="bg-gradient-to-r from-emerald-500 to-teal-600 h-3 rounded-full transition-all"
                   style={{ width: `${approvalPercentage}%` }}
                 />
@@ -179,48 +251,24 @@ export default function ProposalDetailPage() {
                   <XCircle size={20} weight="fill" className="text-red-400" />
                   <span className="text-white font-semibold">Reject</span>
                 </div>
-                <span className="text-red-400 font-bold">{proposal.votesAgainst.toLocaleString()} votes ({100 - approvalPercentage}%)</span>
+                <span className="text-red-400 font-bold">{votesAgainst.toLocaleString()} votes ({totalVotes > 0 ? 100 - approvalPercentage : 0}%)</span>
               </div>
               <div className="w-full bg-gray-700/50 rounded-full h-3">
-                <div 
+                <div
                   className="bg-gradient-to-r from-red-500 to-rose-600 h-3 rounded-full transition-all"
-                  style={{ width: `${100 - approvalPercentage}%` }}
+                  style={{ width: `${totalVotes > 0 ? 100 - approvalPercentage : 0}%` }}
                 />
               </div>
             </div>
           </div>
 
-          {proposal.status === 'voting' && (
-            <p className="text-gray-400 text-sm mt-4">Deadline: {proposal.deadline}</p>
+          {uiStatus === 'voting' && proposal.voteEnd > 0 && (
+            <p className="text-gray-400 text-sm mt-4">Voting ends at block #{proposal.voteEnd.toLocaleString()}</p>
           )}
         </motion.div>
 
-        {/* Budget Breakdown */}
-        {proposal.details.budget.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 mb-4"
-          >
-            <h3 className="text-white text-lg font-bold mb-4">Budget Breakdown</h3>
-            <div className="space-y-3">
-              {proposal.details.budget.map((item, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <span className="text-gray-300">{item.item}</span>
-                  <span className="text-emerald-400 font-semibold">Ɗ{item.amount.toLocaleString()}</span>
-                </div>
-              ))}
-              <div className="pt-3 border-t border-gray-700 flex items-center justify-between">
-                <span className="text-white font-bold">Total</span>
-                <span className="text-emerald-400 font-bold text-lg">Ɗ{proposal.value.toLocaleString()}</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {/* Voting Actions */}
-        {proposal.status === 'voting' && !hasVoted && (
+        {uiStatus === 'voting' && !hasVoted && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -228,21 +276,22 @@ export default function ProposalDetailPage() {
             className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 mb-4"
           >
             <h3 className="text-white text-lg font-bold mb-4">Cast Your Vote</h3>
-            <p className="text-gray-400 text-sm mb-4">Your voting power: <span className="text-emerald-400 font-semibold">1,250 DALLA</span></p>
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => handleVote('approve')}
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
+                disabled={isVoting}
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 text-white font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <CheckCircle size={24} weight="fill" />
-                Approve
+                {isVoting ? 'Submitting…' : 'Approve'}
               </button>
               <button
                 onClick={() => handleVote('reject')}
-                className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
+                disabled={isVoting}
+                className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <XCircle size={24} weight="fill" />
-                Reject
+                {isVoting ? 'Submitting…' : 'Reject'}
               </button>
             </div>
           </motion.div>
@@ -254,9 +303,9 @@ export default function ProposalDetailPage() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className={`rounded-2xl p-6 border mb-4 ${
-              userVote === 'approve' 
-                ? 'bg-emerald-500/100/10 border-emerald-500/30' 
-                : 'bg-red-500/100/10 border-red-500/30'
+              userVote === 'approve'
+                ? 'bg-emerald-500/10 border-emerald-500/30'
+                : 'bg-red-500/10 border-red-500/30'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -267,10 +316,10 @@ export default function ProposalDetailPage() {
               )}
               <div>
                 <h4 className={`font-bold ${userVote === 'approve' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  Vote Cast Successfully!
+                  Vote Submitted!
                 </h4>
                 <p className="text-gray-400 text-sm">
-                  You voted to {userVote} this proposal with 1,250 DALLA
+                  You voted to {userVote} this proposal.
                 </p>
               </div>
             </div>

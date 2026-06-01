@@ -1,10 +1,19 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { MayaShellReadinessPanel } from '@/components/MayaShellReadinessPanel';
+import {
+  getStakingInfo,
+  getPoUWContributions,
+  getTourismRewards,
+  type StakingInfo,
+  type PoUWContribution,
+  type TourismReward,
+} from '@/services/pallets';
+import { getExchangeRate } from '@/services/oracle';
 import {
   Eye,
   EyeSlash,
@@ -21,8 +30,32 @@ import {
   CaretRight
 } from 'phosphor-react';
 
+/** Format a unix-seconds timestamp as a short relative-time label. */
+function timeAgo(tsSeconds: number): string {
+  if (!tsSeconds) return '';
+  const deltaMs = Date.now() - tsSeconds * 1000;
+  if (deltaMs < 0) return 'just now';
+  const mins = Math.floor(deltaMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+/** Build a normalized 7-point sparkline (range ~6..38) from a real numeric series. */
+function buildSparkline(series: number[]): number[] {
+  const points = series.slice(0, 7).reverse();
+  if (points.length === 0) return [20, 20, 20, 20, 20, 20, 20];
+  const max = Math.max(...points, 1);
+  const scaled = points.map((v) => 6 + (v / max) * 32);
+  while (scaled.length < 7) scaled.unshift(scaled[0] ?? 20);
+  return scaled;
+}
+
 export default function HomeNew() {
-  const { balance, balanceLoading, isConnected, connect } = useWallet();
+  const { balance, balanceLoading, isConnected, connect, selectedAccount } = useWallet();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [selectedTrend, setSelectedTrend] = useState<string | null>(null);
   const [showAllAssets, setShowAllAssets] = useState(false);
@@ -30,109 +63,187 @@ export default function HomeNew() {
   const [showActivityFilter, setShowActivityFilter] = useState(false);
   const [activityFilter, setActivityFilter] = useState<string>('all');
 
-  // Calculate display balance
+  // Real on-chain data
+  const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
+  const [pouwContributions, setPouwContributions] = useState<PoUWContribution[]>([]);
+  const [tourismRewards, setTourismRewards] = useState<TourismReward[]>([]);
+  const [rates, setRates] = useState<{ dalla: number; bbzd: number }>({ dalla: 0, bbzd: 0 });
+
+  useEffect(() => {
+    const address = selectedAccount?.address;
+    if (!address) {
+      setStakingInfo(null);
+      setPouwContributions([]);
+      setTourismRewards([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const [staking, pouw, tourism, dallaRate, bbzdRate] = await Promise.all([
+        getStakingInfo(address).catch(() => null),
+        getPoUWContributions(address).catch(() => [] as PoUWContribution[]),
+        getTourismRewards(address).catch(() => [] as TourismReward[]),
+        getExchangeRate('DALLA', 'USD').then((r) => r.rate).catch(() => 0),
+        getExchangeRate('bBZD', 'USD').then((r) => r.rate).catch(() => 0),
+      ]);
+      if (cancelled) return;
+      setStakingInfo(staking);
+      setPouwContributions(pouw);
+      setTourismRewards(tourism);
+      setRates({ dalla: dallaRate, bbzd: bbzdRate });
+    })();
+    return () => { cancelled = true; };
+  }, [selectedAccount?.address]);
+
+  // Real balances
+  const dallaBal = parseFloat(balance?.dalla || '0');
+  const bbzdBal = parseFloat(balance?.bBZD || '0');
+  const stakedBal = parseFloat(stakingInfo?.totalStaked || '0');
+
   const displayBalance = {
     dalla: balance?.dalla || '0.00',
     bbzd: balance?.bBZD || '0.00',
-    total: ((parseFloat(balance?.dalla || '0') * 1.25) + (parseFloat(balance?.bBZD || '0') * 0.50)).toFixed(2)
+    total: (dallaBal * rates.dalla + bbzdBal * rates.bbzd + stakedBal * rates.dalla).toFixed(2),
   };
 
-  // Mock assets data
-  const assets = [
-    {
-      id: 'dalla',
-      name: 'DALLA',
-      symbol: 'Ɗ',
-      balance: displayBalance.dalla,
-      value: (parseFloat(displayBalance.dalla) * 1.25).toFixed(2),
-      change: '+5.2',
-      color: 'from-emerald-500 to-teal-600',
-      icon: Coins
-    },
-    {
-      id: 'bbzd',
-      name: 'bBZD',
-      symbol: '$',
-      balance: displayBalance.bbzd,
-      value: (parseFloat(displayBalance.bbzd) * 0.50).toFixed(2),
-      change: '+0.1',
-      color: 'from-blue-500 to-cyan-600',
-      icon: Coins
-    },
-    {
-      id: 'dot',
-      name: 'DOT',
-      symbol: 'DOT',
-      balance: '12.45',
-      value: '526.54',
-      change: '-2.4',
-      color: 'from-pink-500 to-rose-600',
-      icon: Coins
-    },
-    {
-      id: 'staked',
-      name: 'Staked',
-      symbol: 'Ɗ',
-      balance: '5000',
-      value: '6250.00',
-      change: '+12.5',
-      color: 'from-purple-500 to-violet-600',
-      icon: Lightning
+  // Real assets (DALLA + bBZD always; Staked only when there is an active stake)
+  const assets = useMemo(() => {
+    const list = [
+      {
+        id: 'dalla',
+        name: 'DALLA',
+        symbol: 'Ɗ',
+        balance: dallaBal.toFixed(2),
+        value: (dallaBal * rates.dalla).toFixed(2),
+        color: 'from-emerald-500 to-teal-600',
+        icon: Coins,
+      },
+      {
+        id: 'bbzd',
+        name: 'bBZD',
+        symbol: '$',
+        balance: bbzdBal.toFixed(2),
+        value: (bbzdBal * rates.bbzd).toFixed(2),
+        color: 'from-blue-500 to-cyan-600',
+        icon: Coins,
+      },
+    ];
+    if (stakedBal > 0) {
+      list.push({
+        id: 'staked',
+        name: 'Staked',
+        symbol: 'Ɗ',
+        balance: stakedBal.toFixed(2),
+        value: (stakedBal * rates.dalla).toFixed(2),
+        color: 'from-purple-500 to-violet-600',
+        icon: Lightning,
+      });
     }
-  ];
+    return list;
+  }, [dallaBal, bbzdBal, stakedBal, rates.dalla, rates.bbzd]);
 
-  // Mock activity/trends
-  const trends = [
-    {
-      id: 'tourism',
-      title: 'Tourism Rewards',
-      subtitle: '7% Cashback',
-      value: '+84.04',
-      monthlyValue: '+84.04 DALLA',
-      totalValue: '125.50 DALLA',
-      change: '+12.5',
-      icon: Gift,
-      color: 'from-amber-500 to-orange-600',
-      chartData: [40, 45, 50, 48, 52, 58, 62],
-      stats: { merchants: 45, spending: '1200.5 DALLA' }
-    },
-    {
-      id: 'pouw',
-      title: 'PoUW Rewards',
-      subtitle: 'Federated Learning',
-      value: '+600.00',
-      monthlyValue: '+600 DALLA',
-      totalValue: '4250.75 DALLA',
-      change: '+8.3',
-      icon: Brain,
-      color: 'from-purple-500 to-pink-600',
-      chartData: [30, 35, 32, 38, 42, 45, 50],
-      stats: { contributions: 12, quality: 94, timeliness: 89, honesty: 100 }
+  // Real rewards/trends derived from on-chain data
+  const trends = useMemo(() => {
+    const list: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      value: string;
+      monthlyValue: string;
+      totalValue: string;
+      icon: typeof Gift;
+      color: string;
+      chartData: number[];
+      stats: Record<string, number | string>;
+    }> = [];
+
+    if (tourismRewards.length > 0) {
+      const cashbackTotal = tourismRewards.reduce((s, r) => s + parseFloat(r.cashbackAmount || '0'), 0);
+      const spendTotal = tourismRewards.reduce((s, r) => s + parseFloat(r.amountSpent || '0'), 0);
+      const merchants = new Set(tourismRewards.map((r) => r.merchant)).size;
+      list.push({
+        id: 'tourism',
+        title: 'Tourism Rewards',
+        subtitle: 'Verified Cashback',
+        value: `+${cashbackTotal.toFixed(2)}`,
+        monthlyValue: `+${cashbackTotal.toFixed(2)} DALLA`,
+        totalValue: `${cashbackTotal.toFixed(2)} DALLA`,
+        icon: Gift,
+        color: 'from-amber-500 to-orange-600',
+        chartData: buildSparkline(tourismRewards.map((r) => parseFloat(r.cashbackAmount || '0'))),
+        stats: { merchants, spending: `${spendTotal.toFixed(2)} DALLA` },
+      });
     }
-  ];
 
-  // Mock staking positions
-  const stakingPositions = [
-    {
-      id: 'dalla-stake-1',
-      amount: '5000',
-      apr: '12.5',
-      daily: '+1.71',
-      monthly: '+52.05',
-      total: '856.23',
-      duration: '245 days'
+    if (pouwContributions.length > 0) {
+      const rewardTotal = pouwContributions.reduce((s, c) => s + parseFloat(c.reward || '0'), 0);
+      const avg = (key: 'qualityScore' | 'timelinessScore' | 'honestyScore') =>
+        Math.round(pouwContributions.reduce((s, c) => s + c[key], 0) / pouwContributions.length);
+      list.push({
+        id: 'pouw',
+        title: 'PoUW Rewards',
+        subtitle: 'Federated Learning',
+        value: `+${rewardTotal.toFixed(2)}`,
+        monthlyValue: `+${rewardTotal.toFixed(2)} DALLA`,
+        totalValue: `${rewardTotal.toFixed(2)} DALLA`,
+        icon: Brain,
+        color: 'from-purple-500 to-pink-600',
+        chartData: buildSparkline(pouwContributions.map((c) => c.totalScore)),
+        stats: {
+          contributions: pouwContributions.length,
+          quality: avg('qualityScore'),
+          timeliness: avg('timelinessScore'),
+          honesty: avg('honestyScore'),
+        },
+      });
     }
-  ];
 
-  // Mock activity feed
-  const activities = [
-    { id: 1, type: 'tourism', title: 'Tourism Cashback', subtitle: 'Blue Hole Divers', amount: '+12.5 DALLA', time: '2h ago', icon: Gift, color: 'text-amber-500' },
-    { id: 2, type: 'pouw', title: 'PoUW Rewards', subtitle: 'Federated Learning', amount: '+50 DALLA', time: '5h ago', icon: Brain, color: 'text-purple-500' },
-    { id: 3, type: 'staking', title: 'Staking Rewards', subtitle: 'Daily Distribution', amount: '+1.71 DALLA', time: '1d ago', icon: Lightning, color: 'text-emerald-500' },
-    { id: 4, type: 'send', title: 'Sent DALLA', subtitle: 'To Alice', amount: '-50 DALLA', time: '2d ago', icon: ArrowUp, color: 'text-red-500' },
-    { id: 5, type: 'received', title: 'Received bBZD', subtitle: 'From Bob', amount: '+100 bBZD', time: '3d ago', icon: ArrowDown, color: 'text-green-500' },
-    { id: 6, type: 'tourism', title: 'Tourism Cashback', subtitle: 'Rainforest Tours', amount: '+8.25 DALLA', time: '3d ago', icon: Gift, color: 'text-amber-500' },
-  ];
+    return list;
+  }, [tourismRewards, pouwContributions]);
+
+  // Real staking position (single position from the staking ledger)
+  const stakingPositions = useMemo(() => {
+    if (!stakingInfo || stakedBal <= 0) return [];
+    return [
+      {
+        id: 'dalla-stake',
+        amount: stakedBal.toFixed(0),
+        active: stakingInfo.activeStake,
+        unbonding: stakingInfo.unbonding,
+        rewards: stakingInfo.rewardsEarned,
+        era: stakingInfo.era,
+      },
+    ];
+  }, [stakingInfo, stakedBal]);
+
+  // Real activity feed merged from on-chain reward events
+  const activities = useMemo(() => {
+    const items = [
+      ...pouwContributions.map((c) => ({
+        id: `pouw-${c.contributionId}`,
+        type: 'pouw',
+        title: 'PoUW Rewards',
+        subtitle: 'Federated Learning',
+        amount: `+${c.reward} DALLA`,
+        time: timeAgo(c.timestamp),
+        ts: c.timestamp,
+        icon: Brain,
+        color: 'text-purple-500',
+      })),
+      ...tourismRewards.map((r) => ({
+        id: `tourism-${r.rewardId}`,
+        type: 'tourism',
+        title: 'Tourism Cashback',
+        subtitle: r.merchantName || 'Verified Merchant',
+        amount: `+${r.cashbackAmount} DALLA`,
+        time: timeAgo(r.timestamp),
+        ts: r.timestamp,
+        icon: Gift,
+        color: 'text-amber-500',
+      })),
+    ];
+    return items.sort((a, b) => b.ts - a.ts);
+  }, [pouwContributions, tourismRewards]);
 
   if (!isConnected) {
     return (
@@ -227,42 +338,6 @@ export default function HomeNew() {
       </motion.div>
 
       {/* Profit Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="mx-6 mb-8"
-      >
-        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-4 border border-gray-700/50">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Profit</p>
-              <p className="text-white text-2xl font-bold">${(parseFloat(displayBalance.total) * 0.96).toFixed(2)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-12 relative">
-                {/* Mini sparkline */}
-                <svg className="w-full h-full" viewBox="0 0 100 50">
-                  <path
-                    d="M0,40 Q25,35 50,25 T100,10"
-                    fill="none"
-                    stroke="url(#sparkGradient)"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                  />
-                  <defs>
-                    <linearGradient id="sparkGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#a855f7" />
-                      <stop offset="100%" stopColor="#ec4899" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-              <span className="text-emerald-400 font-bold">5.7%</span>
-            </div>
-          </div>
-        </div>
-      </motion.div>
 
       <div className="mb-8">
         <div className="flex items-center justify-between px-6 mb-4">
@@ -293,16 +368,7 @@ export default function HomeNew() {
                   </div>
                   <p className="text-white font-bold text-lg mb-1">{asset.name}</p>
                   <p className="text-white text-2xl font-bold mb-2">${asset.value}</p>
-                  <div className="flex items-center gap-1">
-                    {asset.change.startsWith('+') ? (
-                      <TrendUp size={14} weight="fill" className="text-emerald-400" />
-                    ) : (
-                      <TrendDown size={14} weight="fill" className="text-red-400" />
-                    )}
-                    <span className={`text-sm font-bold ${asset.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {asset.change}%
-                    </span>
-                  </div>
+                  <p className="text-gray-400 text-sm font-medium">{asset.balance} {asset.symbol}</p>
                 </div>
               </motion.div>
             ))}
@@ -321,6 +387,11 @@ export default function HomeNew() {
           </button>
         </div>
 
+        {trends.length === 0 ? (
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 text-center">
+            <p className="text-gray-400 text-sm">No rewards yet. Tourism cashback and PoUW contributions will appear here.</p>
+          </div>
+        ) : (
         <div className="space-y-3">
           {trends.map((trend, index) => (
             <motion.div
@@ -444,6 +515,7 @@ export default function HomeNew() {
             </motion.div>
           ))}
         </div>
+        )}
       </div>
 
       <div className="px-6 mb-8">
@@ -456,7 +528,16 @@ export default function HomeNew() {
           </Link>
         </div>
 
-        {stakingPositions.map((stake, index) => (
+        {stakingPositions.length === 0 ? (
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 text-center">
+            <p className="text-gray-400 text-sm mb-3">No active stake. Stake DALLA to earn PoUW rewards.</p>
+            <Link href="/staking">
+              <button className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-2 px-5 rounded-xl transition-all text-sm">
+                Start Staking
+              </button>
+            </Link>
+          </div>
+        ) : stakingPositions.map((stake, index) => (
           <motion.div
             key={stake.id}
             initial={{ opacity: 0, y: 20 }}
@@ -471,7 +552,7 @@ export default function HomeNew() {
                 </div>
                 <div>
                   <p className="text-white font-bold text-lg">Staking Rewards</p>
-                  <p className="text-gray-400 text-sm">{stake.apr}% APR</p>
+                  <p className="text-gray-400 text-sm">Era {stake.era}</p>
                 </div>
               </div>
               <div className="text-right">
@@ -482,16 +563,16 @@ export default function HomeNew() {
 
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="bg-gray-800/50 rounded-xl p-3 text-center border border-gray-700/30">
-                <p className="text-gray-400 text-xs mb-1">Daily</p>
-                <p className="text-emerald-400 font-bold">{stake.daily}</p>
+                <p className="text-gray-400 text-xs mb-1">Active</p>
+                <p className="text-emerald-400 font-bold">{stake.active}</p>
               </div>
               <div className="bg-gray-800/50 rounded-xl p-3 text-center border border-gray-700/30">
-                <p className="text-gray-400 text-xs mb-1">Monthly</p>
-                <p className="text-emerald-400 font-bold">{stake.monthly}</p>
+                <p className="text-gray-400 text-xs mb-1">Unbonding</p>
+                <p className="text-amber-400 font-bold">{stake.unbonding}</p>
               </div>
               <div className="bg-gray-800/50 rounded-xl p-3 text-center border border-gray-700/30">
-                <p className="text-gray-400 text-xs mb-1">Total</p>
-                <p className="text-white font-bold">{stake.total}</p>
+                <p className="text-gray-400 text-xs mb-1">Rewards</p>
+                <p className="text-white font-bold">{stake.rewards}</p>
               </div>
             </div>
 
@@ -542,7 +623,11 @@ export default function HomeNew() {
         )}
 
         <div className="space-y-2">
-          {activities
+          {activities.filter(activity => activityFilter === 'all' || activity.type === activityFilter).length === 0 ? (
+            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-xl p-6 border border-gray-700/30 text-center">
+              <p className="text-gray-400 text-sm">No activity yet.</p>
+            </div>
+          ) : activities
             .filter(activity => activityFilter === 'all' || activity.type === activityFilter)
             .map((activity, index) => (
             <motion.div
@@ -614,16 +699,6 @@ export default function HomeNew() {
                       <p className="text-white text-xl font-bold">{asset.balance}</p>
                       <p className="text-gray-400 text-sm">${asset.value}</p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {asset.change.startsWith('+') ? (
-                      <TrendUp size={14} weight="fill" className="text-emerald-400" />
-                    ) : (
-                      <TrendDown size={14} weight="fill" className="text-red-400" />
-                    )}
-                    <span className={`text-sm font-bold ${asset.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {asset.change}%
-                    </span>
                   </div>
                 </div>
               ))}

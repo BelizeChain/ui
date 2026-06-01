@@ -100,27 +100,18 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      // Convert Polkadot keypair to Ethereum-compatible format
-      // In production: proper key derivation
-      const mockPrivateKey = '0x' + '1'.repeat(64); // MOCK - use real key derivation
-      
-      if (!xmtpService) {
-        console.warn('XMTP service not loaded yet');
-        return false;
-      }
-      
-      await xmtpService.initialize(mockPrivateKey);
-      setIsXMTPConnected(true);
-
-      // Load conversations
-      await loadXMTPConversations();
-
-      // Start streaming messages
-      xmtpService.streamAllMessages((message: any) => {
-        handleIncomingXMTPMessage(message);
-      });
-
-      return true;
+      // XMTP requires an Ethereum-compatible private key (or EIP-191 signer) to
+      // derive a per-user messaging identity. Polkadot browser-extension accounts
+      // never expose raw private keys, and no key-derivation/signing bridge is
+      // wired yet. Initializing with a placeholder key would give EVERY user the
+      // same XMTP identity, so the feature is intentionally gated off until a real
+      // per-account signer is available. Mesh messaging and emergency broadcasts
+      // remain fully functional.
+      console.warn(
+        'XMTP messaging is unavailable: no secure per-account key derivation from the Polkadot signer yet.',
+      );
+      setIsXMTPConnected(false);
+      return false;
     } catch (error) {
       console.error('XMTP initialization failed:', error);
       return false;
