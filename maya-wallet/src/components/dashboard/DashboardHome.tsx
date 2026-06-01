@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, useI18n } from '@belizechain/shared';
 import { TransactionIndexer, type Transaction } from '@belizechain/shared';
 import { initializeApi } from '@/services/blockchain';
+import { getActiveProposals, getVotingHistory } from '@/services/pallets';
 import { useAccountStore } from '@/store/account';
 import { 
   PaperPlaneTilt, 
@@ -80,10 +81,12 @@ export function DashboardHome() {
   const { account } = useAccountStore();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+  const [engagement, setEngagement] = useState({ activeProposals: 0, communityVotes: 0 });
 
   useEffect(() => {
     if (!account?.address) {
       setRecentActivity([]);
+      setEngagement({ activeProposals: 0, communityVotes: 0 });
       return;
     }
 
@@ -94,12 +97,20 @@ export function DashboardHome() {
       try {
         const api = await initializeApi();
         const indexer = new TransactionIndexer(api);
-        const txs = await indexer.getAccountHistory(address, { type: 'all', limit: 5 });
+        const [txs, proposals, votes] = await Promise.all([
+          indexer.getAccountHistory(address, { type: 'all', limit: 5 }),
+          getActiveProposals(),
+          getVotingHistory(address),
+        ]);
         if (!cancelled) {
           setRecentActivity(txs.slice(0, 5).map((tx) => mapTransaction(tx, address)));
+          setEngagement({
+            activeProposals: proposals.length,
+            communityVotes: votes.length,
+          });
         }
       } catch (err) {
-        console.error('Failed to load recent activity:', err);
+        console.error('Failed to load dashboard data:', err);
       }
     })();
 
@@ -110,12 +121,14 @@ export function DashboardHome() {
 
   if (!account) return null;
 
-  // Engagement stats remain placeholder until the governance/rewards pallets
-  // expose per-account aggregates; recent activity below is live chain data.
+  // activeProposals (live governance.proposals count) and communityVotes
+  // (this account's on-chain voting history) are real chain data. The
+  // remaining widgets stay placeholder until the compliance/rewards/budget
+  // pallets expose per-account aggregates.
   const stats = {
     compliance: { status: 'verified', level: 3 },
-    activeProposals: 2,
-    communityVotes: 5,
+    activeProposals: engagement.activeProposals,
+    communityVotes: engagement.communityVotes,
     pouwRewards: 125.50,
     monthlySpending: 450,
     budgetLimit: 1000,

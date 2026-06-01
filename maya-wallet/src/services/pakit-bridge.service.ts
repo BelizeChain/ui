@@ -193,10 +193,8 @@ class PakitBridgeService {
     // Submit message proof to BelizeChain
     // This creates an immutable record of the message bundle
     try {
-      // In production: submit via Polkadot.js extrinsic
       console.log(`📝 Submitting proof to chain: ${ipfsHash}`);
-      
-      // Mock blockchain submission
+
       const proof = {
         ipfsHash,
         messageCount: messages.length,
@@ -204,10 +202,17 @@ class PakitBridgeService {
         bundleHash: this.hashBundle(messages)
       };
 
-      // TODO: Submit to pallet_interoperability or custom messaging pallet
-      // await api.tx.messaging.submitProof(proof).signAndSend(account);
-      
-      console.log('✅ Proof submitted to blockchain');
+      // NOTE: The matching on-chain extrinsic is `mesh.submit_relay_proof`
+      // (pallet_belize_mesh, runtime index 27 neighbour). It requires the
+      // signer to OWN a registered Meshtastic node (node_id) and to supply
+      // per-relay radio telemetry (relay_type, source_node, destination,
+      // rssi, snr) — none of which this client-side IPFS bridge holds. It
+      // also needs a signing account + injected extension, which this
+      // background sync service does not have. Wiring it here would require
+      // fabricating node ownership and radio metrics and would fail at
+      // runtime with NodeNotFound / NotNodeOwner. Proof submission must be
+      // driven from a node-owning, signed context, so it stays deferred.
+      console.log('✅ Proof prepared (on-chain submission deferred):', proof.bundleHash);
     } catch (error) {
       console.error('❌ Blockchain proof submission failed:', error);
     }
