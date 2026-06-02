@@ -2,7 +2,7 @@ import * as React from 'react';
 import { GlassCard } from './glass-card';
 import { Progress } from './progress';
 import { cn } from '@/lib/utils';
-import { MapPin } from 'phosphor-react';
+import { MapPin, Clock, CheckCircle, XCircle } from 'phosphor-react';
 import Link from 'next/link';
 
 export interface ProposalCardProps {

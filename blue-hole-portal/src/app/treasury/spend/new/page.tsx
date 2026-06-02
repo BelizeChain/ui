@@ -532,10 +532,10 @@ function ApproversStep({ proposal, setProposal, boardMembers, requiredApprovers 
               {proposal.approvers.length} of {boardMembers.length} selected
             </span>
           </div>
-          <span className={`text-xs font-semibold ${
+          <span className={`text-xs font-semibold inline-flex items-center gap-1 ${
             proposal.approvers.length >= requiredApprovers ? 'text-emerald-400' : 'text-amber-400'
           }`}>
-            {proposal.approvers.length >= requiredApprovers ? '✓ Minimum met' : `Need ${requiredApprovers - proposal.approvers.length} more`}
+            {proposal.approvers.length >= requiredApprovers ? <><CheckCircle size={12} weight="fill" aria-hidden="true" /> Minimum met</> : `Need ${requiredApprovers - proposal.approvers.length} more`}
           </span>
         </div>
         <div className="mt-2 h-2 bg-gray-700/50 rounded-full overflow-hidden">

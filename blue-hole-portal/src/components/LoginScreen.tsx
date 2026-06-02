@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { WalletConnect } from '@belizechain/shared';
-import { ShieldCheck } from 'phosphor-react';
+import { ShieldCheck, LockKey } from 'phosphor-react';
 
 export function LoginScreen() {
   return (
@@ -27,7 +27,7 @@ export function LoginScreen() {
 
         <div className="space-y-6">
           <div className="bg-bluehole-50 border border-bluehole-200 rounded-lg p-4 text-sm text-bluehole-700">
-            <p className="font-semibold mb-2">🔐 Authorized Personnel Only</p>
+            <p className="font-semibold mb-2 flex items-center gap-2"><LockKey size={16} weight="fill" aria-hidden="true" /> Authorized Personnel Only</p>
             <p>Connect your government-authorized Polkadot.js wallet to access the administration dashboard.</p>
           </div>
 
