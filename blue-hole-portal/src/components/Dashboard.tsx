@@ -430,8 +430,9 @@ function TreasuryTab() {
       const api = (blockchainService as any).api;
       if (!api) throw new Error('Blockchain API not initialized');
 
-      // Use government admin account
-      const adminAccount = admin?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+      // Require the connected government admin account as the signer.
+      const adminAccount = admin?.address;
+      if (!adminAccount) throw new Error('No admin account connected. Sign in with an authorized government wallet to sign treasury proposals.');
 
       // Submit approval transaction
       const extrinsic = api.tx.economy.approveTreasury(proposalId);
@@ -755,8 +756,9 @@ function GovernanceTab() {
       const api = (blockchainService as any).api;
       if (!api) throw new Error('Blockchain API not initialized');
 
-      // Use government admin account
-      const adminAccount = admin?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+      // Require the connected government admin account as the signer.
+      const adminAccount = admin?.address;
+      if (!adminAccount) throw new Error('No admin account connected. Sign in with an authorized government wallet to vote.');
 
       // Submit vote transaction
       const extrinsic = api.tx.governance.vote(proposalId, approve);
@@ -1806,8 +1808,9 @@ function ComplianceTab() {
       const api = (blockchainService as any).api;
       if (!api) throw new Error('Blockchain API not initialized');
 
-      // Use government admin account (from store)
-      const adminAccount = admin?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+      // Require the connected government admin account as the signer.
+      const adminAccount = admin?.address;
+      if (!adminAccount) throw new Error('No admin account connected. Sign in with an authorized government wallet to approve KYC.');
 
       // Submit approval transaction
       const extrinsic = api.tx.identity.approveVerification(accountId);
@@ -1830,8 +1833,9 @@ function ComplianceTab() {
       const api = (blockchainService as any).api;
       if (!api) throw new Error('Blockchain API not initialized');
 
-      // Use government admin account (from store)
-      const adminAccount = admin?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+      // Require the connected government admin account as the signer.
+      const adminAccount = admin?.address;
+      if (!adminAccount) throw new Error('No admin account connected. Sign in with an authorized government wallet to reject KYC.');
 
       // Submit rejection transaction
       const extrinsic = api.tx.identity.rejectVerification(accountId);

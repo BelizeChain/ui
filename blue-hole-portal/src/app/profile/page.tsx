@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Card, Input, Button, Badge, Alert } from '@belizechain/shared';
+import { useAdminStore } from '@/store/admin';
 import {
   ArrowLeft,
   UserCircle,
@@ -17,17 +18,26 @@ import {
 } from 'phosphor-react';
 import Link from 'next/link';
 
+const ROLE_LABELS: Record<string, string> = {
+  'super-admin': 'Super Administrator (Root)',
+  treasury: 'Treasury Administrator',
+  compliance: 'Compliance Officer',
+  operations: 'Operations Administrator',
+};
+
 export default function ProfilePage() {
-  const [name, setName] = useState('Admin User');
-  const [email, setEmail] = useState('admin@belizechain.gov.bz');
-  const [phone, setPhone] = useState('+501 223-4567');
-  const [department, setDepartment] = useState('Treasury Department');
+  const { admin } = useAdminStore();
+  const [name, setName] = useState(admin?.name ?? '');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [department, setDepartment] = useState(admin?.department ?? '');
   const [copied, setCopied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const adminAddress = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+  const adminAddress = admin?.address ?? '';
 
   const handleCopyAddress = () => {
+    if (!adminAddress) return;
     navigator.clipboard.writeText(adminAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -158,10 +168,10 @@ export default function ProfilePage() {
             <div>
               <Input
                 label="Role"
-                value="Treasury Administrator"
+                value={admin?.role ? ROLE_LABELS[admin.role] : 'Not signed in'}
                 disabled
               />
-              <p className="mt-1 text-xs text-sand-600">Your role is managed by system administrators</p>
+              <p className="mt-1 text-xs text-sand-600">Your role is derived from your on-chain council/sudo seat</p>
             </div>
             <div>
               <Input
@@ -215,7 +225,11 @@ export default function ProfilePage() {
             <div className="flex justify-between items-center pb-3 border-b border-sand-200">
               <div>
                 <p className="text-sm font-medium text-sand-900">Last Login</p>
-                <p className="text-xs text-sand-600">October 15, 2025 at 9:42 AM</p>
+                <p className="text-xs text-sand-600">
+                  {admin?.lastLogin
+                    ? new Date(admin.lastLogin).toLocaleString()
+                    : 'Not signed in'}
+                </p>
               </div>
               <Badge variant="success">Active</Badge>
             </div>
