@@ -12,7 +12,6 @@ import {
   GlobeHemisphereWest,
   MagnifyingGlass,
   ShoppingCart,
-  Database,
   LockKey,
   Plus,
   CheckCircle,
@@ -27,7 +26,7 @@ export default function BNSPage() {
   const [activeTab, setActiveTab] = useState<'domains' | 'marketplace' | 'hosting'>('domains');
   const [myDomains, setMyDomains] = useState<bnsService.Domain[]>([]);
   const [marketplaceListings, setMarketplaceListings] = useState<bnsService.DomainListing[]>([]);
-  const [hostingStats, setHostingStats] = useState({ totalSites: 0, uptime: '99.9%', storage: '0 GB', bandwidth: '0 GB/mo' });
+  const [hostingStats, setHostingStats] = useState({ totalSites: 0, storage: '0 GB' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +49,18 @@ export default function BNSPage() {
         
         setMyDomains(domainsData);
         setMarketplaceListings(listingsData);
+
+        // Derive hosting stats from real on-chain hosted-website records for
+        // the user's domains. Uptime/bandwidth have no on-chain source.
+        const hostedSites = await Promise.all(
+          domainsData.map((d) => bnsService.getHostedWebsite(d.name).catch(() => null))
+        );
+        const activeSites = hostedSites.filter((s) => s && s.isActive);
+        const totalBytes = activeSites.reduce((sum, s) => sum + (s?.sizeBytes ?? 0), 0);
+        setHostingStats({
+          totalSites: activeSites.length,
+          storage: formatBytes(totalBytes),
+        });
       } catch (err: any) {
         console.error('Failed to fetch BNS data:', err);
         setError(err.message || 'Unable to load domain data. Please try again.');
@@ -66,6 +77,16 @@ export default function BNSPage() {
   // Format date
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString();
+  };
+
+  // Format a byte count into a human-readable size string
+  const formatBytes = (bytes: number) => {
+    if (bytes <= 0) return '0 GB';
+    const gb = bytes / 1e9;
+    if (gb >= 1) return `${gb.toFixed(2)} GB`;
+    const mb = bytes / 1e6;
+    if (mb >= 1) return `${mb.toFixed(1)} MB`;
+    return `${(bytes / 1e3).toFixed(0)} KB`;
   };
 
   if (loading) {
@@ -263,24 +284,11 @@ export default function BNSPage() {
                   <p className="text-2xl font-bold text-white">{hostingStats.totalSites}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-400 mb-1">Uptime</p>
-                  <p className="text-2xl font-bold text-emerald-600">{hostingStats.uptime}</p>
+                  <p className="text-sm text-gray-400 mb-1">Storage Used</p>
+                  <p className="text-2xl font-bold text-white">{hostingStats.storage}</p>
                 </div>
               </div>
             </GlassCard>
-
-            <div className="grid grid-cols-2 gap-3">
-              <GlassCard variant="dark" blur="sm" className="p-4">
-                <Database size={24} className="text-indigo-600 mb-2" weight="fill" />
-                <p className="text-xs text-gray-400">Storage Used</p>
-                <p className="text-lg font-bold text-white">{hostingStats.storage}</p>
-              </GlassCard>
-              <GlassCard variant="dark" blur="sm" className="p-4">
-                <GlobeHemisphereWest size={24} className="text-purple-400 mb-2" weight="fill" />
-                <p className="text-xs text-gray-400">Bandwidth</p>
-                <p className="text-lg font-bold text-white">{hostingStats.bandwidth}</p>
-              </GlassCard>
-            </div>
 
             <GlassCard variant="dark" blur="sm" className="p-4">
               <h3 className="font-bold text-white mb-4">Hosting Features</h3>
