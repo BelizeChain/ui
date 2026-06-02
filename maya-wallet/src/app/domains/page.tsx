@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { initializeApi } from '@/services/blockchain';
+import { useWallet } from '@/contexts/WalletContext';
 import { ApiPromise } from '@polkadot/api';
 import { 
   Globe, 
@@ -26,6 +27,7 @@ interface Domain {
 }
 
 export default function DomainsPage() {
+  const { selectedAccount } = useWallet();
   const [api, setApi] = useState<ApiPromise | null>(null);
   const [account, setAccount] = useState<string | null>(null);
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -37,10 +39,6 @@ export default function DomainsPage() {
       try {
         const apiInstance = await initializeApi();
         setApi(apiInstance);
-        
-        // For demo purposes, use Alice's account
-        // In production, this would come from wallet extension
-        setAccount('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
       } catch (error) {
         console.error('Failed to initialize API:', error);
       }
@@ -48,9 +46,17 @@ export default function DomainsPage() {
     init();
   }, []);
 
+  // Track the connected wallet account; queries are scoped to it.
+  useEffect(() => {
+    setAccount(selectedAccount?.address ?? null);
+  }, [selectedAccount]);
+
   useEffect(() => {
     if (api && account) {
       loadDomains();
+    } else {
+      setDomains([]);
+      setLoading(false);
     }
   }, [api, account]);
 
