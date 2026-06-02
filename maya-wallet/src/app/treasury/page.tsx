@@ -1,8 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
+import { TransactionIndexer, type Transaction } from '@belizechain/shared';
+import { initializeApi, fetchBalance } from '@/services/blockchain';
+import { getActiveProposals } from '@/services/pallets';
+import { type Proposal } from '@/services/pallets/governance';
+import { getDisplayName } from '@/services/pallets/identity';
+import { getExchangeRate } from '@/services/oracle';
 import {
   ArrowLeft,
   Vault,
@@ -18,69 +24,117 @@ import {
   ShieldCheck
 } from 'phosphor-react';
 
+interface Signer {
+  name: string;
+  address: string;
+  verified: boolean;
+}
+
+function shortenAddress(address: string): string {
+  if (!address || address.length <= 12) return address;
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function relativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 export default function TreasuryPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'proposals' | 'signers'>('overview');
+  const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState({ dalla: '0', bBZD: '0', totalUSD: '0' });
+  const [multiSig, setMultiSig] = useState({ required: 0, total: 0, threshold: '—' });
+  const [signers, setSigners] = useState<Signer[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [treasuryAddress, setTreasuryAddress] = useState('');
 
-  const treasuryData = {
-    balance: {
-      dalla: '15,234,567',
-      bBZD: '8,456,789',
-      totalUSD: '23,691,356'
-    },
-    multiSig: {
-      required: 4,
-      total: 7,
-      threshold: '4-of-7'
-    },
-    signers: [
-      { name: 'Central Bank Governor', address: '5F3s...8dHk', verified: true, signed: 156 },
-      { name: 'Finance Minister', address: '5Gk2...9mNp', verified: true, signed: 148 },
-      { name: 'Treasury Secretary', address: '5Hj7...2qWr', verified: true, signed: 142 },
-      { name: 'Comptroller General', address: '5Km9...5tYu', verified: true, signed: 139 },
-      { name: 'Deputy Finance', address: '5Lt4...3xZv', verified: true, signed: 127 },
-      { name: 'Audit Director', address: '5Mw8...7cBn', verified: true, signed: 119 },
-      { name: 'Legal Counsel', address: '5Nx6...4vPm', verified: true, signed: 103 }
-    ],
-    proposals: [
-      {
-        id: 1,
-        title: 'National Infrastructure Fund',
-        amount: '2,500,000 DALLA',
-        proposer: 'Central Bank Governor',
-        signatures: 5,
-        status: 'pending',
-        timeLeft: '2 days',
-        description: 'Allocation for highway reconstruction project'
-      },
-      {
-        id: 2,
-        title: 'Education Technology Grant',
-        amount: '850,000 DALLA',
-        proposer: 'Finance Minister',
-        signatures: 4,
-        status: 'approved',
-        timeLeft: 'Executed',
-        description: 'Digital learning platforms for public schools'
-      },
-      {
-        id: 3,
-        title: 'Healthcare Equipment Purchase',
-        amount: '1,200,000 bBZD',
-        proposer: 'Treasury Secretary',
-        signatures: 2,
-        status: 'rejected',
-        timeLeft: 'Expired',
-        description: 'Medical devices for regional hospitals'
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const api = await initializeApi();
+
+        // Treasury account is exposed by the economy pallet.
+        const treasuryAccountRaw = await api.query.economy?.treasuryAccount?.();
+        const treasuryAddress = treasuryAccountRaw ? treasuryAccountRaw.toString() : '';
+        if (!cancelled) setTreasuryAddress(treasuryAddress);
+
+        // Governance council members are the treasury multi-sig signers.
+        let members: string[] = [];
+        try {
+          const membersRaw: any = await api.query.governanceCouncil?.members?.();
+          if (membersRaw) members = membersRaw.map((m: any) => m.toString());
+        } catch (err) {
+          console.warn('Council members lookup failed:', err);
+        }
+
+        const [bal, rates, signerNames, allProposals, history] = await Promise.all([
+          treasuryAddress ? fetchBalance(treasuryAddress) : Promise.resolve(null),
+          Promise.all([
+            getExchangeRate('DALLA', 'USD').catch(() => null),
+            getExchangeRate('bBZD', 'USD').catch(() => null),
+          ]),
+          Promise.all(members.map((addr) => getDisplayName(addr).catch(() => undefined))),
+          getActiveProposals().catch(() => [] as Proposal[]),
+          treasuryAddress
+            ? new TransactionIndexer(api)
+                .getAccountHistory(treasuryAddress, { type: 'all', limit: 10 })
+                .catch(() => [] as Transaction[])
+            : Promise.resolve([] as Transaction[]),
+        ]);
+
+        if (cancelled) return;
+
+        // Balance + USD valuation from real oracle rates.
+        const dallaNum = bal ? parseFloat(bal.dalla) || 0 : 0;
+        const bbzdNum = bal ? parseFloat(bal.bBZD) || 0 : 0;
+        const [dallaRate, bbzdRate] = rates;
+        const usd = dallaNum * (dallaRate?.rate ?? 0) + bbzdNum * (bbzdRate?.rate ?? 0);
+        setBalance({
+          dalla: dallaNum.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+          bBZD: bbzdNum.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+          totalUSD: usd.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+        });
+
+        // Multi-sig: signer count is real; required is the on-chain simple majority.
+        const total = members.length;
+        const required = total > 0 ? Math.floor(total / 2) + 1 : 0;
+        setMultiSig({ required, total, threshold: total > 0 ? `${required}-of-${total}` : '—' });
+
+        setSigners(
+          members.map((address, i) => ({
+            name: signerNames[i] || shortenAddress(address),
+            address: shortenAddress(address),
+            verified: Boolean(signerNames[i]),
+          }))
+        );
+
+        // Only treasury-spend proposals belong on this screen.
+        setProposals(allProposals.filter((p) => /treasury/i.test(p.category)));
+
+        setRecentTransactions(history);
+      } catch (err) {
+        console.error('Failed to load treasury data:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    ],
-    recentTransactions: [
-      { type: 'out', amount: '850,000 DALLA', to: 'Education Ministry', time: '2 hours ago' },
-      { type: 'in', amount: '3,200,000 DALLA', from: 'Tourism Revenue', time: '1 day ago' },
-      { type: 'out', amount: '450,000 bBZD', to: 'Infrastructure Fund', time: '3 days ago' },
-      { type: 'in', amount: '1,800,000 bBZD', from: 'Tax Collection', time: '5 days ago' }
-    ]
-  };
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -127,7 +181,7 @@ export default function TreasuryPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-white/80 text-sm mb-1">Total Treasury Balance</p>
-                  <h2 className="text-3xl font-bold text-white">${treasuryData.balance.totalUSD}</h2>
+                  <h2 className="text-3xl font-bold text-white">{loading ? '—' : `$${balance.totalUSD}`}</h2>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-gray-700/20 flex items-center justify-center">
                   <Wallet size={24} className="text-white" weight="fill" />
@@ -136,11 +190,11 @@ export default function TreasuryPage() {
               <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/20">
                 <div>
                   <p className="text-white/60 text-xs">DALLA Holdings</p>
-                  <p className="text-white font-bold text-lg">{treasuryData.balance.dalla}</p>
+                  <p className="text-white font-bold text-lg">{balance.dalla}</p>
                 </div>
                 <div>
                   <p className="text-white/60 text-xs">bBZD Holdings</p>
-                  <p className="text-white font-bold text-lg">{treasuryData.balance.bBZD}</p>
+                  <p className="text-white font-bold text-lg">{balance.bBZD}</p>
                 </div>
               </div>
             </GlassCard>
@@ -153,17 +207,17 @@ export default function TreasuryPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-white">Multi-Signature Protection</h3>
-                  <p className="text-sm text-gray-400">{treasuryData.multiSig.threshold} signatures required</p>
+                  <p className="text-sm text-gray-400">{multiSig.threshold} signatures required</p>
                 </div>
               </div>
               <div className="flex items-center justify-around pt-4 border-t border-gray-700">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-purple-400">{treasuryData.multiSig.required}</p>
+                  <p className="text-2xl font-bold text-purple-400">{multiSig.required}</p>
                   <p className="text-xs text-gray-400">Required</p>
                 </div>
                 <div className="text-2xl text-gray-300">/</div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-indigo-400">{treasuryData.multiSig.total}</p>
+                  <p className="text-2xl font-bold text-indigo-400">{multiSig.total}</p>
                   <p className="text-xs text-gray-400">Total Signers</p>
                 </div>
               </div>
@@ -176,28 +230,38 @@ export default function TreasuryPage() {
                 <ChartLineUp size={16} className="text-gray-400" weight="bold" />
               </div>
               <GlassCard variant="dark" blur="sm" className="divide-y divide-gray-100">
-                {treasuryData.recentTransactions.map((tx, i) => (
-                  <div key={i} className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        tx.type === 'in' ? 'bg-emerald-100' : 'bg-red-100'
-                      }`}>
-                        {tx.type === 'in' ? (
-                          <ArrowDownLeft size={20} className="text-emerald-400" weight="bold" />
-                        ) : (
-                          <ArrowUpRight size={20} className="text-red-400" weight="bold" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-white">{tx.type === 'in' ? tx.from : tx.to}</p>
-                        <p className="text-xs text-gray-400">{tx.time}</p>
-                      </div>
-                    </div>
-                    <p className={`font-bold ${tx.type === 'in' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {tx.type === 'in' ? '+' : '-'}{tx.amount}
-                    </p>
+                {recentTransactions.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-gray-400">
+                    {loading ? 'Loading treasury activity…' : 'No recent treasury transactions'}
                   </div>
-                ))}
+                ) : (
+                  recentTransactions.map((tx, i) => {
+                    const incoming = treasuryAddress !== '' && tx.to === treasuryAddress;
+                    const counterparty = incoming ? tx.from : tx.to;
+                    return (
+                      <div key={tx.hash || i} className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            incoming ? 'bg-emerald-100' : 'bg-red-100'
+                          }`}>
+                            {incoming ? (
+                              <ArrowDownLeft size={20} className="text-emerald-400" weight="bold" />
+                            ) : (
+                              <ArrowUpRight size={20} className="text-red-400" weight="bold" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-white">{shortenAddress(counterparty || '')}</p>
+                            <p className="text-xs text-gray-400">{relativeTime(tx.timestamp)}</p>
+                          </div>
+                        </div>
+                        <p className={`font-bold ${incoming ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {incoming ? '+' : '-'}{tx.amount}
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
               </GlassCard>
             </div>
           </>
@@ -205,66 +269,81 @@ export default function TreasuryPage() {
 
         {activeTab === 'proposals' && (
           <div className="space-y-3">
-            {treasuryData.proposals.map((proposal) => (
-              <GlassCard key={proposal.id} variant="dark" blur="md" className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-white mb-1">{proposal.title}</h3>
-                    <p className="text-sm text-gray-400">{proposal.description}</p>
-                  </div>
-                  <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    proposal.status === 'approved' ? 'bg-emerald-500/100/20 text-emerald-400' :
-                    proposal.status === 'rejected' ? 'bg-red-500/100/20 text-red-400' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>
-                    {proposal.status}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-3 border-t border-gray-700">
-                  <div>
-                    <p className="text-xs text-gray-400">Amount</p>
-                    <p className="font-bold text-white">{proposal.amount}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Signatures</p>
-                    <p className="font-bold text-white">{proposal.signatures}/{treasuryData.multiSig.total}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Status</p>
-                    <p className="font-bold text-white">{proposal.timeLeft}</p>
-                  </div>
-                </div>
+            {proposals.length === 0 ? (
+              <GlassCard variant="dark" blur="md" className="p-8 text-center text-sm text-gray-400">
+                {loading ? 'Loading treasury proposals…' : 'No active treasury proposals'}
               </GlassCard>
-            ))}
+            ) : (
+              proposals.map((proposal) => {
+                const status = proposal.status.toLowerCase();
+                return (
+                  <GlassCard key={proposal.index} variant="dark" blur="md" className="p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-white mb-1">{proposal.title || `Proposal #${proposal.index}`}</h3>
+                        <p className="text-sm text-gray-400">{proposal.description}</p>
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        status === 'approved' || status === 'executed' ? 'bg-emerald-500/100/20 text-emerald-400' :
+                        status === 'rejected' || status === 'cancelled' ? 'bg-red-500/100/20 text-red-400' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>
+                        {proposal.status}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-700">
+                      <div>
+                        <p className="text-xs text-gray-400">Amount</p>
+                        <p className="font-bold text-white">{proposal.value} DALLA</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Ayes / Nays</p>
+                        <p className="font-bold text-white">{proposal.voteCount.ayes} / {proposal.voteCount.nays}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Status</p>
+                        <p className="font-bold text-white">{proposal.status}</p>
+                      </div>
+                    </div>
+                  </GlassCard>
+                );
+              })
+            )}
           </div>
         )}
 
         {activeTab === 'signers' && (
           <div className="space-y-3">
-            {treasuryData.signers.map((signer, i) => (
-              <GlassCard key={i} variant="dark" blur="sm" className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center text-white font-bold">
-                      {signer.name[0]}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-white">{signer.name}</p>
-                        {signer.verified && (
-                          <CheckCircle size={16} className="text-emerald-500" weight="fill" />
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400">{signer.address}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-forest-400">{signer.signed}</p>
-                    <p className="text-xs text-gray-400">signatures</p>
-                  </div>
-                </div>
+            {signers.length === 0 ? (
+              <GlassCard variant="dark" blur="sm" className="p-8 text-center text-sm text-gray-400">
+                {loading ? 'Loading signers…' : 'No council signers found'}
               </GlassCard>
-            ))}
+            ) : (
+              signers.map((signer, i) => (
+                <GlassCard key={i} variant="dark" blur="sm" className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center text-white font-bold">
+                        {signer.name[0]}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-white">{signer.name}</p>
+                          {signer.verified && (
+                            <CheckCircle size={16} className="text-emerald-500" weight="fill" />
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400">{signer.address}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <ShieldCheck size={20} className="text-forest-400" weight="fill" />
+                      <p className="text-xs text-gray-400">signer</p>
+                    </div>
+                  </div>
+                </GlassCard>
+              ))
+            )}
           </div>
         )}
       </div>
