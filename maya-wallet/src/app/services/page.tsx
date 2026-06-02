@@ -57,7 +57,7 @@ export default function ServicesPage() {
       description: 'Renew your Belize driver\'s license online',
       fee: '50 DALLA',
       processingTime: '2-3 business days',
-      status: 'in-progress',
+      status: 'available',
     },
     {
       id: '3',
@@ -67,7 +67,7 @@ export default function ServicesPage() {
       description: 'Pay annual property tax',
       fee: '0 DALLA',
       processingTime: 'Instant',
-      status: 'completed',
+      status: 'available',
     },
     {
       id: '4',
