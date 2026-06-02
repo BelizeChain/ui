@@ -30,8 +30,6 @@ export default function BridgesPage() {
   
   const [bridges, setBridges] = useState<interopService.Bridge[]>([]);
   const [transfers, setTransfers] = useState<interopService.BridgeTransfer[]>([]);
-  const [transferHistory, setTransferHistory] = useState<any[]>([]);
-  const [validators, setValidators] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transferring, setTransferring] = useState(false);
@@ -80,6 +78,13 @@ export default function BridgesPage() {
     { id: 'ethereum', name: 'Ethereum', color: 'blue' },
     { id: 'polkadot', name: 'Polkadot', color: 'pink' }
   ];
+
+  // Match the non-BelizeChain side of the transfer against a real on-chain
+  // bridge so transfer details reflect actual bridge parameters.
+  const targetChainId = fromChain === 'belizechain' ? toChain : fromChain;
+  const selectedBridge = bridges.find(
+    (b) => b.chain.toLowerCase() === targetChainId.toLowerCase()
+  ) || null;
 
   if (loading) {
     return <LoadingSpinner message="Loading bridge data from blockchain..." fullScreen />;
@@ -154,7 +159,7 @@ export default function BridgesPage() {
                 : 'text-gray-400 hover:bg-gray-700/30'
             }`}
           >
-            Validators
+            Bridges
           </button>
           </div>
         </GlassCard>
@@ -217,24 +222,28 @@ export default function BridgesPage() {
 
             <GlassCard variant="dark" blur="sm" className="p-4">
               <h4 className="font-bold text-white mb-3">Transfer Details</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Bridge Fee</span>
-                  <span className="font-semibold text-white">0.5%</span>
+              {selectedBridge ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Bridge Fee</span>
+                    <span className="font-semibold text-white">{selectedBridge.fee}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Estimated Time</span>
+                    <span className="font-semibold text-white">~{selectedBridge.estimatedTime} min</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Per-Tx Limit</span>
+                    <span className="font-semibold text-white">{selectedBridge.transactionLimit} DALLA</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Daily Limit</span>
+                    <span className="font-semibold text-white">{selectedBridge.dailyLimit} DALLA</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Estimated Time</span>
-                  <span className="font-semibold text-white">~4.2 min</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Min. Amount</span>
-                  <span className="font-semibold text-white">100 DALLA</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Validator Threshold</span>
-                  <span className="font-semibold text-white">14 of 21</span>
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-gray-400">No active bridge is available for the selected chain.</p>
+              )}
             </GlassCard>
 
             <button className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-blue-400 to-cyan-400 text-white rounded-xl shadow-lg">
@@ -246,36 +255,43 @@ export default function BridgesPage() {
 
         {activeTab === 'history' && (
           <>
-            {transferHistory.map((transfer) => (
-              <GlassCard key={transfer.id} variant="dark" blur="sm" className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-bold text-white mb-1">{transfer.amount}</h3>
-                    <p className="text-xs text-gray-400">{transfer.id}</p>
-                  </div>
-                  <span className={`px-2 py-0.5 ${transfer.status === 'completed' ? 'bg-emerald-500/100/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'} text-xs rounded-full font-semibold`}>
-                    {transfer.status === 'completed' ? 'Completed' : 'Pending'}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between mb-3 p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <span className="text-sm font-semibold text-white">{transfer.from}</span>
-                  <ArrowsLeftRight size={16} className="text-gray-400" />
-                  <span className="text-sm font-semibold text-white">{transfer.to}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="text-gray-400">Transfer Time</p>
-                    <p className="font-semibold text-white">{transfer.time}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-gray-400">Date</p>
-                    <p className="font-semibold text-white">{transfer.date}</p>
-                  </div>
-                </div>
+            {transfers.length === 0 ? (
+              <GlassCard variant="dark" blur="sm" className="p-8 text-center">
+                <ArrowsLeftRight size={32} className="text-gray-500 mx-auto mb-3" weight="duotone" />
+                <p className="text-sm text-gray-400">No bridge transfers yet.</p>
               </GlassCard>
-            ))}
+            ) : (
+              transfers.map((transfer) => (
+                <GlassCard key={transfer.transferId} variant="dark" blur="sm" className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="font-bold text-white mb-1">{transfer.amount} {transfer.asset}</h3>
+                      <p className="text-xs font-mono text-gray-400">{transfer.transferId}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 ${transfer.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400' : transfer.status === 'Failed' || transfer.status === 'Refunded' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'} text-xs rounded-full font-semibold`}>
+                      {transfer.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-3 p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
+                    <span className="text-sm font-semibold text-white">{transfer.fromChain}</span>
+                    <ArrowsLeftRight size={16} className="text-gray-400" />
+                    <span className="text-sm font-semibold text-white">{transfer.toChain}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-gray-400">Confirmations</p>
+                      <p className="font-semibold text-white">{transfer.confirmations}/{transfer.requiredConfirmations}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-gray-400">Initiated</p>
+                      <p className="font-semibold text-white">{new Date(transfer.initiatedAt * 1000).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </GlassCard>
+              ))
+            )}
           </>
         )}
 
@@ -284,40 +300,47 @@ export default function BridgesPage() {
             <GlassCard variant="dark-medium" blur="lg" className="p-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-400 mb-1">Active Validators</p>
-                  <p className="text-2xl font-bold text-white">21</p>
+                  <p className="text-sm text-gray-400 mb-1">Active Bridges</p>
+                  <p className="text-2xl font-bold text-white">{bridges.filter(b => b.status === 'Active').length}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-400 mb-1">Avg Uptime</p>
-                  <p className="text-2xl font-bold text-emerald-400">99.8%</p>
+                  <p className="text-sm text-gray-400 mb-1">Total Bridges</p>
+                  <p className="text-2xl font-bold text-emerald-400">{bridges.length}</p>
                 </div>
               </div>
             </GlassCard>
 
-            {validators.map((validator, index) => (
-              <GlassCard key={index} variant="dark" blur="sm" className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-bold text-white mb-1">{validator.name}</h3>
-                    <p className="text-xs font-mono text-gray-400">{validator.address}</p>
-                  </div>
-                  <span className="px-2 py-0.5 bg-emerald-500/100/20 text-emerald-400 text-xs rounded-full font-semibold">
-                    Active
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-gray-400">Uptime</p>
-                    <p className="font-semibold text-white">{validator.uptime}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Signatures</p>
-                    <p className="font-semibold text-white">{validator.signed}</p>
-                  </div>
-                </div>
+            {bridges.length === 0 ? (
+              <GlassCard variant="dark" blur="sm" className="p-8 text-center">
+                <Users size={32} className="text-gray-500 mx-auto mb-3" weight="duotone" />
+                <p className="text-sm text-gray-400">No bridges registered on chain.</p>
               </GlassCard>
-            ))}
+            ) : (
+              bridges.map((bridge) => (
+                <GlassCard key={bridge.id} variant="dark" blur="sm" className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="font-bold text-white mb-1">{bridge.name}</h3>
+                      <p className="text-xs font-mono text-gray-400">{bridge.chain}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 ${bridge.status === 'Active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'} text-xs rounded-full font-semibold`}>
+                      {bridge.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-400">Fee</p>
+                      <p className="font-semibold text-white">{bridge.fee}%</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400">Est. Time</p>
+                      <p className="font-semibold text-white">{bridge.estimatedTime} min</p>
+                    </div>
+                  </div>
+                </GlassCard>
+              ))
+            )}
           </>
         )}
       </div>
