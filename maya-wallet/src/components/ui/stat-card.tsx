@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { GlassCard } from './glass-card';
 import { cn } from '@/lib/utils';
+import { ArrowUp, ArrowDown } from 'phosphor-react';
 
 export interface StatCardProps {
   label: string;
@@ -19,9 +20,9 @@ export function StatCard({ label, value, change, icon, trend, className }: StatC
 
   const getTrendIcon = () => {
     if (!change) return null;
-    if (trend === 'up') return '↑';
-    if (trend === 'down') return '↓';
-    return '';
+    if (trend === 'up') return <ArrowUp size={14} weight="bold" aria-hidden="true" />;
+    if (trend === 'down') return <ArrowDown size={14} weight="bold" aria-hidden="true" />;
+    return null;
   };
 
   return (
@@ -37,7 +38,7 @@ export function StatCard({ label, value, change, icon, trend, className }: StatC
           <div className="flex items-baseline space-x-2">
             <p className="text-2xl font-bold text-gray-900">{value}</p>
             {change !== undefined && (
-              <span className={cn('text-sm font-medium', getTrendColor())}>
+              <span className={cn('text-sm font-medium inline-flex items-center gap-0.5', getTrendColor())}>
                 {getTrendIcon()} {Math.abs(change)}%
               </span>
             )}

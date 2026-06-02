@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { GlassCard } from './glass-card';
 import { cn } from '@/lib/utils';
-import { ArrowFatUp, ArrowFatDown, ChatDots, Share, MapPin } from 'phosphor-react';
+import { ArrowFatUp, ArrowFatDown, ChatDots, Share, MapPin, Users, Scales, Leaf } from 'phosphor-react';
 import Link from 'next/link';
 
 export interface PostCardProps {
@@ -84,10 +84,11 @@ export function PostCard({
     onShare?.();
   };
   const typeBadges = {
-    community: { label: '👥 Community', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-    governance: { label: '⚖️ Governance', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-    environment: { label: '🌱 Environment', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    community: { label: 'Community', icon: Users, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    governance: { label: 'Governance', icon: Scales, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    environment: { label: 'Environment', icon: Leaf, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   };
+  const TypeIcon = type ? typeBadges[type]?.icon : undefined;
 
   const content_component = (
     <div className={cn('bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-4 border border-gray-700/50 hover:border-gray-600/50 transition-all', className)}>
@@ -118,7 +119,8 @@ export function PostCard({
               )}
             </div>
             {type && typeBadges[type] && (
-              <span className={cn('px-2 py-1 rounded-full text-xs font-medium border', typeBadges[type].color)}>
+              <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border', typeBadges[type].color)}>
+                {TypeIcon && <TypeIcon size={12} weight="fill" aria-hidden="true" />}
                 {typeBadges[type].label}
               </span>
             )}

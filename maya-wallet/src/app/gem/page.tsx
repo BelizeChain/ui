@@ -34,6 +34,7 @@ import {
   Copy,
   CheckCircle,
   Lightning,
+  Diamond,
   ArrowLeft
 } from 'phosphor-react';
 
@@ -331,7 +332,7 @@ export default function GemPage() {
               <ArrowLeft size={24} className="text-gray-300" weight="bold" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-white">The Gem 💎</h1>
+              <h1 className="text-xl font-bold text-white flex items-center gap-2">The Gem <Diamond size={18} weight="fill" className="text-pink-400" aria-hidden="true" /></h1>
               <p className="text-xs text-gray-400">Smart Contracts Platform (ink!)</p>
             </div>
           </div>

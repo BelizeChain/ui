@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle,
   XCircle,
+  Clock,
   MapPin,
   CalendarBlank,
   Coins,
@@ -158,8 +159,9 @@ export default function ProposalDetailPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-white text-xl font-bold">Proposal #{proposal.index}</h1>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusColors[uiStatus]}`}>
-                {uiStatus === 'voting' ? '🗳️ Voting' : uiStatus === 'passed' ? '✅ Passed' : '❌ Rejected'}
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${statusColors[uiStatus]}`}>
+                {uiStatus === 'voting' ? <Clock size={12} weight="fill" aria-hidden="true" /> : uiStatus === 'passed' ? <CheckCircle size={12} weight="fill" aria-hidden="true" /> : <XCircle size={12} weight="fill" aria-hidden="true" />}
+                {uiStatus === 'voting' ? 'Voting' : uiStatus === 'passed' ? 'Passed' : 'Rejected'}
               </span>
             </div>
             <p className="text-gray-400 text-sm">{categoryLabel}</p>

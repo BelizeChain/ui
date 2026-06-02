@@ -10,6 +10,8 @@ import {
   Copy,
   Share,
   Check,
+  Lightbulb,
+  DeviceMobile,
 } from 'phosphor-react';
 import QRCode from 'qrcode.react';
 
@@ -169,9 +171,10 @@ export default function ReceivePage() {
             />
 
             <div className="bg-caribbean-50 border border-caribbean-200 rounded-lg p-3">
-              <p className="text-sm text-caribbean-900">
-                💡 <strong>Tip:</strong> Adding an amount and note makes it easier for the sender.
-                The QR code will include this information.
+              <p className="text-sm text-caribbean-900 flex items-start gap-2">
+                <Lightbulb size={16} weight="fill" className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span><strong>Tip:</strong> Adding an amount and note makes it easier for the sender.
+                The QR code will include this information.</span>
               </p>
             </div>
           </div>
@@ -180,7 +183,7 @@ export default function ReceivePage() {
         {/* How to Receive */}
         <Card className="bg-gray-100 border-gray-300">
           <h3 className="font-semibold text-bluehole-900 mb-3 flex items-center space-x-2">
-            <span>📱</span>
+            <DeviceMobile size={18} weight="fill" aria-hidden="true" />
             <span>How to Receive Money</span>
           </h3>
           <ol className="space-y-2 text-sm text-bluehole-700 list-decimal list-inside">

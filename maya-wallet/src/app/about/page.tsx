@@ -239,7 +239,7 @@ export default function AboutPage() {
 
         {/* Footer */}
         <div className="text-center space-y-2 pt-4">
-          <p className="text-sm text-gray-400">Made with ❤️ in Belize</p>
+          <p className="text-sm text-gray-400 flex items-center justify-center gap-1">Made with <Heart size={14} weight="fill" className="text-red-500" aria-label="love" /> in Belize</p>
           <p className="text-xs text-gray-400">© 2026 BelizeChain. All rights reserved.</p>
           <p className="text-xs text-gray-400">Powered by Substrate • Polkadot SDK stable2512</p>
         </div>

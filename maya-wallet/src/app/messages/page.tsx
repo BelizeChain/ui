@@ -14,7 +14,10 @@ import {
   CloudArrowUp,
   Warning,
   Users,
-  WifiHigh
+  WifiHigh,
+  User,
+  Broadcast,
+  ArrowLeft
 } from 'phosphor-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useMessaging } from '@/contexts/MessagingContext';
@@ -90,7 +93,7 @@ export default function MessagesPage() {
               <div className="flex items-start gap-3">
                 <Warning size={24} className="text-red-400 flex-shrink-0 mt-0.5" weight="fill" />
                 <div className="flex-1">
-                  <p className="text-red-400 font-semibold mb-1">🚨 Emergency Alert</p>
+                  <p className="text-red-400 font-semibold mb-1">Emergency Alert</p>
                   <p className="text-white text-sm">{emergencyAlerts[0].message}</p>
                   <p className="text-red-300 text-xs mt-1">{emergencyAlerts[0].district}</p>
                 </div>
@@ -146,7 +149,7 @@ export default function MessagesPage() {
                   {/* Avatar */}
                   <div className="relative">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-2xl">
-                      {conversation.peerName?.[0] || '👤'}
+                      {conversation.peerName?.[0] || <User size={24} weight="fill" className="text-white" />}
                     </div>
                   </div>
 
@@ -199,11 +202,12 @@ export default function MessagesPage() {
                   <button
                     onClick={() => setSelectedConversation(null)}
                     className="md:hidden text-gray-400 hover:text-white"
+                    aria-label="Back to conversations"
                   >
-                    ←
+                    <ArrowLeft size={20} weight="bold" />
                   </button>
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xl">
-                    {activeConversation?.peerName?.[0] || '👤'}
+                    {activeConversation?.peerName?.[0] || <User size={20} weight="fill" className="text-white" />}
                   </div>
                   <div>
                     <h3 className="font-bold text-white">
@@ -252,7 +256,7 @@ export default function MessagesPage() {
                             </span>
                           )}
                           <span className="text-xs text-gray-400">
-                            {message.via === 'mesh' && '📻'}
+                            {message.via === 'mesh' && <Broadcast size={12} weight="fill" aria-label="Sent via mesh" />}
                           </span>
                         </div>
                       </div>

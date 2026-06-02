@@ -16,7 +16,9 @@ import {
   SignOut,
   CaretRight,
   Gear,
-  UserCircle
+  UserCircle,
+  ArrowDown,
+  ArrowUp
 } from 'phosphor-react';
 import Link from 'next/link';
 
@@ -228,7 +230,7 @@ function TransactionItem({ transaction }: TransactionItemProps) {
               isReceived ? 'bg-emerald-900/30 text-emerald-400' : 'bg-blue-900/30 text-blue-400'
             }`}
           >
-            {isReceived ? '↓' : '↑'}
+            {isReceived ? <ArrowDown size={18} weight="bold" aria-hidden="true" /> : <ArrowUp size={18} weight="bold" aria-hidden="true" />}
           </div>
           <div>
             <p className="font-medium text-white">

@@ -86,7 +86,7 @@ export default function CompliancePage() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Cross-border</span>
-              <span className="font-semibold text-green-600">✓ Enabled</span>
+              <span className="font-semibold text-green-600 inline-flex items-center gap-1"><CheckCircle size={14} weight="fill" aria-hidden="true" /> Enabled</span>
             </div>
           </div>
         </div>
@@ -98,12 +98,12 @@ export default function CompliancePage() {
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
               <IdentificationCard size={20} className="text-caribbean-400" weight="bold" />
               <span className="text-gray-300 text-sm">National ID</span>
-              <span className="ml-auto text-green-600 text-xs font-medium">✓ Verified</span>
+              <span className="ml-auto text-green-600 text-xs font-medium inline-flex items-center gap-1"><CheckCircle size={12} weight="fill" aria-hidden="true" /> Verified</span>
             </div>
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
               <FileText size={20} className="text-caribbean-400" weight="bold" />
               <span className="text-gray-300 text-sm">Proof of Address</span>
-              <span className="ml-auto text-green-600 text-xs font-medium">✓ Verified</span>
+              <span className="ml-auto text-green-600 text-xs font-medium inline-flex items-center gap-1"><CheckCircle size={12} weight="fill" aria-hidden="true" /> Verified</span>
             </div>
           </div>
         </div>

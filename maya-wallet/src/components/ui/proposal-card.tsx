@@ -2,7 +2,7 @@ import * as React from 'react';
 import { GlassCard } from './glass-card';
 import { Progress } from './progress';
 import { cn } from '@/lib/utils';
-import { MapPin } from 'phosphor-react';
+import { MapPin, Clock, CheckCircle, XCircle } from 'phosphor-react';
 import Link from 'next/link';
 
 export interface ProposalCardProps {
@@ -36,11 +36,13 @@ export function ProposalCard({
   const progress = totalVotes > 0 ? (votesFor / totalVotes) * 100 : 0;
 
   const statusBadges = {
-    voting: { label: '🗳️ Voting', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-    active: { label: '🗳️ Active', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-    passed: { label: '✅ Passed', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-    rejected: { label: '❌ Rejected', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+    voting: { label: 'Voting', icon: Clock, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    active: { label: 'Active', icon: Clock, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    passed: { label: 'Passed', icon: CheckCircle, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    rejected: { label: 'Rejected', icon: XCircle, color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   };
+
+  const StatusIcon = statusBadges[status].icon;
 
   const content_component = (
     <div
@@ -51,7 +53,8 @@ export function ProposalCard({
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-1">
             <span className="text-xs font-bold text-emerald-400">#{id}</span>
-            <span className={cn('px-2 py-1 rounded-full text-xs font-medium border', statusBadges[status].color)}>
+            <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border', statusBadges[status].color)}>
+              <StatusIcon size={12} weight="fill" aria-hidden="true" />
               {statusBadges[status].label}
             </span>
           </div>
