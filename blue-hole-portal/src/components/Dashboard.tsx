@@ -1283,15 +1283,29 @@ function MonitoringTab() {
         setPakitStatus(pakit);
         setAlerts(alertList);
 
-        // Generate block production chart data (last 20 blocks)
-        const metrics = await blockchainService.getMetrics();
-        const now = Date.now();
-        const labels = Array.from({ length: 20 }, (_, i) => {
-          const time = new Date(now - (19 - i) * 6000); // 6s block time
-          return time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        });
-        // Simulate block production (1 block per 6s = 10 blocks per minute)
-        const data = Array.from({ length: 20 }, () => Math.floor(Math.random() * 3) + 9); // 9-11 blocks
+        // Build the block production chart from the last 20 real blocks:
+        // chart the actual signed-transaction count per block.
+        const api = await blockchainService.getApi();
+        const head = await api.rpc.chain.getHeader();
+        const tip = head.number.toNumber();
+        const span = 20;
+        const start = Math.max(0, tip - span + 1);
+        const blockNumbers = Array.from(
+          { length: tip - start + 1 },
+          (_, i) => start + i
+        );
+        const blocks = await Promise.all(
+          blockNumbers.map(async (n) => {
+            const hash = await api.rpc.chain.getBlockHash(n);
+            const signed = await api.rpc.chain.getBlock(hash);
+            const txCount = signed.block.extrinsics.filter(
+              (ex: any) => ex.isSigned
+            ).length;
+            return { n, txCount };
+          })
+        );
+        const labels = blocks.map((b) => `#${b.n}`);
+        const data = blocks.map((b) => b.txCount);
         setBlockMetrics({ labels, data });
 
         setLoading(false);
@@ -1544,7 +1558,40 @@ function MonitoringTab() {
             <span>Block Production (Last 2 Minutes)</span>
           </h3>
           <div className="h-64">
-            <canvas id="blockProductionChart"></canvas>
+            {blockMetrics.data.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm text-bluehole-400">
+                Loading recent blocks…
+              </div>
+            ) : (
+              <div className="h-full flex flex-col">
+                <div className="flex-1 flex items-end gap-1">
+                  {blockMetrics.data.map((count, i) => {
+                    const max = Math.max(1, ...blockMetrics.data);
+                    const heightPct = Math.max(4, (count / max) * 100);
+                    return (
+                      <div
+                        key={blockMetrics.labels[i] ?? i}
+                        className="flex-1 flex flex-col items-center justify-end h-full group"
+                        title={`${blockMetrics.labels[i]}: ${count} tx`}
+                      >
+                        <span className="text-[10px] text-bluehole-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {count}
+                        </span>
+                        <div
+                          className="w-full bg-bluehole-500/70 hover:bg-bluehole-500 rounded-t transition-colors"
+                          style={{ height: `${heightPct}%` }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 flex justify-between text-[10px] text-bluehole-400">
+                  <span>{blockMetrics.labels[0]}</span>
+                  <span>signed tx / block</span>
+                  <span>{blockMetrics.labels[blockMetrics.labels.length - 1]}</span>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -1630,6 +1677,41 @@ function MonitoringTab() {
   );
 }
 
+/**
+ * Derive a 0-100 AML/KYC risk score from real on-chain signals:
+ * balance exposure (system.account), slashing history (staking.slashingSpans),
+ * and any active compliance flag for the account. No random values.
+ */
+async function computeKycRiskScore(
+  api: any,
+  accountId: string,
+  flaggedBySeverity: Map<string, string>
+): Promise<number> {
+  let score = 10; // baseline for a pending, unflagged applicant
+  try {
+    const account: any = await api.query.system.account(accountId);
+    const free = BigInt(account?.data?.free?.toString() || '0');
+    const reserved = BigInt(account?.data?.reserved?.toString() || '0');
+    const total = free + reserved;
+    const DALLA = BigInt(10) ** BigInt(12);
+    if (total >= DALLA * BigInt(1000000)) score += 50;
+    else if (total >= DALLA * BigInt(100000)) score += 30;
+    else if (total >= DALLA * BigInt(10000)) score += 15;
+
+    const slashing: any = await api.query.staking?.slashingSpans?.(accountId);
+    if (slashing && !slashing.isNone && !slashing.isEmpty) score += 25;
+  } catch (err) {
+    console.error('computeKycRiskScore: chain query failed', err);
+  }
+
+  const severity = flaggedBySeverity.get(accountId);
+  if (severity) {
+    score += severity === 'high' ? 60 : severity === 'low' ? 20 : 35;
+  }
+
+  return Math.min(100, score);
+}
+
 function ComplianceTab() {
   const { admin } = useAdminStore(); // Add admin from store
   const [loading, setLoading] = React.useState(true);
@@ -1651,25 +1733,8 @@ function ComplianceTab() {
         const api = (blockchainService as any).api;
         if (!api) throw new Error('Blockchain API not initialized');
 
-        // Get pending verifications from identity pallet
-        const entries = await api.query.identity.pendingVerifications.entries();
-        const kycData = entries.map(([key, value]: [any, any]) => {
-          const accountId = key.args[0].toString();
-          const data = value.toJSON() as any;
-          return {
-            id: accountId,
-            accountId,
-            name: data.name || 'Unknown',
-            ssn: data.ssn || 'N/A',
-            documentType: data.documentType || 'Passport',
-            submittedAt: new Date(data.timestamp || Date.now()),
-            riskScore: Math.floor(Math.random() * 100), // Would come from compliance checks
-          };
-        });
-
-        setKycQueue(kycData);
-
-        // Get flagged accounts from compliance pallet
+        // Get flagged accounts from compliance pallet FIRST so the KYC risk
+        // score can incorporate real AML flags instead of a random number.
         const flaggedEntries = await api.query.compliance.flaggedAccounts.entries();
         const flaggedData = flaggedEntries.map(([key, value]: [any, any]) => {
           const accountId = key.args[0].toString();
@@ -1684,6 +1749,29 @@ function ComplianceTab() {
           };
         });
 
+        const flaggedBySeverity = new Map<string, string>(
+          flaggedData.map((f: any) => [f.accountId, String(f.severity || 'medium')])
+        );
+
+        // Get pending verifications from identity pallet
+        const entries = await api.query.identity.pendingVerifications.entries();
+        const kycData = await Promise.all(
+          entries.map(async ([key, value]: [any, any]) => {
+            const accountId = key.args[0].toString();
+            const data = value.toJSON() as any;
+            return {
+              id: accountId,
+              accountId,
+              name: data.name || 'Unknown',
+              ssn: data.ssn || 'N/A',
+              documentType: data.documentType || 'Passport',
+              submittedAt: new Date(data.timestamp || Date.now()),
+              riskScore: await computeKycRiskScore(api, accountId, flaggedBySeverity),
+            };
+          })
+        );
+
+        setKycQueue(kycData);
         setAmlFlags(flaggedData);
         setLoading(false);
       } catch (err) {
