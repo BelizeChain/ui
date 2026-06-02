@@ -4,8 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, useI18n } from '@belizechain/shared';
 import { TransactionIndexer, type Transaction } from '@belizechain/shared';
 import { initializeApi } from '@/services/blockchain';
-import { getActiveProposals, getVotingHistory } from '@/services/pallets';
+import {
+  getActiveProposals,
+  getVotingHistory,
+  getKYCStatus,
+  getPoUWContributions,
+} from '@/services/pallets';
 import { useAccountStore } from '@/store/account';
+
+const KYC_LEVEL_VALUE: Record<string, number> = {
+  None: 0,
+  Basic: 1,
+  Enhanced: 2,
+  Full: 3,
+};
 import { 
   PaperPlaneTilt, 
   QrCode, 
@@ -81,12 +93,26 @@ export function DashboardHome() {
   const { account } = useAccountStore();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
-  const [engagement, setEngagement] = useState({ activeProposals: 0, communityVotes: 0 });
+  const [stats, setStats] = useState({
+    compliance: { status: 'none', level: 0 },
+    activeProposals: 0,
+    communityVotes: 0,
+    pouwRewards: 0,
+    monthlySpending: 0,
+    budgetLimit: 0,
+  });
 
   useEffect(() => {
     if (!account?.address) {
       setRecentActivity([]);
-      setEngagement({ activeProposals: 0, communityVotes: 0 });
+      setStats({
+        compliance: { status: 'none', level: 0 },
+        activeProposals: 0,
+        communityVotes: 0,
+        pouwRewards: 0,
+        monthlySpending: 0,
+        budgetLimit: 0,
+      });
       return;
     }
 
@@ -97,18 +123,47 @@ export function DashboardHome() {
       try {
         const api = await initializeApi();
         const indexer = new TransactionIndexer(api);
-        const [txs, proposals, votes] = await Promise.all([
-          indexer.getAccountHistory(address, { type: 'all', limit: 5 }),
+        const [history, proposals, votes, kyc, pouw] = await Promise.all([
+          indexer.getAccountHistory(address, { type: 'all', limit: 100 }),
           getActiveProposals(),
           getVotingHistory(address),
+          getKYCStatus(address),
+          getPoUWContributions(address),
         ]);
-        if (!cancelled) {
-          setRecentActivity(txs.slice(0, 5).map((tx) => mapTransaction(tx, address)));
-          setEngagement({
-            activeProposals: proposals.length,
-            communityVotes: votes.length,
-          });
-        }
+        if (cancelled) return;
+
+        setRecentActivity(history.slice(0, 5).map((tx) => mapTransaction(tx, address)));
+
+        // Month-to-date outgoing spend from real transaction history.
+        const monthStart = new Date(
+          new Date().getFullYear(),
+          new Date().getMonth(),
+          1
+        ).getTime();
+        const monthlySpending = history
+          .filter(
+            (tx) =>
+              tx.from === address &&
+              tx.timestamp >= monthStart &&
+              !['reward', 'governance', 'staking'].includes(tx.type)
+          )
+          .reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+
+        const pouwRewards = pouw
+          .filter((c) => c.timestamp >= monthStart)
+          .reduce((sum, c) => sum + (parseFloat(c.reward) || 0), 0);
+
+        setStats({
+          compliance: {
+            status: kyc.status.toLowerCase(),
+            level: KYC_LEVEL_VALUE[kyc.level] ?? 0,
+          },
+          activeProposals: proposals.length,
+          communityVotes: votes.length,
+          pouwRewards,
+          monthlySpending,
+          budgetLimit: parseFloat(kyc.limits.monthlyTransfer) || 0,
+        });
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
       }
@@ -120,19 +175,6 @@ export function DashboardHome() {
   }, [account?.address]);
 
   if (!account) return null;
-
-  // activeProposals (live governance.proposals count) and communityVotes
-  // (this account's on-chain voting history) are real chain data. The
-  // remaining widgets stay placeholder until the compliance/rewards/budget
-  // pallets expose per-account aggregates.
-  const stats = {
-    compliance: { status: 'verified', level: 3 },
-    activeProposals: engagement.activeProposals,
-    communityVotes: engagement.communityVotes,
-    pouwRewards: 125.50,
-    monthlySpending: 450,
-    budgetLimit: 1000,
-  };
 
   return (
     <div className="min-h-screen bg-sand-50 pb-20">
@@ -246,12 +288,14 @@ export function DashboardHome() {
                 <div className="flex items-center justify-between mb-2">
                   <TrendUp size={24} weight="fill" className="text-caribbean-500" />
                   <span className="text-xs text-bluehole-600">
-                    {Math.round((stats.monthlySpending / stats.budgetLimit) * 100)}%
+                    {stats.budgetLimit > 0
+                      ? Math.round((stats.monthlySpending / stats.budgetLimit) * 100)
+                      : 0}%
                   </span>
                 </div>
                 <p className="text-sm text-bluehole-600 mb-1">Budget</p>
                 <p className="text-lg font-semibold text-bluehole-900">
-                  Ɗ{stats.monthlySpending} / Ɗ{stats.budgetLimit}
+                  Ɗ{stats.monthlySpending.toLocaleString(undefined, { maximumFractionDigits: 2 })} / Ɗ{stats.budgetLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </p>
               </div>
             </Card>
@@ -306,7 +350,7 @@ export function DashboardHome() {
                 <Gift size={40} weight="duotone" className="text-bluehole-900" />
                 <div>
                   <h3 className="text-lg font-bold text-bluehole-900">PoUW Rewards</h3>
-                  <p className="text-sm text-bluehole-700">You've earned Ɗ{stats.pouwRewards} this month</p>
+                  <p className="text-sm text-bluehole-700">You've earned Ɗ{stats.pouwRewards.toFixed(2)} this month</p>
                 </div>
               </div>
               <CaretRight size={24} weight="bold" className="text-bluehole-900" />
