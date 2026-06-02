@@ -10,6 +10,8 @@ import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import * as stakingService from '@/services/pallets/staking';
 import * as governanceService from '@/services/pallets/governance';
 import * as belizexService from '@/services/pallets/belizex';
+import { initializeApi } from '@/services/blockchain';
+import { TransactionIndexer, type Transaction } from '@belizechain/shared';
 import {
   ChartLineUp,
   TrendUp,
@@ -29,6 +31,7 @@ export default function AnalyticsPage() {
   const [stakingInfo, setStakingInfo] = useState<stakingService.StakingInfo | null>(null);
   const [governanceActivity, setGovernanceActivity] = useState<any[]>([]);
   const [tradingData, setTradingData] = useState<belizexService.TradeHistory[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,15 +47,18 @@ export default function AnalyticsPage() {
       setError(null);
       
       try {
-        const [stakingData, votingHistory, tradeHistory] = await Promise.all([
+        const api = await initializeApi();
+        const [stakingData, votingHistory, tradeHistory, txHistory] = await Promise.all([
           stakingService.getStakingInfo(selectedAccount.address),
           governanceService.getVotingHistory(selectedAccount.address),
-          belizexService.getTradeHistory(selectedAccount.address, 30)
+          belizexService.getTradeHistory(selectedAccount.address, 30),
+          new TransactionIndexer(api).getAccountHistory(selectedAccount.address, { type: 'all', limit: 200 })
         ]);
         
         setStakingInfo(stakingData);
         setGovernanceActivity(votingHistory);
         setTradingData(tradeHistory);
+        setTransactions(txHistory);
       } catch (err: any) {
         console.error('Failed to fetch analytics data:', err);
         setError(err.message || 'Unable to load analytics. Please try again.');
@@ -88,27 +94,75 @@ export default function AnalyticsPage() {
       : '0.00 DALLA'
   };
 
-  const spendingCategories = [
-    { name: 'Tourism', amount: '4,250 DALLA', percentage: 35, color: 'blue' },
-    { name: 'Groceries', amount: '2,100 DALLA', percentage: 17, color: 'emerald' },
-    { name: 'Transport', amount: '1,850 DALLA', percentage: 15, color: 'amber' },
-    { name: 'Entertainment', amount: '1,500 DALLA', percentage: 12, color: 'purple' },
-    { name: 'Others', amount: '2,550 DALLA', percentage: 21, color: 'gray' }
-  ];
+  // Derive spending-by-category from real outgoing transfers in the account history
+  const fmtDalla = (n: number) => `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} DALLA`;
+  const address = selectedAccount.address;
+  const categoryColors = ['blue', 'emerald', 'amber', 'purple', 'gray'];
+  const categoryTotals = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.from !== address) continue;
+    const cat = t.metadata?.category || t.type;
+    categoryTotals.set(cat, (categoryTotals.get(cat) || 0) + parseFloat(t.amount || '0'));
+  }
+  const totalSent = Array.from(categoryTotals.values()).reduce((a, b) => a + b, 0);
+  const spendingCategories = Array.from(categoryTotals.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount], i) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      amount: fmtDalla(amount),
+      percentage: totalSent > 0 ? Math.round((amount / totalSent) * 100) : 0,
+      color: categoryColors[i % categoryColors.length]
+    }));
 
-  const insights = [
-    { title: 'Tourism Cashback Opportunity', description: 'Earn 8% cashback on tourism spending. Potential: 340 DALLA/month', type: 'opportunity', impact: 'high' },
-    { title: 'Staking Rewards Available', description: 'Your balance qualifies for 12% APY staking. Estimated: 2,948 DALLA/year', type: 'opportunity', impact: 'high' },
-    { title: 'Spending Pattern Changed', description: 'Tourism spending increased 45% this month vs last month', type: 'insight', impact: 'medium' }
-  ];
+  // Derive monthly income/spending from real transaction history (last 6 months)
+  const monthlyMap = new Map<string, { month: string; income: number; spending: number; order: number }>();
+  for (const t of transactions) {
+    const d = new Date(t.timestamp);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    const order = d.getFullYear() * 12 + d.getMonth();
+    const entry = monthlyMap.get(key) || {
+      month: d.toLocaleString('en-US', { month: 'short' }),
+      income: 0,
+      spending: 0,
+      order
+    };
+    const amt = parseFloat(t.amount || '0');
+    if (t.to === address) entry.income += amt;
+    if (t.from === address) entry.spending += amt;
+    monthlyMap.set(key, entry);
+  }
+  const monthlyData = Array.from(monthlyMap.values()).sort((a, b) => a.order - b.order).slice(-6);
+  const maxMonthly = Math.max(1, ...monthlyData.map((m) => Math.max(m.income, m.spending)));
 
-  const monthlyData = [
-    { month: 'Sep', income: 5200, spending: 3800 },
-    { month: 'Oct', income: 5200, spending: 4100 },
-    { month: 'Nov', income: 5200, spending: 3900 },
-    { month: 'Dec', income: 5200, spending: 4500 },
-    { month: 'Jan', income: 5200, spending: 4250 }
-  ];
+  // Derive insights from real on-chain data only (no fabricated financial advice)
+  const insights: { title: string; description: string; type: string; impact: string }[] = [];
+  if (stakingInfo && parseFloat(stakingInfo.pendingRewards || '0') > 0) {
+    insights.push({
+      title: 'Staking rewards available',
+      description: `You have ${stakingInfo.pendingRewards} DALLA in unclaimed staking rewards.`,
+      type: 'opportunity',
+      impact: 'high'
+    });
+  }
+  if (spendingCategories.length > 0) {
+    const top = spendingCategories[0];
+    insights.push({
+      title: 'Top spending category',
+      description: `${top.name} accounts for ${top.percentage}% of your outgoing transfers (${top.amount}).`,
+      type: 'insight',
+      impact: 'medium'
+    });
+  }
+  if (monthlyData.length > 0) {
+    const last = monthlyData[monthlyData.length - 1];
+    const net = last.income - last.spending;
+    insights.push({
+      title: `${last.month} net flow`,
+      description: `${net >= 0 ? '+' : ''}${fmtDalla(net)} net this month.`,
+      type: net >= 0 ? 'opportunity' : 'insight',
+      impact: 'medium'
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -182,7 +236,10 @@ export default function AnalyticsPage() {
         <GlassCard variant="dark" blur="sm" className="p-4">
           <h3 className="font-bold text-white mb-4">Spending by Category</h3>
           <div className="space-y-3">
-            {spendingCategories.map((category) => (
+            {spendingCategories.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">No outgoing transfers in your history yet.</p>
+            ) : (
+              spendingCategories.map((category) => (
               <div key={category.name}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-semibold text-white">{category.name}</span>
@@ -195,28 +252,33 @@ export default function AnalyticsPage() {
                   />
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </GlassCard>
 
         <GlassCard variant="dark" blur="sm" className="p-4">
           <h3 className="font-bold text-white mb-4">Monthly Overview</h3>
           <div className="space-y-2">
-            {monthlyData.map((data) => (
+            {monthlyData.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">No transaction history to chart yet.</p>
+            ) : (
+              monthlyData.map((data) => (
               <div key={data.month} className="flex items-center justify-between p-2 bg-gray-800/50 rounded-lg border border-gray-700/30">
                 <span className="text-sm font-semibold text-gray-300 w-12">{data.month}</span>
                 <div className="flex-1 mx-3">
                   <div className="flex items-center space-x-2">
-                    <div className="flex-1 h-6 bg-gradient-to-r from-emerald-400 to-emerald-400 rounded" style={{ width: `${(data.income / 6000) * 100}%` }} />
-                    <div className="flex-1 h-6 bg-gradient-to-r from-red-400 to-red-400 rounded" style={{ width: `${(data.spending / 6000) * 100}%` }} />
+                    <div className="flex-1 h-6 bg-gradient-to-r from-emerald-400 to-emerald-400 rounded" style={{ width: `${(data.income / maxMonthly) * 100}%` }} />
+                    <div className="flex-1 h-6 bg-gradient-to-r from-red-400 to-red-400 rounded" style={{ width: `${(data.spending / maxMonthly) * 100}%` }} />
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-gray-400">Net</p>
-                  <p className="text-sm font-bold text-white">{data.income - data.spending} DALLA</p>
+                  <p className="text-sm font-bold text-white">{fmtDalla(data.income - data.spending)}</p>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
           <div className="flex items-center justify-center space-x-4 mt-4 text-xs">
             <div className="flex items-center space-x-1">
@@ -233,7 +295,10 @@ export default function AnalyticsPage() {
         <GlassCard variant="dark" blur="sm" className="p-4">
           <h3 className="font-bold text-white mb-4">Smart Insights</h3>
           <div className="space-y-3">
-            {insights.map((insight, index) => (
+            {insights.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">No insights available yet. Activity will appear here as you use your wallet.</p>
+            ) : (
+              insights.map((insight, index) => (
               <div key={index} className={`p-3 rounded-lg ${insight.type === 'opportunity' ? 'bg-emerald-500/100/10 border border-emerald-500/30' : 'bg-blue-500/100/10 border border-blue-500/30'}`}>
                 <div className="flex items-start justify-between mb-2">
                   <h4 className="font-semibold text-white text-sm">{insight.title}</h4>
@@ -243,7 +308,8 @@ export default function AnalyticsPage() {
                 </div>
                 <p className="text-xs text-gray-400">{insight.description}</p>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </GlassCard>
       </div>
