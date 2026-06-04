@@ -16,4 +16,5 @@ export { Progress } from './progress';
 export { Button } from './button';
 export { Card } from './card';
 export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './dialog';
+export { ConfirmDialog } from './confirm-dialog';
 export { Avatar, AvatarImage, AvatarFallback } from './avatar';

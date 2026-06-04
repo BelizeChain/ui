@@ -19,6 +19,7 @@ import {
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui';
 import { useBlockchain } from '@/lib/blockchain/hooks';
 import { useWalletStore } from '@/store/wallet';
 import {
@@ -131,6 +132,7 @@ export default function GovernanceProposalsPage() {
   const [loading, setLoading] = useState(true);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [submittingVoteFor, setSubmittingVoteFor] = useState<number | null>(null);
+  const [pendingVote, setPendingVote] = useState<{ proposalId: number; vote: VoteType } | null>(null);
   const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'All'>('All');
   const [sortBy, setSortBy] = useState<'newest' | 'ending' | 'votes'>('newest');
 
@@ -191,6 +193,16 @@ export default function GovernanceProposalsPage() {
       setVoteError('Abstain is not supported by pallet_governance::castVote.');
       return;
     }
+    // Defer the on-chain submission until the user confirms in the dialog.
+    setPendingVote({ proposalId, vote });
+  };
+
+  // Submit the confirmed vote as an on-chain extrinsic.
+  const submitVote = async () => {
+    if (!selectedAccount || !pendingVote) return;
+    const { proposalId, vote } = pendingVote;
+    // Abstain is filtered out in handleVote, so only Aye/Nay reach here.
+    if (vote === 'Abstain') return;
     setSubmittingVoteFor(proposalId);
     try {
       const { hash } = await voteOnProposal(selectedAccount.address, proposalId, vote);
@@ -198,9 +210,11 @@ export default function GovernanceProposalsPage() {
       // Optimistic refresh: pick up the new tally on the next poll tick.
       const refreshed = await getActiveProposals();
       setProposals(refreshed.map(chainToUiProposal));
+      setPendingVote(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Vote submission failed';
       setVoteError(message);
+      setPendingVote(null);
     } finally {
       setSubmittingVoteFor(null);
     }
@@ -302,6 +316,22 @@ export default function GovernanceProposalsPage() {
           </GlassCard>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingVote !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingVote(null);
+        }}
+        title={pendingVote ? `Cast ${pendingVote.vote} vote?` : 'Cast vote?'}
+        description={
+          pendingVote
+            ? `This submits an on-chain governance.castVote extrinsic for proposal #${pendingVote.proposalId}. Your vote is recorded permanently and cannot be changed.`
+            : undefined
+        }
+        confirmLabel={pendingVote ? `Vote ${pendingVote.vote}` : 'Confirm'}
+        loading={submittingVoteFor !== null}
+        onConfirm={submitVote}
+      />
     </div>
   );
 }

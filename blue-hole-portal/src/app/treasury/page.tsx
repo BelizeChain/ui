@@ -15,6 +15,7 @@ import {
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui';
 import { useBlockchain } from '@/lib/blockchain/hooks';
 import { useWalletStore } from '@/store/wallet';
 import {
@@ -102,6 +103,7 @@ export default function TreasuryPage() {
   const [loading, setLoading] = useState(true);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [submittingApprovalFor, setSubmittingApprovalFor] = useState<number | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Pending' | 'Approved' | 'Executed'>('All');
   // `lastGood` keeps the most recent successful fetch around so transient RPC
   // failures don't blank the page mid-render.
@@ -164,13 +166,22 @@ export default function TreasuryPage() {
       setVoteError('Connect a wallet account before voting.');
       return;
     }
+    // Defer the on-chain Aye vote until the user confirms.
+    setPendingApproval(proposalId);
+  };
+
+  const submitApproval = async () => {
+    if (!selectedAccount || pendingApproval === null) return;
+    const proposalId = pendingApproval;
     setSubmittingApprovalFor(proposalId);
     try {
       await voteOnProposal(selectedAccount.address, proposalId, 'Aye');
       await refresh();
+      setPendingApproval(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Vote failed.';
       setVoteError(`Vote failed for proposal #${proposalId}: ${message}`);
+      setPendingApproval(null);
     } finally {
       setSubmittingApprovalFor(null);
     }
@@ -289,6 +300,22 @@ export default function TreasuryPage() {
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingApproval !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingApproval(null);
+        }}
+        title="Approve spend proposal?"
+        description={
+          pendingApproval !== null
+            ? `Approving casts an on-chain Aye vote on treasury proposal #${pendingApproval}. This authorizes release of national funds and is recorded permanently.`
+            : undefined
+        }
+        confirmLabel="Approve & Vote Aye"
+        loading={submittingApprovalFor !== null}
+        onConfirm={submitApproval}
+      />
     </div>
   );
 }

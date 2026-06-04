@@ -24,6 +24,7 @@ import { useGovernance } from '@/hooks/useGovernance';
 import { useOptimisticVoting } from '@/hooks/useOptimisticVoting';
 import { useOptimisticApprovals } from '@/hooks/useOptimisticApprovals';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui';
 
 interface HeaderProps {
   onMobileMenuOpen: () => void;
@@ -39,6 +40,7 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
   const { optimisticVotes } = useOptimisticVoting();
   const { optimisticApprovals } = useOptimisticApprovals();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   // Calculate pending transactions
   const pendingTransactions = [
@@ -94,6 +96,7 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
           <button
             onClick={onMobileMenuOpen}
             className="lg:hidden p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label="Open navigation menu"
           >
             <List size={24} className="text-gray-400" weight="bold" />
           </button>
@@ -106,6 +109,7 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
               document.dispatchEvent(event);
             }}
             className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-800 rounded-lg transition-colors group"
+            aria-label="Search (Command+K)"
           >
             <MagnifyingGlass size={18} className="text-gray-400 group-hover:text-white" weight="bold" />
             <span className="text-sm text-gray-400 group-hover:text-white">Search...</span>
@@ -137,7 +141,10 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
           </div>
 
           {/* Notifications */}
-          <button className="relative p-2 hover:bg-gray-800 rounded-lg transition-colors">
+          <button
+            className="relative p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label={activeProposalsCount > 0 ? `Notifications, ${activeProposalsCount} active proposals` : 'Notifications'}
+          >
             <Bell size={20} className="text-gray-400" weight="duotone" />
             {activeProposalsCount > 0 && (
               <span className="absolute top-0.5 right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full">
@@ -274,8 +281,8 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
                       </button>
                       <button
                         onClick={() => {
-                          disconnectWallet();
                           setAccountMenuOpen(false);
+                          setShowDisconnectConfirm(true);
                         }}
                         className="w-full flex items-center gap-3 px-3 py-2 hover:bg-red-500/10 rounded-lg transition-colors text-left"
                       >
@@ -300,6 +307,19 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDisconnectConfirm}
+        onOpenChange={setShowDisconnectConfirm}
+        title="Disconnect wallet?"
+        description="You will be signed out of the Blue Hole Portal and need to reconnect your government-authorized wallet to continue."
+        confirmLabel="Disconnect"
+        destructive
+        onConfirm={() => {
+          disconnectWallet();
+          setShowDisconnectConfirm(false);
+        }}
+      />
     </header>
   );
 }

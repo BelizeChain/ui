@@ -157,6 +157,8 @@ export function Sidebar({ className }: SidebarProps) {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="p-2 hover:bg-gray-800 rounded-lg transition-colors ml-auto"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
         >
           {collapsed ? (
             <CaretRight size={20} className="text-gray-400" weight="bold" />
