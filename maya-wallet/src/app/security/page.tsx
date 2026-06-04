@@ -19,23 +19,12 @@ export default function SecurityPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'recovery' | 'multisig' | 'audit'>('recovery');
 
-  const recoveryContacts = [
-    { name: 'Maria Garcia', address: '5FHneW46...8s9K3a', status: 'verified', addedDate: '2025-12-15' },
-    { name: 'Carlos Martinez', address: '5DTestUP...mP8B4r', status: 'verified', addedDate: '2025-11-20' },
-    { name: 'Ana Rodriguez', address: '5GNJqTPy...s9w3Hk', status: 'pending', addedDate: '2026-01-10' }
-  ];
-
-  const multiSigAccounts = [
-    { name: 'Business Account', threshold: '2 of 3', signers: 3, balance: '45,200 DALLA', status: 'active' },
-    { name: 'Treasury Account', threshold: '4 of 7', signers: 7, balance: '125,000 DALLA', status: 'active' }
-  ];
-
-  const securityEvents = [
-    { event: 'Successful Login', location: 'Belize City, BZ', timestamp: '2026-01-15 14:32', status: 'normal' },
-    { event: 'Failed Login Attempt', location: 'Unknown Location', timestamp: '2026-01-14 03:15', status: 'warning' },
-    { event: 'Password Changed', location: 'Belmopan, BZ', timestamp: '2026-01-10 09:18', status: 'normal' },
-    { event: 'New Device Added', location: 'San Pedro, BZ', timestamp: '2026-01-05 16:45', status: 'normal' }
-  ];
+  // Social recovery, multi-sig, and the on-chain audit log are not yet wired to
+  // a pallet. Rather than show fabricated accounts/events, these surfaces render
+  // honest "in development" states until the chain services are available.
+  const recoveryContacts: { name: string; address: string; status: string; addedDate: string }[] = [];
+  const multiSigAccounts: { name: string; threshold: string; signers: number; balance: string; status: string }[] = [];
+  const securityEvents: { event: string; location: string; timestamp: string; status: string }[] = [];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -125,48 +114,58 @@ export default function SecurityPage() {
             </GlassCard>
 
             <div className="grid grid-cols-2 gap-3">
-              <button className="flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-red-400 to-rose-400 text-white rounded-xl shadow-lg">
+              <button
+                disabled
+                title="Your seed phrase lives in your wallet extension and cannot be displayed here"
+                className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 text-gray-400 rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+              >
                 <Key size={20} weight="fill" />
-                <span className="font-semibold">View Seed</span>
+                <span className="font-semibold">View in Wallet</span>
               </button>
-              <button className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 rounded-xl shadow-sm">
+              <button
+                disabled
+                title="Social recovery is coming soon"
+                className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+              >
                 <Users size={20} weight="fill" className="text-white" />
                 <span className="font-semibold text-white">Add Contact</span>
               </button>
             </div>
 
             <GlassCard variant="dark" blur="sm" className="p-4">
-              <h3 className="font-bold text-white mb-4">Recovery Contacts ({recoveryContacts.length}/5)</h3>
-              <div className="space-y-3">
-                {recoveryContacts.map((contact, index) => (
-                  <div key={index} className="p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-white">{contact.name}</h4>
-                      <span className={`px-2 py-0.5 ${contact.status === 'verified' ? 'bg-emerald-500/100/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'} text-xs rounded-full font-semibold`}>
-                        {contact.status === 'verified' ? 'Verified' : 'Pending'}
-                      </span>
+              <h3 className="font-bold text-white mb-4">Recovery Contacts</h3>
+              {recoveryContacts.length === 0 ? (
+                <div className="py-8 text-center">
+                  <Users size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
+                  <p className="text-sm text-gray-400">Social recovery is in development.</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Once available, you&apos;ll be able to designate trusted contacts to help recover your account.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recoveryContacts.map((contact, index) => (
+                    <div key={index} className="p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-white">{contact.name}</h4>
+                        <span className={`px-2 py-0.5 ${contact.status === 'verified' ? 'bg-emerald-500/100/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'} text-xs rounded-full font-semibold`}>
+                          {contact.status === 'verified' ? 'Verified' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-mono text-gray-400 mb-1">{contact.address}</p>
+                      <p className="text-xs text-gray-400">Added: {contact.addedDate}</p>
                     </div>
-                    <p className="text-xs font-mono text-gray-400 mb-1">{contact.address}</p>
-                    <p className="text-xs text-gray-400">Added: {contact.addedDate}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </GlassCard>
 
             <GlassCard variant="dark" blur="sm" className="p-4">
               <h3 className="font-bold text-white mb-3">Social Recovery Settings</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <span className="text-gray-400">Recovery Threshold</span>
-                  <span className="font-semibold text-white">2 of 3 contacts</span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <span className="text-gray-400">Cooldown Period</span>
-                  <span className="font-semibold text-white">48 hours</span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <span className="text-gray-400">Last Recovery Attempt</span>
-                  <span className="font-semibold text-white">Never</span>
+                  <span className="text-gray-400">Status</span>
+                  <span className="font-semibold text-gray-300">In development</span>
                 </div>
               </div>
             </GlassCard>
@@ -175,12 +174,27 @@ export default function SecurityPage() {
 
         {activeTab === 'multisig' && (
           <>
-            <button className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-red-400 to-rose-400 text-white rounded-xl shadow-lg">
+            <button
+              disabled
+              title="Multi-sig accounts are coming soon"
+              className="w-full flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 text-gray-400 rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+            >
               <Users size={20} weight="fill" />
               <span className="font-semibold">Create Multi-sig Account</span>
             </button>
 
-            {multiSigAccounts.map((account, index) => (
+            {multiSigAccounts.length === 0 ? (
+              <GlassCard variant="dark" blur="sm" className="p-4">
+                <div className="py-8 text-center">
+                  <Users size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
+                  <p className="text-sm text-gray-400">Multi-sig accounts are in development.</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Threshold-signed accounts will let multiple signers jointly authorize transactions.
+                  </p>
+                </div>
+              </GlassCard>
+            ) : (
+              multiSigAccounts.map((account, index) => (
               <GlassCard key={index} variant="dark" blur="sm" className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -207,7 +221,8 @@ export default function SecurityPage() {
                   Manage Signers →
                 </button>
               </GlassCard>
-            ))}
+              ))
+            )}
 
             <GlassCard variant="dark" blur="sm" className="p-4">
               <h3 className="font-bold text-white mb-3">Multi-sig Features</h3>
@@ -237,6 +252,15 @@ export default function SecurityPage() {
           <>
             <GlassCard variant="dark" blur="sm" className="p-4">
               <h3 className="font-bold text-white mb-4">Security Events</h3>
+              {securityEvents.length === 0 ? (
+                <div className="py-8 text-center">
+                  <FileText size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
+                  <p className="text-sm text-gray-400">The on-chain audit log is in development.</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Account security events will appear here once the audit pallet is wired.
+                  </p>
+                </div>
+              ) : (
               <div className="space-y-3">
                 {securityEvents.map((event, index) => (
                   <div key={index} className={`p-3 rounded-lg ${event.status === 'warning' ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-200'}`}>
@@ -257,18 +281,27 @@ export default function SecurityPage() {
                   </div>
                 ))}
               </div>
+              )}
             </GlassCard>
 
             <GlassCard variant="dark" blur="sm" className="p-4">
               <h3 className="font-bold text-white mb-3">Export Options</h3>
               <div className="grid grid-cols-2 gap-3">
-                <button className="flex items-center justify-center space-x-2 p-3 bg-gray-200 border border-gray-700 rounded-lg hover:border-gray-300 transition-colors">
+                <button
+                  disabled
+                  title="Export is available once the audit log is wired"
+                  className="flex items-center justify-center space-x-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg opacity-60 cursor-not-allowed"
+                >
                   <FileText size={16} className="text-gray-400" />
-                  <span className="text-sm font-semibold text-white">PDF Report</span>
+                  <span className="text-sm font-semibold text-gray-300">PDF Report</span>
                 </button>
-                <button className="flex items-center justify-center space-x-2 p-3 bg-gray-200 border border-gray-700 rounded-lg hover:border-gray-300 transition-colors">
+                <button
+                  disabled
+                  title="Export is available once the audit log is wired"
+                  className="flex items-center justify-center space-x-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg opacity-60 cursor-not-allowed"
+                >
                   <FileText size={16} className="text-gray-400" />
-                  <span className="text-sm font-semibold text-white">CSV Export</span>
+                  <span className="text-sm font-semibold text-gray-300">CSV Export</span>
                 </button>
               </div>
             </GlassCard>
