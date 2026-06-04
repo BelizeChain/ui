@@ -9,9 +9,7 @@ import {
   FileText, 
   ShieldCheck, 
   Activity,
-  TrendUp,
   Warning,
-  CheckCircle,
   Spinner,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -113,8 +111,6 @@ export default function NationalDashboard() {
             iconBg="bg-emerald-500/20"
             title="Treasury DALLA"
             value={isLoadingData ? '...' : formatDALLA(treasuryBalance?.dalla || 0n)}
-            trend="+2.4%"
-            trendLabel="vs last month"
             onClick={() => router.push('/treasury')}
           />
 
@@ -125,8 +121,6 @@ export default function NationalDashboard() {
             iconBg="bg-blue-500/20"
             title="Treasury bBZD"
             value={isLoadingData ? '...' : formatBBZD(treasuryBalance?.bBZD || 0n)}
-            trend="+1.8%"
-            trendLabel="vs last month"
             onClick={() => router.push('/treasury')}
           />
 
@@ -239,62 +233,37 @@ export default function NationalDashboard() {
             </div>
           </div>
 
-          {/* Activity Feed */}
+          {/* Activity Feed — derived from live governance proposals */}
           <div className="space-y-4">
-            <ActivityItem
-              icon={FileText}
-              iconColor="text-blue-400"
-              iconBg="bg-blue-500/20"
-              title="New Proposal: Treasury Allocation Q1 2026"
-              subtitle="Finance Department • 2 hours ago"
-              action="View"
-              onClick={() => router.push('/governance/proposals/1')}
-            />
-            
-            <ActivityItem
-              icon={Users}
-              iconColor="text-emerald-400"
-              iconBg="bg-emerald-500/20"
-              title="Validator Joined: BelizeCityNode"
-              subtitle="Staking • 4 hours ago"
-              action="View"
-              onClick={() => router.push('/validators')}
-            />
-            
-            <ActivityItem
-              icon={CheckCircle}
-              iconColor="text-purple-400"
-              iconBg="bg-purple-500/20"
-              title="Proposal Executed: Education Budget 2026"
-              subtitle="Education Department • 6 hours ago"
-              action="View"
-              onClick={() => router.push('/governance/proposals/2')}
-            />
-            
-            <ActivityItem
-              icon={Warning}
-              iconColor="text-amber-400"
-              iconBg="bg-amber-500/20"
-              title="KYC Review Required: 12 Pending Applications"
-              subtitle="FSC Compliance • 8 hours ago"
-              action="Review"
-              onClick={() => router.push('/compliance')}
-            />
-            
-            <ActivityItem
-              icon={TrendUp}
-              iconColor="text-teal-400"
-              iconBg="bg-teal-500/20"
-              title="Tourism Revenue +15% This Quarter"
-              subtitle="Tourism Department • 12 hours ago"
-              action="View"
-              onClick={() => router.push('/analytics')}
-            />
+            {isLoadingData ? (
+              <p className="text-sm text-gray-500 py-6 text-center">Loading activity…</p>
+            ) : governanceProposals.length === 0 ? (
+              <div className="py-10 text-center">
+                <Activity size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
+                <p className="text-sm text-gray-400">No recent on-chain activity.</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Governance proposals and network events will appear here as they happen.
+                </p>
+              </div>
+            ) : (
+              governanceProposals.slice(0, 5).map((proposal) => (
+                <ActivityItem
+                  key={proposal.id}
+                  icon={FileText}
+                  iconColor="text-blue-400"
+                  iconBg="bg-blue-500/20"
+                  title={proposal.title}
+                  subtitle={`Proposal #${proposal.id} • ${proposal.status}`}
+                  action="View"
+                  onClick={() => router.push(`/governance/proposals/${proposal.id}`)}
+                />
+              ))
+            )}
           </div>
 
           <div className="mt-6 pt-6 border-t border-gray-700/50">
             <Button 
-              onClick={() => router.push('/activity')}
+              onClick={() => router.push('/governance/proposals')}
               className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl"
             >
               View All Activity
