@@ -54,6 +54,7 @@ console.log('Transaction hash:', hash.toHex());`,
       description: 'Command-line interface for blockchain operations',
       status: 'Available',
       link: 'https://docs.belizechain.io/cli',
+      external: true,
     },
     {
       icon: <Package size={24} weight="duotone" />,
@@ -61,20 +62,23 @@ console.log('Transaction hash:', hash.toHex());`,
       description: 'Official SDK for building dApps',
       status: 'v1.2.0',
       link: 'https://www.npmjs.com/package/@belizechain/sdk',
+      external: true,
     },
     {
       icon: <FileCode size={24} weight="duotone" />,
       name: 'Smart Contract Templates',
       description: 'Pre-built contract templates',
-      status: 'Beta',
-      link: '/developer/templates',
+      status: 'Coming soon',
+      link: null,
+      external: false,
     },
     {
       icon: <Flask size={24} weight="duotone" />,
       name: 'Testnet Faucet',
       description: 'Get testnet DALLA for development',
-      status: 'Active',
-      link: '/developer/faucet',
+      status: 'Coming soon',
+      link: null,
+      external: false,
     },
   ];
 
@@ -191,23 +195,43 @@ console.log('Transaction hash:', hash.toHex());`,
         <GlassCard variant="dark-medium" blur="lg" className="p-6">
           <h2 className="text-lg font-bold text-white mb-4">Development Tools</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {tools.map((tool, index) => (
-              <div
-                key={index}
-                className="p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 hover:border-purple-500/50 transition-colors cursor-pointer"
-              >
+            {tools.map((tool, index) => {
+              const cardInner = (
                 <div className="flex items-start gap-3">
                   <div className="text-purple-400">{tool.icon}</div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <h3 className="font-semibold text-white">{tool.name}</h3>
-                      <span className="text-xs text-emerald-400">{tool.status}</span>
+                      <span className={`text-xs ${tool.link ? 'text-emerald-400' : 'text-gray-500'}`}>{tool.status}</span>
                     </div>
                     <p className="text-xs text-gray-400">{tool.description}</p>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+
+              if (tool.link && tool.external) {
+                return (
+                  <a
+                    key={index}
+                    href={tool.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 hover:border-purple-500/50 transition-colors cursor-pointer"
+                  >
+                    {cardInner}
+                  </a>
+                );
+              }
+
+              return (
+                <div
+                  key={index}
+                  className="p-4 bg-gray-800/50 rounded-lg border border-gray-700/50 opacity-60"
+                >
+                  {cardInner}
+                </div>
+              );
+            })}
           </div>
         </GlassCard>
 

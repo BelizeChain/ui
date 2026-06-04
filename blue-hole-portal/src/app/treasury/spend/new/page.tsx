@@ -11,6 +11,21 @@ import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
 import { proposeTreasurySpend } from '@/services/pallets/treasury';
 import { blockchainService } from '@/services/blockchain';
+import { decodeAddress } from '@polkadot/util-crypto';
+
+/**
+ * Validate an SS58 address by attempting to decode it. Returns true only for
+ * well-formed addresses, so the UI can flag typos before submission.
+ */
+function isValidSs58Address(address: string): boolean {
+  if (!address.trim()) return false;
+  try {
+    decodeAddress(address.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 type StepType = 'details' | 'beneficiary' | 'approvers' | 'preview';
 
@@ -164,7 +179,7 @@ export default function NewSpendProposalPage() {
       case 'details':
         return proposal.title && proposal.description && proposal.amount && parseFloat(proposal.amount) > 0;
       case 'beneficiary':
-        return proposal.beneficiary.name && proposal.beneficiary.address;
+        return Boolean(proposal.beneficiary.name) && isValidSs58Address(proposal.beneficiary.address);
       case 'approvers':
         return proposal.approvers.length >= requiredApprovers;
       case 'preview':
@@ -466,17 +481,34 @@ function BeneficiaryStep({ proposal, setProposal }: {
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Wallet Address <span className="text-red-400">*</span>
           </label>
-          <input
-            type="text"
-            value={proposal.beneficiary.address}
-            onChange={(e) => setProposal({ 
-              ...proposal, 
-              beneficiary: { ...proposal.beneficiary, address: e.target.value } 
-            })}
-            placeholder="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
-            className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono text-sm"
-          />
-          <p className="mt-2 text-xs text-gray-500">The BelizeChain address that will receive the funds</p>
+          {(() => {
+            const trimmed = proposal.beneficiary.address.trim();
+            const showInvalid = trimmed.length > 0 && !isValidSs58Address(trimmed);
+            return (
+              <>
+                <input
+                  type="text"
+                  value={proposal.beneficiary.address}
+                  onChange={(e) => setProposal({ 
+                    ...proposal, 
+                    beneficiary: { ...proposal.beneficiary, address: e.target.value } 
+                  })}
+                  placeholder="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+                  aria-invalid={showInvalid}
+                  className={`w-full px-4 py-3 bg-gray-800/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none font-mono text-sm ${
+                    showInvalid ? 'border-red-500 focus:border-red-500' : 'border-gray-700 focus:border-blue-500'
+                  }`}
+                />
+                {showInvalid ? (
+                  <p className="mt-2 text-xs text-red-400">
+                    This is not a valid BelizeChain (SS58) address. Check for typos.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-500">The BelizeChain address that will receive the funds</p>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Warning Box */}

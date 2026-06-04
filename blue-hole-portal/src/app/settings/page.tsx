@@ -16,6 +16,9 @@ import {
 } from 'phosphor-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useWalletStore } from '@/store/wallet';
+import { useSystem } from '@/hooks/useSystem';
+import { ConfirmDialog } from '@/components/ui';
 
 // Custom dark-themed components
 const DarkSwitch = ({ 
@@ -85,7 +88,15 @@ const DarkSelect = ({
 
 export default function SettingsPage() {
   const router = useRouter();
-  
+  const { disconnectWallet } = useWalletStore();
+  const { systemInfo, isLoading: systemLoading } = useSystem();
+  const [showSignOut, setShowSignOut] = useState(false);
+
+  const handleSignOut = () => {
+    disconnectWallet();
+    router.push('/');
+  };
+
   // Notification Settings
   const [systemAlerts, setSystemAlerts] = useState(true);
   const [securityAlerts, setSecurityAlerts] = useState(true);
@@ -280,9 +291,15 @@ export default function SettingsPage() {
                 <Clock size={20} className="text-blue-400 mt-0.5" weight="duotone" />
                 <div>
                   <p className="font-medium text-white text-sm mb-1">System Status</p>
-                  <p className="text-sm text-gray-300">
-                    Last sync: 2 seconds ago · Node: Healthy · Peers: 47
-                  </p>
+                  {systemLoading ? (
+                    <p className="text-sm text-gray-400">Loading node status…</p>
+                  ) : systemInfo ? (
+                    <p className="text-sm text-gray-300">
+                      Block #{systemInfo.blockNumber.toLocaleString()} · Node: {systemInfo.health} · Peers: {systemInfo.peersCount}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400">Node status unavailable — not connected to the network.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -297,18 +314,19 @@ export default function SettingsPage() {
           </h3>
           <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
             <p className="text-sm text-gray-300 mb-3">
-              Treasury operations require 4 of 7 authorized signatures
+              Treasury operations are protected by an on-chain multi-signature policy.
             </p>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Your Approval Status:</span>
-                <span className="font-medium text-emerald-400">Authorized Signer</span>
+                <span className="font-medium text-gray-500">—</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Pending Approvals:</span>
-                <span className="font-medium text-white">3 transactions</span>
+                <span className="font-medium text-gray-500">—</span>
               </div>
             </div>
+            <p className="text-xs text-gray-500 mt-2">Signer membership and pending approvals load from the Treasury dashboard.</p>
             <Link href="/treasury">
               <Button variant="outline" size="sm" className="w-full mt-4 border-gray-600 text-gray-300 hover:bg-gray-700">
                 View Treasury Dashboard
@@ -337,10 +355,21 @@ export default function SettingsPage() {
         <Button
           variant="outline"
           className="w-full text-red-400 border-red-500/30 hover:bg-red-500/10 hover:border-red-500/50"
+          onClick={() => setShowSignOut(true)}
         >
           <SignOut size={18} className="mr-2" />
           Sign Out
         </Button>
+
+        <ConfirmDialog
+          open={showSignOut}
+          onOpenChange={setShowSignOut}
+          title="Sign out?"
+          description="This will disconnect your wallet from the Blue Hole Portal. You can reconnect at any time."
+          confirmLabel="Sign Out"
+          destructive
+          onConfirm={handleSignOut}
+        />
 
         {/* App Info */}
         <div className="text-center text-sm text-gray-500 pt-4 space-y-1">
