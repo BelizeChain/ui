@@ -5,11 +5,12 @@ import { RuntimeEnvironmentBadge } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
 import { NotificationBell } from './NotificationBell';
 import { User, CaretDown, SignOut } from 'phosphor-react';
-import { GlassCard } from './ui';
+import { GlassCard, ConfirmDialog } from './ui';
 
 export function AppHeader() {
   const { selectedAccount, accounts, selectAccount, disconnect, isConnected } = useWallet();
   const [showAccountMenu, setShowAccountMenu] = React.useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = React.useState(false);
 
   if (!isConnected) {
     return null;
@@ -44,6 +45,9 @@ export function AppHeader() {
             <button
               onClick={() => setShowAccountMenu(!showAccountMenu)}
               className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-emerald-900/50 transition-colors"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded={showAccountMenu}
             >
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <User size={18} weight="fill" className="text-white" />
@@ -104,8 +108,8 @@ export function AppHeader() {
                     <div className="p-3">
                       <button
                         onClick={() => {
-                          disconnect();
                           setShowAccountMenu(false);
+                          setShowDisconnectConfirm(true);
                         }}
                         className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
@@ -120,6 +124,19 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDisconnectConfirm}
+        onOpenChange={setShowDisconnectConfirm}
+        title="Disconnect wallet?"
+        description="You will be signed out of Maya Wallet and need to reconnect your Polkadot.js account to continue."
+        confirmLabel="Disconnect"
+        destructive
+        onConfirm={() => {
+          disconnect();
+          setShowDisconnectConfirm(false);
+        }}
+      />
     </header>
   );
 }

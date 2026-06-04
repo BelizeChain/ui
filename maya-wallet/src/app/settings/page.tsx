@@ -18,6 +18,7 @@ import {
   Fingerprint,
 } from 'phosphor-react';
 import Link from 'next/link';
+import { ConfirmDialog } from '@/components/ui';
 
 export default function SettingsPage() {
   const { selectedAccount, disconnect } = useWallet();
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const [analytics, setAnalytics] = useState(true);
   const [currency, setCurrency] = useState('USD');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   const handleSaveSettings = () => {
     setShowSuccess(true);
@@ -269,7 +271,7 @@ export default function SettingsPage() {
           <Button
             variant="outline"
             className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10"
-            onClick={disconnect}
+            onClick={() => setShowSignOutConfirm(true)}
           >
             <SignOut size={20} className="mr-2" />
             Sign Out
@@ -291,6 +293,19 @@ export default function SettingsPage() {
           </div>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={showSignOutConfirm}
+        onOpenChange={setShowSignOutConfirm}
+        title="Sign out of Maya Wallet?"
+        description="You will be disconnected and need to reconnect your Polkadot.js account to sign back in."
+        confirmLabel="Sign Out"
+        destructive
+        onConfirm={() => {
+          disconnect();
+          setShowSignOutConfirm(false);
+        }}
+      />
     </div>
   );
 }
