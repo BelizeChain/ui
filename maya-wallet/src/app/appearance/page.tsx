@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,12 +15,78 @@ import {
   Image as ImageIcon
 } from 'phosphor-react';
 
+const APPEARANCE_STORAGE_KEY = 'maya-appearance-settings';
+
+type AppearanceSettings = {
+  theme: 'light' | 'dark' | 'auto';
+  accentColor: string;
+  glassEffect: boolean;
+  animations: boolean;
+};
+
 export default function AppearancePage() {
   const router = useRouter();
   const [theme, setTheme] = useState<'light' | 'dark' | 'auto'>('light');
   const [accentColor, setAccentColor] = useState('forest');
   const [glassEffect, setGlassEffect] = useState(true);
   const [animations, setAnimations] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const raw = localStorage.getItem(APPEARANCE_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as AppearanceSettings;
+      if (parsed.theme === 'light' || parsed.theme === 'dark' || parsed.theme === 'auto') {
+        setTheme(parsed.theme);
+      }
+      if (typeof parsed.accentColor === 'string') {
+        setAccentColor(parsed.accentColor);
+      }
+      if (typeof parsed.glassEffect === 'boolean') {
+        setGlassEffect(parsed.glassEffect);
+      }
+      if (typeof parsed.animations === 'boolean') {
+        setAnimations(parsed.animations);
+      }
+    } catch {
+      // Ignore invalid saved settings and keep defaults.
+    }
+  }, []);
+
+  const applyTheme = (selectedTheme: 'light' | 'dark' | 'auto') => {
+    const root = document.documentElement;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const effectiveDark = selectedTheme === 'dark' || (selectedTheme === 'auto' && prefersDark);
+    root.classList.toggle('dark', effectiveDark);
+  };
+
+  const applyAppearanceSettings = (settings: AppearanceSettings) => {
+    const root = document.documentElement;
+    applyTheme(settings.theme);
+    root.dataset.mayaAccent = settings.accentColor;
+    root.classList.toggle('maya-no-glass', !settings.glassEffect);
+    root.classList.toggle('maya-reduced-motion', !settings.animations);
+  };
+
+  const saveSettings = () => {
+    const payload: AppearanceSettings = {
+      theme,
+      accentColor,
+      glassEffect,
+      animations,
+    };
+
+    localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem('maya-theme', theme === 'auto' ? 'light' : theme);
+    applyAppearanceSettings(payload);
+
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  };
 
   const themes = [
     { id: 'light', name: 'Light', icon: <Sun size={20} weight="fill" />, gradient: 'from-yellow-400 to-orange-500' },
@@ -58,6 +124,12 @@ export default function AppearancePage() {
       </div>
 
       <div className="p-4 space-y-6">
+        {saved && (
+          <GlassCard variant="dark" blur="sm" className="p-3 border border-emerald-500/30">
+            <p className="text-emerald-400 text-sm font-semibold text-center">Appearance settings saved.</p>
+          </GlassCard>
+        )}
+
         {/* Theme Selection */}
         <div>
           <h2 className="text-sm font-semibold text-gray-300 mb-3 px-2">Theme Mode</h2>
@@ -65,7 +137,7 @@ export default function AppearancePage() {
             {themes.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTheme(t.id as any)}
+                onClick={() => setTheme(t.id as 'light' | 'dark' | 'auto')}
                 className="relative"
               >
                 <GlassCard 
@@ -193,7 +265,10 @@ export default function AppearancePage() {
         </div>
 
         {/* Save Button */}
-        <button className="w-full py-4 bg-gradient-to-r from-forest-500 to-emerald-400 hover:from-forest-400 hover:to-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl">
+        <button
+          onClick={saveSettings}
+          className="w-full py-4 bg-gradient-to-r from-forest-500 to-emerald-400 hover:from-forest-400 hover:to-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl"
+        >
           Apply Changes
         </button>
       </div>

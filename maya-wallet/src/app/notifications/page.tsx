@@ -15,7 +15,7 @@ import {
   ChatCircle,
   Trash
 } from 'phosphor-react';
-import { getNotifications, markAsRead, clearAllNotifications, type WalletNotification } from '@/services/notifications';
+import { getNotifications, markAsRead, markAllAsRead, clearAllNotifications, type WalletNotification } from '@/services/notifications';
 
 const iconMap = {
   payment: Money,
@@ -44,6 +44,21 @@ export default function NotificationsPage() {
   const handleMarkAsRead = (id: string) => {
     markAsRead(id);
     loadNotifications();
+  };
+
+  const handleMarkAllAsRead = () => {
+    markAllAsRead();
+    loadNotifications();
+  };
+
+  const handleOpenNotification = (notification: WalletNotification) => {
+    if (!notification.read) {
+      markAsRead(notification.id);
+      loadNotifications();
+    }
+    if (notification.actionUrl) {
+      router.push(notification.actionUrl);
+    }
   };
 
   const handleClearAll = () => {
@@ -105,13 +120,23 @@ export default function NotificationsPage() {
 
         {/* Clear All Button */}
         {notifications.length > 0 && (
-          <button
-            onClick={handleClearAll}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-gray-800/50 border border-red-500/30 text-red-400 rounded-xl hover:bg-red-500/100/100/10 transition-colors"
-          >
-            <Trash size={20} weight="bold" />
-            <span className="font-medium">Clear All</span>
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={handleMarkAllAsRead}
+              disabled={unreadCount === 0}
+              className="flex items-center justify-center gap-2 py-3 bg-gray-800/50 border border-emerald-500/30 text-emerald-400 rounded-xl hover:bg-emerald-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Check size={20} weight="bold" />
+              <span className="font-medium">Mark All Read</span>
+            </button>
+            <button
+              onClick={handleClearAll}
+              className="flex items-center justify-center gap-2 py-3 bg-gray-800/50 border border-red-500/30 text-red-400 rounded-xl hover:bg-red-500/10 transition-colors"
+            >
+              <Trash size={20} weight="bold" />
+              <span className="font-medium">Clear All</span>
+            </button>
+          </div>
         )}
 
         {/* Notifications List */}
@@ -130,7 +155,8 @@ export default function NotificationsPage() {
               return (
                 <div
                   key={notification.id}
-                  className={`bg-gray-800/50 rounded-xl shadow-sm p-4 hover:bg-gray-800/70 transition-all border border-gray-700/30 ${
+                  onClick={() => handleOpenNotification(notification)}
+                  className={`bg-gray-800/50 rounded-xl shadow-sm p-4 hover:bg-gray-800/70 transition-all border border-gray-700/30 ${notification.actionUrl ? 'cursor-pointer' : ''} ${
                     !notification.read ? 'border-l-4 border-emerald-500' : ''
                   }`}
                 >
@@ -151,7 +177,10 @@ export default function NotificationsPage() {
                         <h3 className="font-semibold text-white">{notification.title}</h3>
                         {!notification.read && (
                           <button
-                            onClick={() => handleMarkAsRead(notification.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkAsRead(notification.id);
+                            }}
                             className="p-1 text-emerald-500 hover:bg-emerald-500/100/10 rounded-lg transition-colors flex-shrink-0"
                             title="Mark as read"
                           >

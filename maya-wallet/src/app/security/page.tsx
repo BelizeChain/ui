@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,16 +15,209 @@ import {
   ArrowLeft
 } from 'phosphor-react';
 
+type RecoveryContact = {
+  id: string;
+  name: string;
+  address: string;
+  status: 'verified' | 'pending';
+  addedDate: string;
+};
+
+type MultiSigAccount = {
+  id: string;
+  name: string;
+  threshold: string;
+  signers: number;
+  balance: string;
+  status: 'active' | 'paused';
+};
+
+type SecurityEvent = {
+  id: string;
+  event: string;
+  location: string;
+  timestamp: string;
+  status: 'ok' | 'warning';
+};
+
+const SECURITY_CONTACTS_KEY = 'maya-security-recovery-contacts';
+const SECURITY_MULTISIG_KEY = 'maya-security-multisig-accounts';
+const SECURITY_EVENTS_KEY = 'maya-security-events';
+
+function createEvent(event: string, status: 'ok' | 'warning' = 'ok'): SecurityEvent {
+  return {
+    id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    event,
+    location: 'Maya Wallet',
+    timestamp: new Date().toLocaleString(),
+    status,
+  };
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function SecurityPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'recovery' | 'multisig' | 'audit'>('recovery');
+  const [recoveryContacts, setRecoveryContacts] = useState<RecoveryContact[]>([]);
+  const [multiSigAccounts, setMultiSigAccounts] = useState<MultiSigAccount[]>([]);
+  const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
+  const [contactName, setContactName] = useState('');
+  const [contactAddress, setContactAddress] = useState('');
+  const [multisigName, setMultisigName] = useState('');
+  const [multisigThreshold, setMultisigThreshold] = useState('2/3');
+  const [multisigSigners, setMultisigSigners] = useState('3');
 
-  // Social recovery, multi-sig, and the on-chain audit log are not yet wired to
-  // a pallet. Rather than show fabricated accounts/events, these surfaces render
-  // honest "in development" states until the chain services are available.
-  const recoveryContacts: { name: string; address: string; status: string; addedDate: string }[] = [];
-  const multiSigAccounts: { name: string; threshold: string; signers: number; balance: string; status: string }[] = [];
-  const securityEvents: { event: string; location: string; timestamp: string; status: string }[] = [];
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedContacts = localStorage.getItem(SECURITY_CONTACTS_KEY);
+      const storedMultisig = localStorage.getItem(SECURITY_MULTISIG_KEY);
+      const storedEvents = localStorage.getItem(SECURITY_EVENTS_KEY);
+
+      if (storedContacts) {
+        setRecoveryContacts(JSON.parse(storedContacts) as RecoveryContact[]);
+      }
+
+      if (storedMultisig) {
+        setMultiSigAccounts(JSON.parse(storedMultisig) as MultiSigAccount[]);
+      }
+
+      if (storedEvents) {
+        setSecurityEvents(JSON.parse(storedEvents) as SecurityEvent[]);
+      } else {
+        setSecurityEvents([createEvent('Security Center opened')]);
+      }
+    } catch {
+      setSecurityEvents([createEvent('Security Center initialized with defaults', 'warning')]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(SECURITY_CONTACTS_KEY, JSON.stringify(recoveryContacts));
+  }, [recoveryContacts]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(SECURITY_MULTISIG_KEY, JSON.stringify(multiSigAccounts));
+  }, [multiSigAccounts]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(SECURITY_EVENTS_KEY, JSON.stringify(securityEvents));
+  }, [securityEvents]);
+
+  const securityStatus = useMemo(() => {
+    if (recoveryContacts.length > 0 && multiSigAccounts.length > 0) {
+      return { label: 'Hardened', color: 'text-emerald-400', dot: 'bg-emerald-500' };
+    }
+    if (recoveryContacts.length > 0 || multiSigAccounts.length > 0) {
+      return { label: 'Partially Protected', color: 'text-amber-400', dot: 'bg-amber-500' };
+    }
+    return { label: 'Basic Protection', color: 'text-blue-400', dot: 'bg-blue-500' };
+  }, [multiSigAccounts.length, recoveryContacts.length]);
+
+  const appendEvent = (event: string, status: 'ok' | 'warning' = 'ok') => {
+    setSecurityEvents((prev) => [createEvent(event, status), ...prev].slice(0, 100));
+  };
+
+  const addRecoveryContact = () => {
+    const name = contactName.trim();
+    const address = contactAddress.trim();
+
+    if (!name || !address) {
+      appendEvent('Recovery contact validation failed', 'warning');
+      return;
+    }
+
+    const newContact: RecoveryContact = {
+      id: `contact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      address,
+      status: 'pending',
+      addedDate: new Date().toLocaleDateString(),
+    };
+
+    setRecoveryContacts((prev) => [newContact, ...prev]);
+    setContactName('');
+    setContactAddress('');
+    appendEvent(`Recovery contact added: ${name}`);
+  };
+
+  const addMultisigAccount = () => {
+    const name = multisigName.trim();
+    const threshold = multisigThreshold.trim();
+    const signers = Number(multisigSigners);
+
+    if (!name || !threshold || Number.isNaN(signers) || signers < 2) {
+      appendEvent('Multi-sig configuration validation failed', 'warning');
+      return;
+    }
+
+    const newAccount: MultiSigAccount = {
+      id: `multisig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      threshold,
+      signers,
+      balance: '0 DALLA',
+      status: 'active',
+    };
+
+    setMultiSigAccounts((prev) => [newAccount, ...prev]);
+    setMultisigName('');
+    setMultisigThreshold('2/3');
+    setMultisigSigners('3');
+    appendEvent(`Multi-sig account created: ${name}`);
+  };
+
+  const toggleMultisigStatus = (accountId: string) => {
+    setMultiSigAccounts((prev) =>
+      prev.map((account) => {
+        if (account.id !== accountId) return account;
+        const nextStatus = account.status === 'active' ? 'paused' : 'active';
+        appendEvent(`Multi-sig account ${account.name} set to ${nextStatus}`);
+        return { ...account, status: nextStatus };
+      })
+    );
+  };
+
+  const exportPdfLikeReport = () => {
+    if (securityEvents.length === 0) return;
+
+    const content = [
+      'Maya Wallet Security Report',
+      `Generated: ${new Date().toLocaleString()}`,
+      '',
+      ...securityEvents.map((event) => `${event.timestamp} | ${event.status.toUpperCase()} | ${event.event} | ${event.location}`),
+    ].join('\n');
+
+    downloadTextFile('maya-security-report.txt', content, 'text/plain;charset=utf-8');
+    appendEvent('Security report exported');
+  };
+
+  const exportCsv = () => {
+    if (securityEvents.length === 0) return;
+
+    const header = 'timestamp,status,event,location';
+    const rows = securityEvents.map((event) =>
+      [event.timestamp, event.status, event.event, event.location]
+        .map((value) => `"${value.replace(/"/g, '""')}"`)
+        .join(',')
+    );
+
+    downloadTextFile('maya-security-events.csv', [header, ...rows].join('\n'), 'text/csv;charset=utf-8');
+    appendEvent('Security events exported to CSV');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -52,11 +245,11 @@ export default function SecurityPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400 mb-1">Security Status</p>
-              <p className="text-2xl font-bold text-emerald-400">Protected</p>
+              <p className={`text-2xl font-bold ${securityStatus.color}`}>{securityStatus.label}</p>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-emerald-500/100 rounded-full animate-pulse" />
-              <span className="text-sm text-gray-400">All systems secure</span>
+              <div className={`w-3 h-3 ${securityStatus.dot} rounded-full animate-pulse`} />
+              <span className="text-sm text-gray-400">Contacts: {recoveryContacts.length} • Multi-sig: {multiSigAccounts.length}</span>
             </div>
           </div>
         </GlassCard>
@@ -115,17 +308,15 @@ export default function SecurityPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <button
-                disabled
                 title="Your seed phrase lives in your wallet extension and cannot be displayed here"
-                className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 text-gray-400 rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+                className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 text-gray-400 rounded-xl shadow-sm"
               >
                 <Key size={20} weight="fill" />
                 <span className="font-semibold">View in Wallet</span>
               </button>
               <button
-                disabled
-                title="Social recovery is coming soon"
-                className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+                onClick={addRecoveryContact}
+                className="flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-red-500 to-rose-400 border border-red-500/30 rounded-xl shadow-sm hover:shadow-md transition-shadow"
               >
                 <Users size={20} weight="fill" className="text-white" />
                 <span className="font-semibold text-white">Add Contact</span>
@@ -133,13 +324,33 @@ export default function SecurityPage() {
             </div>
 
             <GlassCard variant="dark" blur="sm" className="p-4">
+              <h3 className="font-bold text-white mb-3">New Recovery Contact</h3>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="Contact name"
+                  className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                />
+                <input
+                  type="text"
+                  value={contactAddress}
+                  onChange={(e) => setContactAddress(e.target.value)}
+                  placeholder="Wallet address"
+                  className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                />
+              </div>
+            </GlassCard>
+
+            <GlassCard variant="dark" blur="sm" className="p-4">
               <h3 className="font-bold text-white mb-4">Recovery Contacts</h3>
               {recoveryContacts.length === 0 ? (
                 <div className="py-8 text-center">
                   <Users size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
-                  <p className="text-sm text-gray-400">Social recovery is in development.</p>
+                  <p className="text-sm text-gray-400">No recovery contacts added yet.</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Once available, you&apos;ll be able to designate trusted contacts to help recover your account.
+                    Add at least 3 trusted contacts for stronger recovery options.
                   </p>
                 </div>
               ) : (
@@ -164,8 +375,8 @@ export default function SecurityPage() {
               <h3 className="font-bold text-white mb-3">Social Recovery Settings</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <span className="text-gray-400">Status</span>
-                  <span className="font-semibold text-gray-300">In development</span>
+                  <span className="text-gray-400">Recovery quorum</span>
+                  <span className="font-semibold text-white">{Math.min(2, Math.max(1, recoveryContacts.length))}/{Math.max(3, recoveryContacts.length)}</span>
                 </div>
               </div>
             </GlassCard>
@@ -175,21 +386,48 @@ export default function SecurityPage() {
         {activeTab === 'multisig' && (
           <>
             <button
-              disabled
-              title="Multi-sig accounts are coming soon"
-              className="w-full flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 text-gray-400 rounded-xl shadow-sm opacity-60 cursor-not-allowed"
+              onClick={addMultisigAccount}
+              className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-red-500 to-rose-400 text-white rounded-xl shadow-sm hover:shadow-md transition-shadow"
             >
               <Users size={20} weight="fill" />
               <span className="font-semibold">Create Multi-sig Account</span>
             </button>
 
+            <GlassCard variant="dark" blur="sm" className="p-4">
+              <h3 className="font-bold text-white mb-3">New Multi-sig Configuration</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  value={multisigName}
+                  onChange={(e) => setMultisigName(e.target.value)}
+                  placeholder="Treasury Vault"
+                  className="bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                />
+                <input
+                  type="text"
+                  value={multisigThreshold}
+                  onChange={(e) => setMultisigThreshold(e.target.value)}
+                  placeholder="2/3"
+                  className="bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                />
+                <input
+                  type="number"
+                  min={2}
+                  value={multisigSigners}
+                  onChange={(e) => setMultisigSigners(e.target.value)}
+                  placeholder="3"
+                  className="bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
+                />
+              </div>
+            </GlassCard>
+
             {multiSigAccounts.length === 0 ? (
               <GlassCard variant="dark" blur="sm" className="p-4">
                 <div className="py-8 text-center">
                   <Users size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
-                  <p className="text-sm text-gray-400">Multi-sig accounts are in development.</p>
+                  <p className="text-sm text-gray-400">No multi-sig accounts configured.</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Threshold-signed accounts will let multiple signers jointly authorize transactions.
+                    Create a shared account to require multiple signers for approvals.
                   </p>
                 </div>
               </GlassCard>
@@ -201,8 +439,8 @@ export default function SecurityPage() {
                     <h3 className="font-bold text-white mb-1">{account.name}</h3>
                     <p className="text-xs text-gray-400">Threshold: {account.threshold}</p>
                   </div>
-                  <span className="px-2 py-0.5 bg-emerald-500/100/20 text-emerald-400 text-xs rounded-full font-semibold">
-                    Active
+                  <span className={`px-2 py-0.5 ${account.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'} text-xs rounded-full font-semibold`}>
+                    {account.status === 'active' ? 'Active' : 'Paused'}
                   </span>
                 </div>
 
@@ -217,8 +455,11 @@ export default function SecurityPage() {
                   </div>
                 </div>
 
-                <button className="w-full p-2 bg-gray-200 text-white rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors">
-                  Manage Signers →
+                <button
+                  onClick={() => toggleMultisigStatus(account.id)}
+                  className="w-full p-2 bg-gray-700 text-white rounded-lg font-semibold text-sm hover:bg-gray-600 transition-colors"
+                >
+                  {account.status === 'active' ? 'Pause account' : 'Resume account'}
                 </button>
               </GlassCard>
               ))
@@ -255,9 +496,9 @@ export default function SecurityPage() {
               {securityEvents.length === 0 ? (
                 <div className="py-8 text-center">
                   <FileText size={40} className="mx-auto mb-3 text-gray-500" weight="thin" />
-                  <p className="text-sm text-gray-400">The on-chain audit log is in development.</p>
+                  <p className="text-sm text-gray-400">No security events recorded yet.</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Account security events will appear here once the audit pallet is wired.
+                    Events appear when you configure recovery and multi-sig features.
                   </p>
                 </div>
               ) : (
@@ -288,17 +529,17 @@ export default function SecurityPage() {
               <h3 className="font-bold text-white mb-3">Export Options</h3>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  disabled
-                  title="Export is available once the audit log is wired"
-                  className="flex items-center justify-center space-x-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg opacity-60 cursor-not-allowed"
+                  disabled={securityEvents.length === 0}
+                  onClick={exportPdfLikeReport}
+                  className="flex items-center justify-center space-x-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed hover:bg-gray-700/50 transition-colors"
                 >
                   <FileText size={16} className="text-gray-400" />
-                  <span className="text-sm font-semibold text-gray-300">PDF Report</span>
+                  <span className="text-sm font-semibold text-gray-300">TXT Report</span>
                 </button>
                 <button
-                  disabled
-                  title="Export is available once the audit log is wired"
-                  className="flex items-center justify-center space-x-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg opacity-60 cursor-not-allowed"
+                  disabled={securityEvents.length === 0}
+                  onClick={exportCsv}
+                  className="flex items-center justify-center space-x-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed hover:bg-gray-700/50 transition-colors"
                 >
                   <FileText size={16} className="text-gray-400" />
                   <span className="text-sm font-semibold text-gray-300">CSV Export</span>

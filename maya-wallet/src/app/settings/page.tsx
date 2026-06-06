@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, Switch, Select, Button, Badge, Alert, useWallet, useI18n } from '@belizechain/shared';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
@@ -19,6 +19,14 @@ import {
 } from 'phosphor-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/ui';
+import {
+  getNotificationPreferences,
+  saveNotificationPreferences,
+  getSecuritySettings,
+  saveSecuritySettings,
+  getWalletPreferences,
+  saveWalletPreferences,
+} from '@/services/settings';
 
 export default function SettingsPage() {
   const { selectedAccount, disconnect } = useWallet();
@@ -32,7 +40,22 @@ export default function SettingsPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
+  useEffect(() => {
+    const notifPrefs = getNotificationPreferences();
+    const securitySettings = getSecuritySettings();
+    const walletPrefs = getWalletPreferences();
+    setNotifications(notifPrefs.pushEnabled);
+    setBiometric(securitySettings.biometric);
+    setAnalytics(securitySettings.analytics);
+    setCurrency(walletPrefs.currency);
+  }, []);
+
   const handleSaveSettings = () => {
+    const notifPrefs = getNotificationPreferences();
+    saveNotificationPreferences({ ...notifPrefs, pushEnabled: notifications });
+    const securitySettings = getSecuritySettings();
+    saveSecuritySettings({ ...securitySettings, biometric, analytics });
+    saveWalletPreferences({ currency, pushNotifications: notifications });
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
