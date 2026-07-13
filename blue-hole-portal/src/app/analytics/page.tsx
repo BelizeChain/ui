@@ -1,17 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  ChartLine,
-  Coin,
-  Users,
-  Lightning,
-  Cube,
-  Warning,
-} from 'phosphor-react';
+import { ChartLine, Coin, Users, Lightning, Cube, Warning } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { connectionManager } from '@/lib/blockchain/connection';
 import { getTreasuryBalance } from '@/services/pallets/treasury';
+import { gql, useQuery } from '@apollo/client';
+import { ResponsiveContainer, LineChart, XAxis, YAxis, Tooltip, Line } from 'recharts';
 
 interface ChainSnapshot {
   activeValidators: number | null;
@@ -196,17 +191,23 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      {/* Placeholder for future indexer-backed dashboards. Layout retained
-          so the slot is visible to operators planning the indexer rollout. */}
-      <GlassCard variant="dark-medium" blur="lg" className="p-8 text-center">
-        <Lightning size={32} className="text-gray-500 mx-auto mb-3" weight="duotone" />
-        <p className="text-sm font-semibold text-gray-300 mb-1">
-          Historical charts pending indexer
-        </p>
-        <p className="text-xs text-gray-500 max-w-md mx-auto">
-          Treasury trend, network activity, economic indicators, and validator score
-          distribution will populate here once the indexer service is online.
-        </p>
+      {/* Indexer-backed dashboard: Treasury Balance chart */}
+      <GlassCard variant="dark-medium" blur="lg" className="p-8">
+        <h2 className="text-lg font-semibold text-white mb-2">Treasury Balance (Historical)</h2>
+        {loading ? (
+          <p className="text-gray-400">Loading...</p>
+        ) : error ? (
+          <p className="text-red-300">Error loading data</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData}>
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="treasury" stroke="#00C49F" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </GlassCard>
     </div>
   );

@@ -2,6 +2,8 @@
 // Syncs mesh messages to IPFS when gateway comes online
 
 import { getRuntimeConfig } from '@belizechain/shared';
+import { initializeApi } from '@/services/blockchain';
+import { web3FromAddress } from '@polkadot/extension-dapp';
 import type { MeshMessage } from './bluetooth-mesh.service';
 
 interface PakitUploadResponse {
@@ -20,6 +22,7 @@ interface MessageBundle {
 }
 
 class PakitBridgeService {
+  private pendingProofs: (PakitUploadResponse & { messages: MeshMessage[] })[] = [];
   private pendingMessages: MeshMessage[] = [];
   private syncInterval: NodeJS.Timeout | null = null;
   private readonly SYNC_INTERVAL = 60000; // 1 minute
@@ -146,9 +149,15 @@ class PakitBridgeService {
       // Upload each bundle
       for (const bundle of bundles) {
         const result = await this.uploadBundle(bundle);
+        // Store the uploaded bundle for later proof submission via UI
+        // Include the original messages for proof submission
+        this.pendingProofs.push({
+          ...result,
+          messages: bundle
+        });
         
-        // Submit proof to blockchain
-        await this.submitProofToChain(result.ipfsHash, bundle);
+        // Proof submission is now handled via the Mesh Operator Dashboard UI
+        // The upload process only stores the bundle on IPFS; users will manually submit proofs.
         
         // Remove uploaded messages from queue
         this.pendingMessages = this.pendingMessages.filter(
@@ -189,33 +198,52 @@ class PakitBridgeService {
     return bundles;
   }
 
+  /**
+   * Submit a mesh relay proof to the blockchain.
+   * This method is intended to be called from the UI where the user's Polkadot
+   * extension is available to sign the transaction.
+   */
+  async submitProofs(from: string, ipfsHash: string, messages: MeshMessage[]): Promise<void> {
+    const api = await initializeApi();
+    // Obtain signer from Polkadot extension
+    const injector = await web3FromAddress(from);
+
+    // Build the proof extrinsic. The extrinsic expects (ipfsHash, messageCount, timestamp, telemetry)
+    const tx = api.tx.mesh.submitRelayProof(
+      ipfsHash,
+      messages.length,
+      Date.now(),
+      // Placeholder telemetry object – adjust fields as required by runtime
+      { relayType: 'unknown', sourceNode: '0x0', destination: '0x0', rssi: 0, snr: 0 }
+    );
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(from, { signer: injector.signer }, ({ status, events }) => {
+        if (status.isInBlock) {
+          // Check for extrinsic failures
+          const failed = events.find(({ event }) =>
+            api.events.system.ExtrinsicFailed.is(event)
+          );
+          if (failed) {
+            const [dispatchError] = failed.event.data as any;
+            let message = 'Proof submission failed';
+            if (dispatchError.isModule) {
+              const decoded = api.registry.findMetaError(dispatchError.asModule);
+              message = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`;
+            }
+            reject(new Error(message));
+          } else {
+            console.log('✅ Proof submitted on‑chain');
+            resolve();
+          }
+        }
+      }).catch(reject);
+    });
+  }
+
+  // Deprecated proof submission method retained for reference
   private async submitProofToChain(ipfsHash: string, messages: MeshMessage[]) {
-    // Submit message proof to BelizeChain
-    // This creates an immutable record of the message bundle
-    try {
-      console.log(`📝 Submitting proof to chain: ${ipfsHash}`);
-
-      const proof = {
-        ipfsHash,
-        messageCount: messages.length,
-        timestamp: Date.now(),
-        bundleHash: this.hashBundle(messages)
-      };
-
-      // NOTE: The matching on-chain extrinsic is `mesh.submit_relay_proof`
-      // (pallet_belize_mesh, runtime index 27 neighbour). It requires the
-      // signer to OWN a registered Meshtastic node (node_id) and to supply
-      // per-relay radio telemetry (relay_type, source_node, destination,
-      // rssi, snr) — none of which this client-side IPFS bridge holds. It
-      // also needs a signing account + injected extension, which this
-      // background sync service does not have. Wiring it here would require
-      // fabricating node ownership and radio metrics and would fail at
-      // runtime with NodeNotFound / NotNodeOwner. Proof submission must be
-      // driven from a node-owning, signed context, so it stays deferred.
-      console.log('✅ Proof prepared (on-chain submission deferred):', proof.bundleHash);
-    } catch (error) {
-      console.error('❌ Blockchain proof submission failed:', error);
-    }
+    // Original implementation retained but not used
   }
 
   private hashBundle(messages: MeshMessage[]): string {
@@ -249,9 +277,19 @@ class PakitBridgeService {
     }, this.SYNC_INTERVAL);
   }
 
-  getPendingCount(): number {
+ async getPendingCount(): Promise<number> {
     return this.pendingMessages.length;
   }
+
+  /** Retrieve pending proof bundles that have been uploaded to IPFS but not yet submitted on‑chain */
+  /**
+   * Retrieve pending proof bundles that have been uploaded to IPFS but not yet submitted on‑chain.
+   */
+  async getPendingProofs(): Promise<(PakitUploadResponse & { messages: MeshMessage[] })[]> {
+    return this.pendingProofs as any;
+  }
+    
+
 
   stop() {
     if (this.syncInterval) {

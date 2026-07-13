@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, useI18n } from '@belizechain/shared';
 import { TransactionIndexer, type Transaction } from '@belizechain/shared';
 import { initializeApi } from '@/services/blockchain';
-import {
+import { LeaderboardCard } from '@/components/community/LeaderboardCard';
   getActiveProposals,
   getVotingHistory,
   getKYCStatus,
@@ -243,6 +243,12 @@ export function DashboardHome() {
             {/* Quick Actions */}
       <div className="px-4 -mt-24 mb-6">
         <div className="grid grid-cols-3 gap-3">
+          {/* Existing Quick Actions */}
+        </div>
+        {/* Community Leaderboard */}
+        <div className="mt-6 px-4">
+          <LeaderboardCard />
+        </div>
           <QuickActionCard
             icon={<PaperPlaneTilt size={28} weight="fill" />}
             label={t.wallet.send}
