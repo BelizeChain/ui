@@ -73,8 +73,14 @@ export class PakitClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Pakit upload failed: ${error}`);
+      let errorMessage = response.statusText;
+      try {
+        const errorJson = await response.json();
+        errorMessage = errorJson.detail?.message || errorJson.detail || JSON.stringify(errorJson);
+      } catch (e) {
+        errorMessage = await response.text() || errorMessage;
+      }
+      throw new Error(`Pakit upload failed: ${errorMessage}`);
     }
 
     return response.json();

@@ -47,6 +47,12 @@ export default function TradePage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('swap');
 
+  // Liquidity state
+  const [baseLpAmount, setBaseLpAmount] = useState('');
+  const [quoteLpAmount, setQuoteLpAmount] = useState('');
+  const [lpProcessing, setLpProcessing] = useState(false);
+  const [myLpBalance, setMyLpBalance] = useState<bigint>(0n);
+
   const refreshPairs = useCallback(async () => {
     try {
       const list = await belizexService.getTradingPairs();
@@ -70,6 +76,26 @@ export default function TradePage() {
     const interval = setInterval(refreshPairs, 15000);
     return () => clearInterval(interval);
   }, [refreshPairs]);
+
+  useEffect(() => {
+    async function fetchLpBalance() {
+      if (!selectedAccount || !currentPair) {
+        setMyLpBalance(0n);
+        return;
+      }
+      try {
+        const bal = await belizexService.getLpBalance(
+          selectedAccount.address,
+          currentPair.baseAsset,
+          currentPair.quoteAsset
+        );
+        setMyLpBalance(bal);
+      } catch {
+        setMyLpBalance(0n);
+      }
+    }
+    fetchLpBalance();
+  }, [selectedAccount, currentPair, txHash]);
 
   const currentPair = useMemo(
     () => pairs.find((p) => pairKey(p) === selectedPair) ?? null,
@@ -128,6 +154,52 @@ export default function TradePage() {
     setBaseToQuote((v) => !v);
     setAmount('');
     setQuote(null);
+  };
+
+  const handleAddLiquidity = async () => {
+    if (!selectedAccount || !currentPair || !fromAsset || !toAsset) return;
+    setLpProcessing(true);
+    setTxHash(null);
+    try {
+      const result = await belizexService.addLiquidity(
+        selectedAccount.address,
+        currentPair.baseAsset,
+        currentPair.quoteAsset,
+        baseLpAmount,
+        quoteLpAmount,
+        '0'
+      );
+      setTxHash(result.hash);
+      setBaseLpAmount('');
+      setQuoteLpAmount('');
+      await refreshPairs();
+    } catch (err: any) {
+      setQuoteError(err?.message ?? 'Add liquidity failed');
+    } finally {
+      setLpProcessing(false);
+    }
+  };
+
+  const handleRemoveLiquidity = async () => {
+    if (!selectedAccount || !currentPair || myLpBalance === 0n) return;
+    setLpProcessing(true);
+    setTxHash(null);
+    try {
+      const result = await belizexService.removeLiquidity(
+        selectedAccount.address,
+        currentPair.baseAsset,
+        currentPair.quoteAsset,
+        belizexService.fromPlanck(myLpBalance, 12),
+        '0',
+        '0'
+      );
+      setTxHash(result.hash);
+      await refreshPairs();
+    } catch (err: any) {
+      setQuoteError(err?.message ?? 'Remove liquidity failed');
+    } finally {
+      setLpProcessing(false);
+    }
   };
 
   if (loading) {
@@ -191,6 +263,7 @@ export default function TradePage() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="swap">Swap</TabsTrigger>
+              <TabsTrigger value="pools">Pools</TabsTrigger>
               <TabsTrigger value="pairs">Pairs</TabsTrigger>
             </TabsList>
 
@@ -388,6 +461,105 @@ export default function TradePage() {
                   </GlassCard>
                 ))}
               </div>
+            </TabsContent>
+
+            <TabsContent value="pools" className="mt-4">
+              <GlassCard variant="dark-medium" blur="lg" className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-semibold text-white">Provide Liquidity</h2>
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-sm text-gray-400 mb-2 block font-medium">Pool Pair</label>
+                  <select
+                    value={selectedPair ?? ''}
+                    onChange={(e) => {
+                      setSelectedPair(e.target.value);
+                      setBaseLpAmount('');
+                      setQuoteLpAmount('');
+                    }}
+                    className="w-full bg-gray-800/80 text-white px-4 py-2 rounded-lg border border-gray-700"
+                  >
+                    {pairs.map((p) => (
+                      <option key={pairKey(p)} value={pairKey(p)} disabled={!p.active}>
+                        {p.baseAsset}/{p.quoteAsset}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-3">
+                  <label className="text-sm text-gray-400 mb-2 block font-medium">Deposit {currentPair?.baseAsset ?? 'Base'}</label>
+                  <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="number"
+                        value={baseLpAmount}
+                        onChange={(e) => setBaseLpAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="flex-1 bg-transparent text-2xl font-bold text-white outline-none placeholder-gray-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="text-sm text-gray-400 mb-2 block font-medium">Deposit {currentPair?.quoteAsset ?? 'Quote'}</label>
+                  <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="number"
+                        value={quoteLpAmount}
+                        onChange={(e) => setQuoteLpAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="flex-1 bg-transparent text-2xl font-bold text-white outline-none placeholder-gray-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {quoteError && (
+                  <div className="bg-red-500/10 border border-red-500/40 text-red-300 text-sm rounded-lg p-3 mb-4">
+                    {quoteError}
+                  </div>
+                )}
+
+                {txHash && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-sm rounded-lg p-3 mb-4 break-all">
+                    Liquidity processed: {txHash}
+                  </div>
+                )}
+
+                {!isConnected ? (
+                  <ConnectWalletPrompt message="Connect wallet to add liquidity" />
+                ) : (
+                  <button
+                    onClick={handleAddLiquidity}
+                    disabled={!baseLpAmount || !quoteLpAmount || lpProcessing}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+                  >
+                    <Vault size={20} weight="fill" />
+                    <span>{lpProcessing ? 'Processing...' : 'Add Liquidity'}</span>
+                  </button>
+                )}
+
+                <div className="border-t border-gray-700/50 pt-6">
+                  <h3 className="text-md font-semibold text-white mb-2">My Active Position</h3>
+                  <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30 flex justify-between items-center">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">LP Tokens</p>
+                      <p className="font-bold text-emerald-400">{belizexService.fromPlanck(myLpBalance, 4)}</p>
+                    </div>
+                    <button 
+                      onClick={handleRemoveLiquidity}
+                      disabled={myLpBalance === 0n || lpProcessing || !isConnected}
+                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      Remove Liquidity
+                    </button>
+                  </div>
+                </div>
+              </GlassCard>
             </TabsContent>
           </Tabs>
         </GlassCard>

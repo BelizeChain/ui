@@ -42,6 +42,10 @@ export default defineConfig({
     // Collect trace on failure
     trace: 'on-first-retry',
     
+    launchOptions: {
+      executablePath: '/snap/bin/chromium',
+    },
+    
     // Screenshot on failure
     screenshot: 'only-on-failure',
     
@@ -62,7 +66,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        channel: 'chromium'
+      },
     },
     // Uncomment for cross-browser testing
     // {
@@ -77,15 +84,18 @@ export default defineConfig({
     // Mobile viewports
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      use: { 
+        ...devices['Pixel 5'],
+        channel: 'chromium'
+      },
     },
   ],
 
-  // Run local dev server before tests (optional - assumes already running)
-  // webServer: {
-  //   command: 'npm run dev',
-  //   url: 'http://localhost:3001',
-  //   reuseExistingServer: !process.env.CI,
-  //   timeout: 120 * 1000,
-  // },
+  // Run local dev server before tests
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3001',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  },
 });

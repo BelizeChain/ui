@@ -34,53 +34,52 @@ function planckToDalla(planck: string): string {
   }
 }
 
-async function loadSnapshot(): Promise<ChainSnapshot> {
-  const api = await connectionManager.connect();
-
-  const [validatorsRaw, issuanceRaw, headRaw, finalizedHashRaw, treasury] =
-    await Promise.all([
-      (
-        api.query as unknown as { session: { validators: () => Promise<unknown> } }
-      ).session.validators(),
-      (
-        api.query as unknown as {
-          balances: { totalIssuance: () => Promise<{ toString(): string }> };
-        }
-      ).balances.totalIssuance(),
-      (api.rpc as unknown as { chain: { getHeader: () => Promise<{ number: { toNumber(): number } }> } })
-        .chain.getHeader(),
-      (api.rpc as unknown as { chain: { getFinalizedHead: () => Promise<{ toString(): string }> } })
-        .chain.getFinalizedHead(),
-      getTreasuryBalance(),
-    ]);
-
-  const validators = validatorsRaw as { length: number } | { toJSON: () => unknown[] };
-  const activeValidators =
-    'length' in validators
-      ? validators.length
-      : Array.isArray(validators.toJSON())
-      ? (validators.toJSON() as unknown[]).length
-      : 0;
-
-  const latestBlock = headRaw.number.toNumber();
-
-  const finalizedHeader = await (
-    api.rpc as unknown as {
-      chain: { getHeader: (hash: string) => Promise<{ number: { toNumber(): number } }> };
+async function loadSnapshot(): Promise<{ current: ChainSnapshot, history: any[] }> {
+  try {
+    const response = await fetch('http://localhost:4350/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          query {
+            networkSnapshots(limit: 20, orderBy: timestamp_DESC) {
+              activeValidators
+              treasuryDalla
+              totalIssuanceDalla
+              blockNumber
+              timestamp
+            }
+          }
+        `,
+      }),
+    });
+    
+    const result = await response.json();
+    const history = result.data?.networkSnapshots || [];
+    const data = history[0];
+    
+    if (data) {
+      return {
+        current: {
+          activeValidators: data.activeValidators,
+          treasuryDalla: planckToDalla(data.treasuryDalla),
+          totalIssuanceDalla: planckToDalla(data.totalIssuanceDalla),
+          latestBlock: data.blockNumber,
+          finalizedBlock: data.blockNumber,
+        },
+        history
+      };
     }
-  ).chain.getHeader(finalizedHashRaw.toString());
-
-  return {
-    activeValidators,
-    treasuryDalla: treasury.freeDalla,
-    totalIssuanceDalla: planckToDalla(issuanceRaw.toString()),
-    latestBlock,
-    finalizedBlock: finalizedHeader.number.toNumber(),
-  };
+  } catch (error) {
+    console.error('Failed to fetch from indexer:', error);
+  }
+  
+  return { current: EMPTY, history: [] };
 }
 
 export default function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<ChainSnapshot>(EMPTY);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,9 +88,10 @@ export default function AnalyticsPage() {
 
     async function tick() {
       try {
-        const next = await loadSnapshot();
+        const { current, history: hist } = await loadSnapshot();
         if (cancelled) return;
-        setSnapshot(next);
+        setSnapshot(current);
+        setHistory(hist);
         setError(null);
       } catch (err) {
         if (cancelled) return;
@@ -200,7 +200,10 @@ export default function AnalyticsPage() {
           <p className="text-red-300">Error loading data</p>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={snapshot.treasuryDalla ? [{ date: 'Current', treasury: Number(snapshot.treasuryDalla.replace(/,/g, '')) || 0 }] : []}>
+            <LineChart data={[...history].reverse().map(h => ({
+              date: new Date(h.timestamp).toLocaleTimeString(),
+              treasury: Number(planckToDalla(h.treasuryDalla).replace(/,/g, '')) || 0
+            }))}>
               <XAxis dataKey="date" />
               <YAxis />
               <Tooltip />

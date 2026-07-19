@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import * as bnsService from '@/services/pallets/bns';
+import { getPakitClient } from '@belizechain/shared';
 import {
   GlobeHemisphereWest,
   MagnifyingGlass,
@@ -29,6 +30,12 @@ export default function BNSPage() {
   const [hostingStats, setHostingStats] = useState({ totalSites: 0, storage: '0 GB' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Deployment states
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployDomain, setDeployDomain] = useState<string>('');
+  const [deployFile, setDeployFile] = useState<File | null>(null);
+  const [deployStatus, setDeployStatus] = useState<string | null>(null);
 
   // Fetch user domains and marketplace from blockchain
   useEffect(() => {
@@ -73,6 +80,49 @@ export default function BNSPage() {
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [selectedAccount]);
+
+  const handleDeploy = async () => {
+    if (!selectedAccount || !deployDomain || !deployFile) return;
+
+    setIsDeploying(true);
+    setDeployStatus('Uploading to Pakit IPFS...');
+    setError(null);
+
+    try {
+      // 1. Upload to Pakit Storage
+      const pakitClient = getPakitClient();
+      const uploadResult = await pakitClient.upload(deployFile, {
+        storage: 'ipfs',
+        compress: true,
+        tags: {
+          owner: selectedAccount.address,
+          category: 'CDN',
+          domain: deployDomain
+        }
+      });
+
+      // 2. Link hash to domain via blockchain
+      setDeployStatus('Linking hash on-chain...');
+      const txResult = await bnsService.hostWebsite(
+        selectedAccount.address,
+        deployDomain,
+        uploadResult.cid,
+        uploadResult.hash
+      );
+
+      setDeployStatus(`Success! Hash: ${txResult.hash}`);
+      setDeployFile(null);
+      
+      // Clear status after 5s
+      setTimeout(() => setDeployStatus(null), 5000);
+    } catch (err: any) {
+      console.error('Deploy failed:', err);
+      setError(err.message || 'Deployment failed');
+      setDeployStatus(null);
+    } finally {
+      setIsDeploying(false);
+    }
+  };
 
   // Format date
   const formatDate = (timestamp: number) => {
@@ -320,10 +370,54 @@ export default function BNSPage() {
               </div>
             </GlassCard>
 
-            <button className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl shadow-lg">
-              <Plus size={20} weight="fill" />
-              <span className="font-semibold">Deploy New Site</span>
-            </button>
+            <GlassCard variant="dark" blur="sm" className="p-4 mt-4">
+              <h3 className="font-bold text-white mb-4">Deploy New Site</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-gray-400 block mb-2">Select Domain</label>
+                  <select 
+                    value={deployDomain}
+                    onChange={(e) => setDeployDomain(e.target.value)}
+                    className="w-full bg-gray-800/80 text-white px-4 py-3 rounded-xl border border-gray-700 outline-none"
+                    disabled={isDeploying}
+                  >
+                    <option value="">-- Choose a domain --</option>
+                    {myDomains.map(d => (
+                      <option key={d.name} value={d.name}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 block mb-2">Website Bundle (ZIP or index.html)</label>
+                  <input
+                    type="file"
+                    accept=".zip,.html,.htm"
+                    onChange={(e) => setDeployFile(e.target.files?.[0] || null)}
+                    className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500/10 file:text-indigo-400 hover:file:bg-indigo-500/20"
+                    disabled={isDeploying}
+                  />
+                </div>
+
+                {deployStatus && (
+                  <div className={`p-3 rounded-lg text-sm font-semibold ${
+                    deployStatus.includes('Success') ? 'bg-emerald-500/10 text-emerald-400' : 'bg-indigo-500/10 text-indigo-400'
+                  }`}>
+                    {deployStatus}
+                  </div>
+                )}
+
+                <button 
+                  onClick={handleDeploy}
+                  disabled={!deployDomain || !deployFile || isDeploying}
+                  className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <Plus size={20} weight="fill" />
+                  <span className="font-semibold">{isDeploying ? 'Deploying...' : 'Deploy to CDN'}</span>
+                </button>
+              </div>
+            </GlassCard>
           </>
         )}
       </div>

@@ -32,6 +32,58 @@ function I18nHydration({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ThemeHydration({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const applyTheme = () => {
+      const raw = localStorage.getItem('maya-appearance-settings');
+      let theme = 'light';
+      let accent = 'forest';
+      let glass = true;
+      let anim = true;
+
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          theme = parsed.theme ?? theme;
+          accent = parsed.accentColor ?? accent;
+          glass = parsed.glassEffect ?? glass;
+          anim = parsed.animations ?? anim;
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      const root = document.documentElement;
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const effectiveDark = theme === 'dark' || (theme === 'auto' && prefersDark);
+      
+      root.classList.toggle('dark', effectiveDark);
+      root.dataset.mayaAccent = accent;
+      root.classList.toggle('maya-no-glass', !glass);
+      root.classList.toggle('maya-reduced-motion', !anim);
+    };
+
+    applyTheme();
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => applyTheme();
+    mediaQuery.addEventListener('change', handleChange);
+    
+    // Also listen to local storage changes from appearance page
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'maya-appearance-settings') applyTheme();
+    });
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
+  }, []);
+
+  return <>{children}</>;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   // Future: Add ToastContainer when shared package exports compatible types
   // const { notifications, removeNotification } = useUIStore();
@@ -41,9 +93,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <WalletProvider>
         <ToastProvider>
           <MessagingProvider>
-            <I18nHydration>
-              {children}
-            </I18nHydration>
+            <ThemeHydration>
+              <I18nHydration>
+                {children}
+              </I18nHydration>
+            </ThemeHydration>
           </MessagingProvider>
         </ToastProvider>
       </WalletProvider>
