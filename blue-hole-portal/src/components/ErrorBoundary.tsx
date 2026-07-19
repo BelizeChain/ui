@@ -63,10 +63,69 @@ export class ErrorBoundary extends Component<Props, State> {
       this.props.onError(error, errorInfo);
     }
 
-    // Report to error tracking service (e.g., Sentry)
+    // Report to error tracking service (Sentry)
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
-      // TODO: Integrate with error tracking service
-      // Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
+      this.reportToSentry(error, errorInfo);
+    }
+  }
+
+  /**
+   * Send error to Sentry via its envelope API.
+   * Uses a lightweight fetch-based approach so we don't need @sentry/nextjs.
+   * Only fires when NEXT_PUBLIC_SENTRY_DSN is configured.
+   */
+  private reportToSentry(error: Error, errorInfo: ErrorInfo) {
+    const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+    if (!dsn) return;
+
+    try {
+      // Parse DSN: https://{key}@{host}/{project_id}
+      const url = new URL(dsn);
+      const projectId = url.pathname.replace('/', '');
+      const publicKey = url.username;
+      const sentryHost = url.hostname;
+
+      const envelope = JSON.stringify({
+        event_id: crypto.randomUUID().replace(/-/g, ''),
+        timestamp: new Date().toISOString(),
+        platform: 'javascript',
+        level: 'error',
+        environment: process.env.NODE_ENV || 'production',
+        exception: {
+          values: [{
+            type: error.name,
+            value: error.message,
+            stacktrace: error.stack ? {
+              frames: error.stack.split('\n').slice(1).map(line => ({
+                filename: line.trim(),
+              })),
+            } : undefined,
+          }],
+        },
+        contexts: {
+          react: {
+            componentStack: errorInfo.componentStack || undefined,
+          },
+          browser: {
+            name: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+          },
+        },
+        tags: {
+          app: 'blue-hole-portal',
+        },
+      });
+
+      const envelopeUrl = `https://${sentryHost}/api/${projectId}/store/?sentry_version=7&sentry_key=${publicKey}`;
+
+      fetch(envelopeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: envelope,
+      }).catch(() => {
+        // Silently fail — error tracking should never break the app
+      });
+    } catch {
+      // DSN parsing failed — silently ignore
     }
   }
 

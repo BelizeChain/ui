@@ -8,6 +8,7 @@ export * from './ui';
 export * from './WalletConnect';
 export * from './RuntimeEnvironmentBadge';
 export * from './ShellReadinessPanel';
+export * from './NetworkStatusIndicator';
 
 // i18n Components
 export * from './LanguageSwitcher';

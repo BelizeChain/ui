@@ -14,6 +14,7 @@
 import type { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { getUserFriendlyErrorMessage } from '@belizechain/shared';
 
 const PLANCK = 1_000_000_000_000n; // 12 decimals for all current belizeX assets
 
@@ -174,8 +175,8 @@ export async function executeSwap(
     tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
       if (dispatchError) {
         const msg = dispatchError.isModule
-          ? api.registry.findMetaError(dispatchError.asModule).docs.join(' ') || dispatchError.toString()
-          : dispatchError.toString();
+          ? getUserFriendlyErrorMessage(api.registry.findMetaError(dispatchError.asModule))
+          : getUserFriendlyErrorMessage(dispatchError.toString());
         reject(new Error(msg));
         return;
       }

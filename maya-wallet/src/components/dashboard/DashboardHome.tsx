@@ -5,19 +5,13 @@ import { Card, Badge, useI18n } from '@belizechain/shared';
 import { TransactionIndexer, type Transaction } from '@belizechain/shared';
 import { initializeApi } from '@/services/blockchain';
 import { LeaderboardCard } from '@/components/community/LeaderboardCard';
+import {
   getActiveProposals,
   getVotingHistory,
   getKYCStatus,
   getPoUWContributions,
 } from '@/services/pallets';
 import { useAccountStore } from '@/store/account';
-
-const KYC_LEVEL_VALUE: Record<string, number> = {
-  None: 0,
-  Basic: 1,
-  Enhanced: 2,
-  Full: 3,
-};
 import { 
   PaperPlaneTilt, 
   QrCode, 
@@ -35,6 +29,13 @@ import {
   Scan
 } from 'phosphor-react';
 import Link from 'next/link';
+
+const KYC_LEVEL_VALUE: Record<string, number> = {
+  None: 0,
+  Basic: 1,
+  Enhanced: 2,
+  Full: 3,
+};
 
 interface RecentActivityItem {
   id: string;
@@ -240,15 +241,8 @@ export function DashboardHome() {
       </div>
 
       {/* Quick Actions */}
-            {/* Quick Actions */}
       <div className="px-4 -mt-24 mb-6">
         <div className="grid grid-cols-3 gap-3">
-          {/* Existing Quick Actions */}
-        </div>
-        {/* Community Leaderboard */}
-        <div className="mt-6 px-4">
-          <LeaderboardCard />
-        </div>
           <QuickActionCard
             icon={<PaperPlaneTilt size={28} weight="fill" />}
             label={t.wallet.send}
@@ -267,6 +261,10 @@ export function DashboardHome() {
             href="/trade"
             color="jungle"
           />
+        </div>
+        {/* Community Leaderboard */}
+        <div className="mt-6">
+          <LeaderboardCard />
         </div>
       </div>
 

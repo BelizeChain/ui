@@ -7,6 +7,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { Coins } from 'phosphor-react';
 import { motion } from 'framer-motion';
+import { pakitBridgeService, type PakitUploadResponse } from '@/services/pakit-bridge.service';
 
 // Extend type to include messages for proof submission
 interface PendingProof extends PakitUploadResponse {

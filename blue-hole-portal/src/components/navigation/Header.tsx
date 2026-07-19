@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RuntimeEnvironmentBadge } from '@belizechain/shared';
+import { RuntimeEnvironmentBadge, NetworkStatusIndicator } from '@belizechain/shared';
 import {
   Bell,
   MagnifyingGlass,
@@ -50,37 +50,6 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
 
   // Calculate active proposals
   const activeProposalsCount = proposals.filter(p => p.status === 'Active').length;
-
-  const getStatusBadge = () => {
-    if (isReady && systemInfo) {
-      return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
-          <CheckCircle size={16} className="text-emerald-400" weight="fill" />
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-emerald-400">Connected</span>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400/70">
-              <Cube size={12} weight="duotone" />
-              <span>#{systemInfo.blockNumber.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      );
-    } else if (status === 'connecting') {
-      return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg">
-          <Activity size={16} className="text-amber-400 animate-pulse" weight="duotone" />
-          <span className="text-xs font-medium text-amber-400">Connecting</span>
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/30 rounded-lg">
-          <Warning size={16} className="text-red-400" weight="fill" />
-          <span className="text-xs font-medium text-red-400">Disconnected</span>
-        </div>
-      );
-    }
-  };
 
   return (
     <header
@@ -133,7 +102,7 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
 
           {/* Connection Status */}
           <div className="hidden sm:block">
-            {getStatusBadge()}
+            <NetworkStatusIndicator />
           </div>
 
           <div className="hidden lg:block">

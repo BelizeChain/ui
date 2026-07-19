@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { submitTransfer, estimateFee } from '@/services/blockchain';
 import { Button, Input, Card, Modal, useWallet, useBalance, useI18n } from '@belizechain/shared';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import { useUIStore } from '@/store/ui';
@@ -40,6 +41,7 @@ export default function SendPage() {
   const [step, setStep] = useState<'select' | 'amount' | 'confirm' | 'success'>('select');
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [estimatedFee, setEstimatedFee] = useState<string>('Free');
   const [isSending, setIsSending] = useState(false);
 
   const {
@@ -77,8 +79,29 @@ export default function SendPage() {
     setStep('amount');
   };
 
-  const onSubmit = async (data: SendMoneyForm) => {
-    setShowConfirmModal(true);
+  const handleSend = async (data: SendMoneyForm) => {
+    try {
+      if (!account?.address) throw new Error('No account connected');
+      
+      setEstimatedFee('Calculating...');
+      setShowConfirmModal(true);
+      
+      const fee = await estimateFee(
+        account.address,
+        selectedContact?.address || data.recipient,
+        data.amount,
+        watchCurrency?.toLowerCase() as 'dalla' | 'bBZD'
+      );
+      
+      setEstimatedFee(fee === 'Unknown' ? 'Unknown' : `${fee} DALLA`);
+    } catch (error) {
+      console.error(error);
+      addNotification({
+        type: 'error',
+        message: 'Failed to estimate transaction fee',
+      });
+      setShowConfirmModal(false);
+    }
   };
 
   const handleConfirmSend = async () => {
@@ -86,9 +109,6 @@ export default function SendPage() {
     setShowConfirmModal(false);
 
     try {
-      // Import blockchain service dynamically to avoid SSR issues
-      const { submitTransfer } = await import('@/services/blockchain');
-      
       if (!account?.address) {
         throw new Error('No account connected');
       }
@@ -241,7 +261,7 @@ export default function SendPage() {
             </div>
           </Card>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(handleSend)} className="space-y-6">
             {/* Manual address input if needed */}
             {selectedContact?.address === '' && (
               <Input
@@ -367,7 +387,7 @@ export default function SendPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-bluehole-600">Fee</span>
-              <span className="text-bluehole-900">Free</span>
+              <span className="text-bluehole-900">{estimatedFee}</span>
             </div>
             <div className="border-t border-sand-200 pt-3 flex justify-between">
               <span className="font-medium text-bluehole-900">Total</span>

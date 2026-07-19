@@ -1,7 +1,8 @@
 // Pakit Bridge Service
 // Syncs mesh messages to IPFS when gateway comes online
 
-import { getRuntimeConfig } from '@belizechain/shared';
+import { getRuntimeConfig, type PakitConfig, getUserFriendlyErrorMessage } from '@belizechain/shared';
+// using any for storage provider since the type isn't exported from shared
 import { initializeApi } from '@/services/blockchain';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import type { MeshMessage } from './bluetooth-mesh.service';
@@ -24,6 +25,7 @@ interface MessageBundle {
 class PakitBridgeService {
   private pendingProofs: (PakitUploadResponse & { messages: MeshMessage[] })[] = [];
   private pendingMessages: MeshMessage[] = [];
+  private storageProvider: any | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
   private readonly SYNC_INTERVAL = 60000; // 1 minute
   private readonly BUNDLE_SIZE_LIMIT = 1024 * 1024; // 1 MB
@@ -32,7 +34,8 @@ class PakitBridgeService {
     return getRuntimeConfig().pakitApiUrl;
   }
 
-  async initialize() {
+  async initialize(provider: any): Promise<void> {
+    this.storageProvider = provider;
     // Check Pakit availability
     const available = await this.checkPakitAvailability();
     
@@ -202,6 +205,10 @@ class PakitBridgeService {
    * Submit a mesh relay proof to the blockchain.
    * This method is intended to be called from the UI where the user's Polkadot
    * extension is available to sign the transaction.
+   *
+   * After a successful mesh proof, it also acknowledges the relay on the
+   * interoperability/messaging pallet so cross-chain bridges can track
+   * mesh relay activity.
    */
   async submitProofs(from: string, ipfsHash: string, messages: MeshMessage[]): Promise<void> {
     const api = await initializeApi();
@@ -218,7 +225,7 @@ class PakitBridgeService {
     );
 
     return new Promise((resolve, reject) => {
-      tx.signAndSend(from, { signer: injector.signer }, ({ status, events }) => {
+      tx.signAndSend(from, { signer: injector.signer }, async ({ status, events }) => {
         if (status.isInBlock) {
           // Check for extrinsic failures
           const failed = events.find(({ event }) =>
@@ -229,16 +236,53 @@ class PakitBridgeService {
             let message = 'Proof submission failed';
             if (dispatchError.isModule) {
               const decoded = api.registry.findMetaError(dispatchError.asModule);
-              message = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`;
+              message = getUserFriendlyErrorMessage(decoded);
+            } else {
+              message = getUserFriendlyErrorMessage(dispatchError.toString());
             }
             reject(new Error(message));
           } else {
             console.log('✅ Proof submitted on‑chain');
+
+            // Best-effort: acknowledge the relay on the interoperability pallet
+            // so bridge tracking stays in sync with mesh activity.
+            await this.acknowledgeOnInteropPallet(api, from, injector.signer, ipfsHash, messages.length);
+
             resolve();
           }
         }
       }).catch(reject);
     });
+  }
+
+  /**
+   * Fire-and-forget acknowledgment on the interoperability/messaging pallet.
+   * Gracefully degrades if the pallet or extrinsic is not available.
+   */
+  private async acknowledgeOnInteropPallet(
+    api: any,
+    from: string,
+    signer: any,
+    ipfsHash: string,
+    messageCount: number,
+  ): Promise<void> {
+    try {
+      // Check if the interoperability pallet exposes acknowledgeMeshRelay
+      const extrinsic = api.tx.interoperability?.acknowledgeMeshRelay
+        ?? api.tx.messaging?.acknowledgeMeshRelay;
+
+      if (!extrinsic) {
+        console.log('ℹ️  Interoperability pallet does not expose acknowledgeMeshRelay — skipping');
+        return;
+      }
+
+      const ackTx = extrinsic(ipfsHash, messageCount, Date.now());
+      await ackTx.signAndSend(from, { signer });
+      console.log('✅ Interop relay acknowledgment submitted');
+    } catch (error) {
+      // Non-fatal: the primary mesh proof is already on-chain
+      console.warn('⚠️  Interop acknowledgment failed (non-fatal):', error);
+    }
   }
 
   // Deprecated proof submission method retained for reference

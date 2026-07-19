@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useBlockchain } from '@/lib/blockchain/hooks';
+import { getUserFriendlyErrorMessage } from '@belizechain/shared';
 import { useWalletStore } from '@/store/wallet';
 
 export type VoteType = 'Aye' | 'Nay' | 'Abstain';
@@ -141,9 +142,9 @@ export function useOptimisticVoting() {
                 success = false;
                 if (dispatchError.isModule) {
                   const decoded = api.registry.findMetaError(dispatchError.asModule);
-                  error = `${decoded.section}.${decoded.name}: ${decoded.docs}`;
+                  error = getUserFriendlyErrorMessage(decoded);
                 } else {
-                  error = dispatchError.toString();
+                  error = getUserFriendlyErrorMessage(dispatchError.toString());
                 }
               }
 

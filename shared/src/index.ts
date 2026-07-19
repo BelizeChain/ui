@@ -76,3 +76,17 @@ export {
   validatorLogger,
   governanceLogger,
 } from './utils/logger';
+
+export {
+  getUserFriendlyError,
+  getUserFriendlyErrorMessage,
+  type FriendlyError,
+} from './utils/blockchain-errors';
+
+export {
+  estimateFee,
+  estimateBatchFee,
+  getEstimatedFeeString,
+  type FeeEstimate,
+  type FeeEstimateResult,
+} from './utils/fee-estimator';

@@ -29,13 +29,13 @@ export class CommunityIndexerService {
   async getLeaderboard(limit: number = 10): Promise<Array<{ account: string; srs: SRSData }>> {
     try {
       return await withRetry(async () => {
-        const api = await initializeApi();
+        const api = (await initializeApi()) as any;
         const entries = await api.query.community.srsScores.entries();
-        const scores = entries.map(([key, opt]) => ({
+        const scores = entries.map(([key, opt]: [any, any]) => ({
           account: key.args[0].toString(),
           srs: opt.unwrapOrDefault(),
         }));
-        scores.sort((a, b) => (b.srs.total ?? 0) - (a.srs.total ?? 0));
+        scores.sort((a: any, b: any) => (b.srs.total ?? 0) - (a.srs.total ?? 0));
         return scores.slice(0, limit);
       });
     } catch (e) {
@@ -48,9 +48,9 @@ export class CommunityIndexerService {
   async getProposals(): Promise<Array<{ id: number; proposal: CommunityProposal }>> {
     try {
       return await withRetry(async () => {
-        const api = await initializeApi();
+        const api = (await initializeApi()) as any;
         const entries = await api.query.community.communityProposals.entries();
-        return entries.map(([key, opt]) => ({
+        return entries.map(([key, opt]: [any, any]) => ({
           id: key.args[0].toNumber(),
           proposal: opt.unwrapOrDefault(),
         }));
@@ -65,7 +65,7 @@ export class CommunityIndexerService {
   async getSRS(account: string): Promise<SRSData> {
     try {
       return await withRetry(async () => {
-        const api = await initializeApi();
+        const api = (await initializeApi()) as any;
         return await api.rpc.communityApi.getSrs(account);
       });
     } catch (e) {
@@ -78,7 +78,7 @@ export class CommunityIndexerService {
   async getProposalsRpc(): Promise<CommunityProposal[]> {
     try {
       return await withRetry(async () => {
-        const api = await initializeApi();
+        const api = (await initializeApi()) as any;
         return await api.rpc.communityApi.getProposals();
       });
     } catch (e) {
@@ -91,9 +91,9 @@ export class CommunityIndexerService {
   async getLeaderboardRpc(limit: number = 10): Promise<Array<{ account: string; srs: SRSData }>> {
     try {
       return await withRetry(async () => {
-        const api = await initializeApi();
+        const api = (await initializeApi()) as any;
         const raw = await api.rpc.communityApi.getLeaderboard();
-        const sorted = raw.sort((a, b) => (b.srs.total ?? 0) - (a.srs.total ?? 0));
+        const sorted = raw.sort((a: any, b: any) => (b.srs?.total ?? 0) - (a.srs?.total ?? 0));
         return sorted.slice(0, limit);
       });
     } catch (e) {

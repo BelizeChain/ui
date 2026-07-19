@@ -3,7 +3,7 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 // Removed walletLogger to fix SSR issues
-import { getRuntimeConfig, type Balance } from '@belizechain/shared';
+import { getRuntimeConfig, type Balance, getUserFriendlyErrorMessage, estimateFee as sharedEstimateFee } from '@belizechain/shared';
 
 let api: ApiPromise | null = null;
 let wsProvider: WsProvider | null = null;
@@ -90,6 +90,8 @@ export async function fetchBalance(address: string): Promise<Balance> {
   }
 }
 
+
+
 /**
  * Submit a transfer transaction
  */
@@ -132,13 +134,15 @@ export async function submitTransfer(
               const [dispatchError]: any = event.data;
               let errorMessage = 'Transaction failed';
               
-              if (dispatchError.isModule) {
-                const decoded = apiInstance.registry.findMetaError(dispatchError.asModule);
-                errorMessage = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`;
+                if (dispatchError.isModule) {
+                  const decoded = apiInstance.registry.findMetaError(dispatchError.asModule);
+                  errorMessage = getUserFriendlyErrorMessage(decoded);
+                } else {
+                  errorMessage = getUserFriendlyErrorMessage(dispatchError.toString());
+                }
+                
+                reject(new Error(errorMessage));
               }
-              
-              reject(new Error(errorMessage));
-            }
           });
 
           resolve({
@@ -280,8 +284,8 @@ export async function estimateFee(
       }
     }
 
-    const info = await tx.paymentInfo(from);
-    return formatBalance(info.partialFee.toString());
+    const feeResult = await sharedEstimateFee(apiInstance, tx, from);
+    return feeResult.ok ? feeResult.totalDALLA.toString() : '0.01';
   } catch (error) {
     console.error('Failed to estimate fee:', error);
     return '0.01'; // Default fee estimate

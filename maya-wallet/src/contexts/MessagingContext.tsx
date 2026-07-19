@@ -129,7 +129,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         window.addEventListener('mesh-message', handleIncomingMeshMessage);
         
         // Start Pakit bridge
-        await pakitBridgeService.initialize();
+        await pakitBridgeService.initialize(null);
       }
 
       return success;
@@ -220,7 +220,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Handle incoming mesh message
-  const handleIncomingMeshMessage = (event: Event) => {
+  const handleIncomingMeshMessage = async (event: Event) => {
     const customEvent = event as CustomEvent<MeshMessage>;
     const meshMsg = customEvent.detail;
 
@@ -236,7 +236,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
     // Queue for Pakit sync
     pakitBridgeService.queueMessage(meshMsg);
-    setPendingSyncCount(pakitBridgeService.getPendingCount());
+    setPendingSyncCount(await pakitBridgeService.getPendingCount());
 
     // Update conversations
     setConversations(prev => {
@@ -328,7 +328,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   // Sync pending messages to Pakit
   const syncToPakit = async (): Promise<boolean> => {
     const success = await pakitBridgeService.syncNow();
-    setPendingSyncCount(pakitBridgeService.getPendingCount());
+    setPendingSyncCount(await pakitBridgeService.getPendingCount());
     return success;
   };
 

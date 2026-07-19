@@ -5,7 +5,7 @@ import { ChartLine, Coin, Users, Lightning, Cube, Warning } from 'phosphor-react
 import { GlassCard } from '@/components/ui/glass-card';
 import { connectionManager } from '@/lib/blockchain/connection';
 import { getTreasuryBalance } from '@/services/pallets/treasury';
-import { gql, useQuery } from '@apollo/client';
+// Note: @apollo/client will be used once SubSquid indexer is deployed for historical data
 import { ResponsiveContainer, LineChart, XAxis, YAxis, Tooltip, Line } from 'recharts';
 
 interface ChainSnapshot {
@@ -200,7 +200,7 @@ export default function AnalyticsPage() {
           <p className="text-red-300">Error loading data</p>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
+            <LineChart data={snapshot.treasuryDalla ? [{ date: 'Current', treasury: Number(snapshot.treasuryDalla.replace(/,/g, '')) || 0 }] : []}>
               <XAxis dataKey="date" />
               <YAxis />
               <Tooltip />

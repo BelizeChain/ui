@@ -19,36 +19,220 @@ function formatPlanck(raw: string): string {
   }
 }
 
-const subscribeToStakingRewards = async (address: string, callback: (reward: any) => void) => {
-  return () => {};
+import { initializeApi } from '@/services/blockchain';
+
+/**
+ * Subscribe to staking reward events for a given address.
+ * Listens for `staking.Rewarded` and `belizeStaking.PoUWRewardPaid` events.
+ */
+const subscribeToStakingRewards = async (
+  address: string,
+  callback: (reward: { amount: string; era: number; type: 'Staking' | 'PoUW' }) => void,
+): Promise<() => void> => {
+  try {
+    const api = await initializeApi();
+    const unsub = await api.query.system.events((events: any[]) => {
+      events.forEach(({ event }) => {
+        // Standard staking rewards
+        if (api.events.staking?.Rewarded?.is(event)) {
+          const [stash, amount] = event.data;
+          if (stash.toString() === address) {
+            callback({ amount: amount.toString(), era: 0, type: 'Staking' });
+          }
+        }
+        // PoUW rewards (custom BelizeChain pallet)
+        if (api.events.belizeStaking?.PoUWRewardPaid?.is(event)) {
+          const [account, reward] = event.data;
+          if (account.toString() === address) {
+            callback({ amount: reward.toString(), era: 0, type: 'PoUW' });
+          }
+        }
+      });
+    });
+    return unsub as unknown as () => void;
+  } catch {
+    return () => {};
+  }
 };
 
-const subscribeToTourismCashback = async (address: string, callback: (cashback: any) => void) => {
-  return () => {};
+/**
+ * Subscribe to tourism cashback events for a given address.
+ * Listens for `oracle.CashbackIssued` events.
+ */
+const subscribeToTourismCashback = async (
+  address: string,
+  callback: (cashback: { merchant: string; amountSpent: string; cashbackAmount: string; cashbackRate: number }) => void,
+): Promise<() => void> => {
+  try {
+    const api = await initializeApi();
+    const unsub = await api.query.system.events((events: any[]) => {
+      events.forEach(({ event }) => {
+        if (api.events.oracle?.CashbackIssued?.is(event)) {
+          const [account, merchant, spent, cashback, rate] = event.data;
+          if (account.toString() === address) {
+            callback({
+              merchant: merchant.toString(),
+              amountSpent: spent.toString(),
+              cashbackAmount: cashback.toString(),
+              cashbackRate: (rate as any).toNumber?.() / 10000 || 0.05,
+            });
+          }
+        }
+      });
+    });
+    return unsub as unknown as () => void;
+  } catch {
+    return () => {};
+  }
 };
 
-const subscribeToGovernanceProposals = async (callback: (proposal: any) => void) => {
-  return () => {};
+// Governance proposals subscription is implemented inline in useGovernanceProposalsSubscription
+// using polling via getActiveProposals() — no stub needed here.
+
+/**
+ * Subscribe to compliance alerts for a given address.
+ * Listens for `compliance.KYCStatusChanged`, `compliance.AccountRestricted` events.
+ */
+const subscribeToComplianceAlerts = async (
+  address: string,
+  callback: (alert: { type: 'KYCApproved' | 'KYCRejected' | 'LimitExceeded' | 'AccountFrozen'; message: string; timestamp: number }) => void,
+): Promise<() => void> => {
+  try {
+    const api = await initializeApi();
+    const unsub = await api.query.system.events((events: any[]) => {
+      events.forEach(({ event }) => {
+        if (api.events.compliance?.KYCStatusChanged?.is(event)) {
+          const [account, , newStatus] = event.data;
+          if (account.toString() === address) {
+            const status = newStatus.toString();
+            callback({
+              type: status === 'Verified' ? 'KYCApproved' : 'KYCRejected',
+              message: `KYC status changed to ${status}`,
+              timestamp: Date.now(),
+            });
+          }
+        }
+        if (api.events.compliance?.AccountRestricted?.is(event)) {
+          const [account, reason] = event.data;
+          if (account.toString() === address) {
+            callback({
+              type: 'AccountFrozen',
+              message: `Account restricted: ${reason?.toString() || 'Compliance review'}`,
+              timestamp: Date.now(),
+            });
+          }
+        }
+      });
+    });
+    return unsub as unknown as () => void;
+  } catch {
+    return () => {};
+  }
 };
 
-const subscribeToComplianceAlerts = async (address: string, callback: (alert: any) => void) => {
-  return () => {};
+/**
+ * Subscribe to land title transfer events for a given address.
+ */
+const subscribeToLandTransfers = async (
+  address: string,
+  callback: (transfer: { titleId: string; from: string; to: string; type: 'Received' | 'Transferred' }) => void,
+): Promise<() => void> => {
+  try {
+    const api = await initializeApi();
+    const unsub = await api.query.system.events((events: any[]) => {
+      events.forEach(({ event }) => {
+        if (api.events.landLedger?.TitleTransferred?.is(event)) {
+          const [titleId, from, to] = event.data;
+          const fromStr = from.toString();
+          const toStr = to.toString();
+          if (fromStr === address || toStr === address) {
+            callback({
+              titleId: titleId.toString(),
+              from: fromStr,
+              to: toStr,
+              type: toStr === address ? 'Received' : 'Transferred',
+            });
+          }
+        }
+      });
+    });
+    return unsub as unknown as () => void;
+  } catch {
+    return () => {};
+  }
 };
 
-const subscribeToBalanceChanges = async (address: string, callback: (balance: any) => void) => {
-  return () => {};
+/**
+ * Subscribe to BNS domain events for a given address.
+ */
+const subscribeToDomainEvents = async (
+  address: string,
+  callback: (event: { type: 'Registered' | 'Renewed' | 'Transferred' | 'Listed' | 'Sold'; domain: string; details?: any }) => void,
+): Promise<() => void> => {
+  try {
+    const api = await initializeApi();
+    const eventMap: Record<string, 'Registered' | 'Renewed' | 'Transferred' | 'Listed' | 'Sold'> = {
+      DomainRegistered: 'Registered',
+      DomainRenewed: 'Renewed',
+      DomainTransferred: 'Transferred',
+      DomainListed: 'Listed',
+      DomainSold: 'Sold',
+    };
+    const unsub = await api.query.system.events((events: any[]) => {
+      events.forEach(({ event }) => {
+        if (event.section === 'bns') {
+          const type = eventMap[event.method];
+          if (type) {
+            // First arg is typically the account, second is the domain name
+            const account = event.data[0]?.toString();
+            if (account === address) {
+              callback({
+                type,
+                domain: event.data[1]?.toString() || 'unknown',
+                details: event.data.toHuman?.() || {},
+              });
+            }
+          }
+        }
+      });
+    });
+    return unsub as unknown as () => void;
+  } catch {
+    return () => {};
+  }
 };
 
-const subscribeToLandTransfers = async (address: string, callback: (transfer: any) => void) => {
-  return () => {};
-};
-
-const subscribeToDomainEvents = async (address: string, callback: (event: any) => void) => {
-  return () => {};
-};
-
-const subscribeToDEXEvents = async (address: string, callback: (event: any) => void) => {
-  return () => {};
+/**
+ * Subscribe to BelizeX DEX events for a given address.
+ */
+const subscribeToDEXEvents = async (
+  address: string,
+  callback: (event: { type: 'Swapped' | 'LiquidityAdded' | 'LiquidityRemoved'; details: any }) => void,
+): Promise<() => void> => {
+  try {
+    const api = await initializeApi();
+    const eventMap: Record<string, 'Swapped' | 'LiquidityAdded' | 'LiquidityRemoved'> = {
+      Swapped: 'Swapped',
+      LiquidityAdded: 'LiquidityAdded',
+      LiquidityRemoved: 'LiquidityRemoved',
+    };
+    const unsub = await api.query.system.events((events: any[]) => {
+      events.forEach(({ event }) => {
+        if (event.section === 'belizex') {
+          const type = eventMap[event.method];
+          if (type) {
+            const account = event.data[0]?.toString();
+            if (account === address) {
+              callback({ type, details: event.data.toHuman?.() || {} });
+            }
+          }
+        }
+      });
+    });
+    return unsub as unknown as () => void;
+  } catch {
+    return () => {};
+  }
 };
 
 export function useBalanceSubscription(address: string | null) {

@@ -36,6 +36,20 @@ export interface TransactionSummary {
   suspiciousActivity: number;
 }
 
+export type OverallRiskLevel = 'Low' | 'Medium' | 'High' | 'Critical';
+
+export interface AggregateRiskScore {
+  overall: OverallRiskLevel;
+  score: number; // 0–100
+  breakdown: {
+    kycRisk: number;      // weighted KYC-level contribution (0–30)
+    amlRisk: number;      // weighted AML-alert contribution  (0–40)
+    concentrationRisk: number; // high-risk account ratio      (0–30)
+  };
+  highRiskAccounts: number;
+  unverifiedAccounts: number;
+}
+
 export interface ComplianceReport {
   reportDate: Date;
   periodStart: Date;
@@ -52,6 +66,7 @@ export interface ComplianceReport {
     rapidTransactions: number;
     crossBorderTransactions: number;
   };
+  aggregateRisk: AggregateRiskScore;
 }
 
 export class FSCExporter {
@@ -82,6 +97,9 @@ export class FSCExporter {
     // Detect AML alerts
     const amlAlerts = await this.detectAMLAlerts(startDate, endDate);
 
+    // Calculate aggregate risk score from KYC records + AML alerts
+    const aggregateRisk = this.calculateAggregateRiskScore(kycRecords, amlAlerts, transactionSummary);
+
     return {
       reportDate: new Date(),
       periodStart: startDate,
@@ -90,6 +108,7 @@ export class FSCExporter {
       transactionSummary,
       validatorActivity,
       amlAlerts,
+      aggregateRisk,
     };
   }
 
@@ -347,6 +366,17 @@ export class FSCExporter {
     rows.push(`High-Value Transactions,${report.amlAlerts.highValueTransactions}`);
     rows.push(`Rapid Transactions,${report.amlAlerts.rapidTransactions}`);
     rows.push(`Cross-Border Transactions,${report.amlAlerts.crossBorderTransactions}`);
+    rows.push('');
+
+    // Aggregate Risk Score
+    rows.push('AGGREGATE RISK ASSESSMENT');
+    rows.push(`Overall Risk Level,${report.aggregateRisk.overall}`);
+    rows.push(`Composite Score,${report.aggregateRisk.score}/100`);
+    rows.push(`KYC Risk Component,${report.aggregateRisk.breakdown.kycRisk}/30`);
+    rows.push(`AML Risk Component,${report.aggregateRisk.breakdown.amlRisk}/40`);
+    rows.push(`Concentration Risk Component,${report.aggregateRisk.breakdown.concentrationRisk}/30`);
+    rows.push(`High-Risk Accounts,${report.aggregateRisk.highRiskAccounts}`);
+    rows.push(`Unverified Accounts,${report.aggregateRisk.unverifiedAccounts}`);
 
     return rows.join('\n');
   }
@@ -414,6 +444,33 @@ export class FSCExporter {
     doc.text(`Total Staked: ${report.validatorActivity.totalStaked} DALLA`, 14, yPos + 6);
     doc.text(`Slashing Events: ${report.validatorActivity.slashingEvents}`, 14, yPos + 12);
 
+    yPos += 22;
+
+    // Aggregate Risk Assessment
+    doc.setFontSize(14);
+    doc.text('Aggregate Risk Assessment', 14, yPos);
+    yPos += 8;
+
+    const risk = report.aggregateRisk;
+    const riskColor = risk.overall === 'Critical' ? '#ef4444'
+      : risk.overall === 'High' ? '#f97316'
+      : risk.overall === 'Medium' ? '#eab308'
+      : '#22c55e';
+
+    doc.setFontSize(12);
+    doc.setTextColor(riskColor);
+    doc.text(`Overall: ${risk.overall} (${risk.score}/100)`, 14, yPos);
+    doc.setTextColor('#000000');
+    yPos += 8;
+
+    doc.setFontSize(10);
+    doc.text(`KYC Risk: ${risk.breakdown.kycRisk}/30`, 14, yPos);
+    doc.text(`AML Risk: ${risk.breakdown.amlRisk}/40`, 80, yPos);
+    doc.text(`Concentration: ${risk.breakdown.concentrationRisk}/30`, 140, yPos);
+    yPos += 6;
+    doc.text(`High-Risk Accounts: ${risk.highRiskAccounts}`, 14, yPos);
+    doc.text(`Unverified Accounts: ${risk.unverifiedAccounts}`, 100, yPos);
+
     return doc;
   }
 
@@ -457,6 +514,65 @@ export class FSCExporter {
       console.error('Error calculating risk level:', error);
       return 'Low';
     }
+  }
+
+  /**
+   * Calculate an aggregate risk score that combines per-account KYC risk levels
+   * with AML alert signals into an overall compliance risk assessment.
+   *
+   * Scoring breakdown (0–100):
+   *  - KYC Risk       (0–30): ratio of unverified / high-risk accounts
+   *  - AML Risk       (0–40): weighted sum of alert counts relative to transaction volume
+   *  - Concentration  (0–30): proportion of high-risk accounts among all accounts
+   */
+  private calculateAggregateRiskScore(
+    kycRecords: KYCRecord[],
+    amlAlerts: ComplianceReport['amlAlerts'],
+    txSummary: TransactionSummary,
+  ): AggregateRiskScore {
+    const total = Math.max(kycRecords.length, 1); // avoid division by zero
+
+    // --- KYC Risk (0–30) ---
+    const unverifiedAccounts = kycRecords.filter(r => r.kycStatus !== 'Verified').length;
+    const rejectedAccounts = kycRecords.filter(r => r.kycStatus === 'Rejected').length;
+    // Unverified accounts contribute linearly; rejected accounts are weighted 2×.
+    const kycRiskRaw = ((unverifiedAccounts + rejectedAccounts) / total) * 30;
+    const kycRisk = Math.min(30, Math.round(kycRiskRaw));
+
+    // --- AML Risk (0–40) ---
+    const totalAlerts = amlAlerts.highValueTransactions
+      + amlAlerts.rapidTransactions
+      + amlAlerts.crossBorderTransactions;
+    const txCount = Math.max(txSummary.totalTransactions, 1);
+    // Weight: high-value ×3, rapid ×2, cross-border ×1 (structuring & layering are higher risk).
+    const weightedAlerts =
+      amlAlerts.highValueTransactions * 3 +
+      amlAlerts.rapidTransactions * 2 +
+      amlAlerts.crossBorderTransactions * 1;
+    // Normalize against transaction volume — a few alerts out of thousands is less concerning.
+    const alertRatio = Math.min(weightedAlerts / txCount, 1);
+    const amlRisk = Math.min(40, Math.round(alertRatio * 40));
+
+    // --- Concentration Risk (0–30) ---
+    const highRiskAccounts = kycRecords.filter(r => r.riskLevel === 'High').length;
+    const concentrationRatio = highRiskAccounts / total;
+    const concentrationRisk = Math.min(30, Math.round(concentrationRatio * 30));
+
+    // --- Composite ---
+    const score = kycRisk + amlRisk + concentrationRisk;
+    const overall: OverallRiskLevel =
+      score >= 70 ? 'Critical' :
+      score >= 45 ? 'High' :
+      score >= 20 ? 'Medium' :
+      'Low';
+
+    return {
+      overall,
+      score,
+      breakdown: { kycRisk, amlRisk, concentrationRisk },
+      highRiskAccounts,
+      unverifiedAccounts,
+    };
   }
 
   /**
