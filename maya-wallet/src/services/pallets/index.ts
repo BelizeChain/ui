@@ -49,6 +49,9 @@ export { getQuantumBackends, submitQuantumJob, getQuantumJob, getUserQuantumJobs
 // Community Governance
 export { getCommunityGroups, createCommunityGroup, joinCommunityGroup, getCommunityProposals, submitCommunityProposal, voteOnCommunityProposal, contributeToCommunityFund, getCommunityEvents, rsvpToEvent, getUserCommunityGroups } from './community';
 
+// Nawal AI
+export { getParticipantStats, getSystemMetrics, getRoundStatus } from './nawal';
+
 // Smart Contracts (GEM Platform) — see src/services/gem.ts for the
 // ContractPromise-based implementation. The legacy ./contracts module
 // targeted a non-existent api.query.contracts.call() API and has been removed.
@@ -65,4 +68,5 @@ export type { PayrollRecord, SalaryPayment, SalarySlip } from './payroll';
 export type { Bridge, BridgeTransfer } from './interoperability';
 export type { QuantumJob, QuantumResult, QuantumWorkProof, QuantumBackend } from './quantum';
 export type { CommunityGroup, CommunityProposal, CommunityFund, CommunityEvent, Milestone } from './community';
+export type { NawalParticipantStats, NawalSystemMetrics, NawalRoundStatus } from './nawal';
 

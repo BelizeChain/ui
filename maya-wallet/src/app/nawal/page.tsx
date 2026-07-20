@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
+import { useWallet } from '@/contexts/WalletContext';
+import { getParticipantStats, getPoUWContributions, NawalParticipantStats, PoUWContribution } from '@/services/pallets';
 import {
   Brain,
   Lightning,
@@ -21,55 +23,61 @@ import {
 
 export default function NawalPage() {
   const router = useRouter();
+  const { selectedAccount } = useWallet();
   const [activeTab, setActiveTab] = useState<'training' | 'genome' | 'rewards'>('training');
+  
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<NawalParticipantStats | null>(null);
+  const [history, setHistory] = useState<PoUWContribution[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchData() {
+      if (!selectedAccount) {
+        setLoading(false);
+        return;
+      }
+      
+      setLoading(true);
+      try {
+        const [participantStats, pouwHistory] = await Promise.all([
+          getParticipantStats(selectedAccount.address),
+          getPoUWContributions(selectedAccount.address)
+        ]);
+
+        if (mounted) {
+          setStats(participantStats);
+          setHistory(pouwHistory);
+        }
+      } catch (err) {
+        console.error('Error fetching Nawal data:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    fetchData();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [selectedAccount]);
 
   const aiStats = {
-    contributionRank: 12,
-    totalContributions: 847,
-    trainingRewards: '2,456 DALLA',
-    modelAccuracy: '94.7%',
+    contributionRank: stats ? Math.max(1, 150 - (stats.total_rounds * 2)) : '-',
+    totalContributions: stats ? stats.total_rounds : 0,
+    trainingRewards: stats ? `${stats.total_rewards.toLocaleString()} DALLA` : '0 DALLA',
+    modelAccuracy: stats ? `${stats.average_quality.toFixed(1)}%` : '0%',
     currentGeneration: 42,
     genomeId: 'nawal_v1_gen42',
     activeLanguages: ['English', 'Spanish', 'Kriol']
   };
 
-  const trainingHistory = [
-    {
-      id: 'TR-8945',
-      task: 'Tourism Revenue Prediction',
-      model: 'BelizeChainLLM v2.1',
-      rounds: 12,
-      accuracy: '96.2%',
-      reward: '245 DALLA',
-      status: 'completed',
-      timestamp: '2 hours ago'
-    },
-    {
-      id: 'TR-8946',
-      task: 'Land Price Forecasting',
-      model: 'BelizeChainLLM v2.1',
-      rounds: 8,
-      accuracy: '89.4%',
-      reward: '180 DALLA',
-      status: 'completed',
-      timestamp: '6 hours ago'
-    },
-    {
-      id: 'TR-8947',
-      task: 'Compliance Pattern Detection',
-      model: 'BelizeChainLLM v2.2',
-      rounds: 5,
-      accuracy: '-',
-      reward: '~320 DALLA',
-      status: 'training',
-      timestamp: '10 minutes ago'
-    }
-  ];
-
   const genomeEvolution = [
     {
       generation: 42,
-      fitness: 94.7,
+      fitness: stats ? stats.average_quality : 94.7,
       architecture: 'Transformer + MoE',
       improvement: '+2.3%',
       status: 'current'
@@ -121,31 +129,40 @@ export default function NawalPage() {
       <div className="p-4 space-y-6">
         {/* Stats Overview */}
         <GlassCard variant="dark-medium" blur="lg" className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm text-gray-400">Contribution Rank</p>
-              <p className="text-3xl font-bold text-indigo-400">#{aiStats.contributionRank}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-400">Model Accuracy</p>
-              <p className="text-3xl font-bold text-emerald-400">{aiStats.modelAccuracy}</p>
-            </div>
-          </div>
+          {loading ? (
+             <div className="animate-pulse space-y-4">
+               <div className="h-10 bg-gray-700/50 rounded-lg w-1/2"></div>
+               <div className="h-16 bg-gray-700/50 rounded-lg w-full"></div>
+             </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm text-gray-400">Contribution Rank</p>
+                  <p className="text-3xl font-bold text-indigo-400">#{aiStats.contributionRank}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-400">Model Accuracy</p>
+                  <p className="text-3xl font-bold text-emerald-400">{aiStats.modelAccuracy}</p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-700">
-            <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Contributions</p>
-              <p className="text-lg font-bold text-purple-400">{aiStats.totalContributions}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Generation</p>
-              <p className="text-lg font-bold text-blue-400">{aiStats.currentGeneration}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Rewards</p>
-              <p className="text-lg font-bold text-forest-400">{aiStats.trainingRewards}</p>
-            </div>
-          </div>
+              <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-700">
+                <div className="text-center">
+                  <p className="text-xs text-gray-400 mb-1">Contributions</p>
+                  <p className="text-lg font-bold text-purple-400">{aiStats.totalContributions}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-400 mb-1">Generation</p>
+                  <p className="text-lg font-bold text-blue-400">{aiStats.currentGeneration}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-400 mb-1">Rewards</p>
+                  <p className="text-lg font-bold text-forest-400">{aiStats.trainingRewards}</p>
+                </div>
+              </div>
+            </>
+          )}
         </GlassCard>
       </div>
 
@@ -247,15 +264,22 @@ export default function NawalPage() {
 
             {/* Training History */}
             <div className="space-y-3">
-              {trainingHistory.map((session, index) => (
+              {history.length === 0 && !loading ? (
+                <div className="text-center py-6 text-gray-400 text-sm">
+                  No training history found. Start participating in FL rounds to earn rewards.
+                </div>
+              ) : history.map((session, index) => (
                 <GlassCard key={index} variant="dark" blur="sm" className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <p className="font-semibold text-white">{session.task}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{session.model} • {session.rounds} rounds</p>
+                      <p className="font-semibold text-white truncate w-48" title={session.modelHash}>
+                        Model: {session.modelHash.slice(0, 10)}...{session.modelHash.slice(-6)}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">Contribution ID: {session.contributionId}</p>
                     </div>
                     <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ml-2 ${
-                      session.status === 'completed' ? 'bg-emerald-500/100/20 text-emerald-400' :
+                      session.status === 'Rewarded' ? 'bg-emerald-500/100/20 text-emerald-400' :
+                      session.status === 'Rejected' ? 'bg-red-500/100/20 text-red-400' :
                       'bg-blue-500/100/20 text-blue-400'
                     }`}>
                       {session.status}
@@ -264,18 +288,18 @@ export default function NawalPage() {
 
                   <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
                     <div>
-                      <p className="text-gray-400">Accuracy</p>
-                      <p className="font-semibold text-white">{session.accuracy}</p>
+                      <p className="text-gray-400">Total Score</p>
+                      <p className="font-semibold text-white">{session.totalScore.toFixed(1)} / 100</p>
                     </div>
                     <div>
                       <p className="text-gray-400">PoUW Reward</p>
-                      <p className="font-semibold text-forest-400">{session.reward}</p>
+                      <p className="font-semibold text-forest-400">{session.reward} DALLA</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                    <span className="text-xs text-gray-400">{session.timestamp}</span>
-                    <button className="text-xs text-indigo-400 font-semibold hover:text-indigo-700">
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-200/20">
+                    <span className="text-xs text-gray-400">{new Date(session.timestamp).toLocaleString()}</span>
+                    <button className="text-xs text-indigo-400 font-semibold hover:text-indigo-300 transition-colors">
                       View Details →
                     </button>
                   </div>

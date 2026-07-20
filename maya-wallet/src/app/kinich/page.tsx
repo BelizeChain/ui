@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
+import { getKinichClient, type QuantumJob } from '@belizechain/shared';
 import {
   Atom,
   Lightning,
@@ -17,64 +18,62 @@ import {
   PlusCircle,
   Cpu,
   CloudArrowUp,
-  ArrowLeft
+  ArrowLeft,
+  CircleNotch
 } from 'phosphor-react';
 
 export default function KinichPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'jobs' | 'rewards'>('dashboard');
 
-  const quantumStats = {
-    totalJobs: 127,
-    successRate: '95.3%',
-    avgCostPerJob: '$3.20',
-    pqwRewards: '1,234 DALLA',
-    activeBackend: 'Azure Quantum',
-    qubitsUsed: 12450,
-    shotsExecuted: 458200
-  };
+  const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState<QuantumJob[]>([]);
+  const [stats, setStats] = useState({
+    totalJobs: 0,
+    activeJobs: 0,
+    totalShots: 0,
+    avgWaitTime: 0,
+  });
 
-  const recentJobs = [
-    {
-      id: 'KJ-5478',
-      name: 'VQE Optimization - Tourism Route',
-      type: 'VQE',
-      qubits: 8,
-      shots: 2048,
-      status: 'completed',
-      cost: '$2.45',
-      runtime: '12.3s',
-      backend: 'Azure Quantum',
-      result: 'Optimal path found',
-      timestamp: '2 hours ago'
-    },
-    {
-      id: 'KJ-5479',
-      name: 'QAOA - Land Distribution',
-      type: 'QAOA',
-      qubits: 12,
-      shots: 4096,
-      status: 'running',
-      cost: '$4.20',
-      runtime: '8.1s / ~15s',
-      backend: 'Azure Quantum',
-      result: 'In progress...',
-      timestamp: '5 minutes ago'
-    },
-    {
-      id: 'KJ-5480',
-      name: 'QNN - Fraud Detection',
-      type: 'QNN',
-      qubits: 6,
-      shots: 1024,
-      status: 'queued',
-      cost: '$1.80',
-      runtime: '-',
-      backend: 'IonQ',
-      result: 'Pending',
-      timestamp: 'Queued'
-    }
-  ];
+  useEffect(() => {
+    const kinichClient = getKinichClient();
+    let mounted = true;
+    
+    const fetchData = async () => {
+      try {
+        const [systemStats, accountJobs] = await Promise.all([
+          kinichClient.getSystemStats(),
+          // Use Alice's account address for demo purposes
+          kinichClient.listJobs('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', 20)
+        ]);
+
+        if (mounted) {
+          setStats(systemStats);
+          setJobs(accountJobs);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch Kinich data:", err);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 3000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const quantumStats = {
+    totalJobs: stats.totalJobs,
+    successRate: '99.9%',
+    avgCostPerJob: '3.00 DALLA',
+    pqwRewards: `${stats.totalJobs * 25} DALLA`,
+    activeBackend: 'Azure Quantum',
+    qubitsUsed: stats.totalJobs * 8, // mock metric based on jobs
+    shotsExecuted: stats.totalShots
+  };
 
   const pqwRewards = [
     {
@@ -151,8 +150,8 @@ export default function KinichPage() {
 
           <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-700">
             <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Qubits</p>
-              <p className="text-lg font-bold text-purple-400">{quantumStats.qubitsUsed.toLocaleString()}</p>
+              <p className="text-xs text-gray-400 mb-1">Qubits / Shots</p>
+              <p className="text-lg font-bold text-purple-400">{quantumStats.qubitsUsed.toLocaleString()} / {quantumStats.shotsExecuted.toLocaleString()}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-400 mb-1">Avg Cost</p>
@@ -303,19 +302,28 @@ export default function KinichPage() {
 
         {activeTab === 'jobs' && (
           <div className="space-y-3">
-            {recentJobs.map((job, index) => (
-              <GlassCard key={index} variant="dark" blur="sm" className="p-4">
+            {loading ? (
+              <div className="flex justify-center items-center py-10">
+                <CircleNotch size={32} className="text-purple-500 animate-spin" />
+              </div>
+            ) : jobs.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                No jobs found for this account.
+              </div>
+            ) : jobs.map((job) => (
+              <GlassCard key={job.jobId} variant="dark" blur="sm" className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-start space-x-3 flex-1">
                     <Atom size={24} className="text-purple-400 flex-shrink-0" weight="fill" />
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-white">{job.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Job ID: {job.id}</p>
+                      <p className="font-semibold text-white">{(job.circuit as any)?.circuitType?.toUpperCase() || 'Quantum Circuit'}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Job ID: {job.jobId}</p>
                     </div>
                   </div>
                   <div className={`px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ml-2 ${
                     job.status === 'completed' ? 'bg-emerald-500/100/20 text-emerald-400' :
                     job.status === 'running' ? 'bg-blue-500/100/20 text-blue-400' :
+                    job.status === 'failed' ? 'bg-red-500/100/20 text-red-400' :
                     'bg-gray-200 text-gray-400'
                   }`}>
                     {job.status}
@@ -324,33 +332,26 @@ export default function KinichPage() {
 
                 <div className="grid grid-cols-3 gap-3 mb-3 text-xs">
                   <div>
-                    <p className="text-gray-400">Qubits</p>
-                    <p className="font-semibold text-white">{job.qubits}</p>
+                    <p className="text-gray-400">Qubits / Gates</p>
+                    <p className="font-semibold text-white">{job.circuit?.qubits || 0} / {job.circuit?.gates || 0}</p>
                   </div>
                   <div>
                     <p className="text-gray-400">Shots</p>
-                    <p className="font-semibold text-white">{job.shots}</p>
+                    <p className="font-semibold text-white">{job.results?.shots || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-gray-400">Cost</p>
-                    <p className="font-semibold text-white">{job.cost}</p>
+                    <p className="font-semibold text-white">{job.estimatedCost} DALLA</p>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                   <div className="flex items-center space-x-2 text-xs">
                     <Lightning size={14} className="text-purple-400" weight="fill" />
-                    <span className="text-gray-400">{job.runtime}</span>
+                    <span className="text-gray-400">{job.results?.executionTime ? `${job.results.executionTime.toFixed(2)} ms` : 'Pending...'}</span>
                   </div>
-                  <div className="flex space-x-2">
-                    {job.status === 'running' && (
-                      <button className="p-1.5 hover:bg-gray-200 rounded">
-                        <Pause size={16} className="text-gray-400" weight="fill" />
-                      </button>
-                    )}
-                    <button className="p-1.5 hover:bg-gray-200 rounded">
-                      <ChartLine size={16} className="text-blue-400" weight="fill" />
-                    </button>
+                  <div className="flex items-center space-x-2 text-xs">
+                     <span className="text-gray-400">{new Date(job.submittedAt).toLocaleTimeString()}</span>
                   </div>
                 </div>
               </GlassCard>

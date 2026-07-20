@@ -14,6 +14,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { ApiPromise } from '@polkadot/api';
 import type { Codec } from '@polkadot/types/types';
+import { gql, useQuery } from '@apollo/client';
 import {
   connectionManager,
   type ConnectionStatus,
@@ -397,81 +398,61 @@ export interface ExplorerTx {
   timestamp: number;
 }
 
+const RECENT_BLOCKS_QUERY = gql`
+  query GetRecentBlocks($limit: Int!) {
+    blocks(limit: $limit, orderBy: number_DESC) {
+      number
+      hash
+      timestamp
+      extrinsicsCount
+      author
+    }
+    transactions(limit: $limit, orderBy: blockNumber_DESC) {
+      hash
+      blockNumber
+      method
+      signer
+      timestamp
+    }
+  }
+`;
+
 export function useRecentBlocks(limit = 10) {
-  const { api, isReady } = useBlockchain();
+  const { data, loading, error } = useQuery(RECENT_BLOCKS_QUERY, {
+    variables: { limit },
+    pollInterval: 3000,
+  });
+
   const [blocks, setBlocks] = useState<ExplorerBlock[]>([]);
   const [txs, setTxs] = useState<ExplorerTx[]>([]);
-  const [finalizedNumber, setFinalizedNumber] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+
+  // TODO: Implement finalized head tracking via indexer or keep RPC subscription just for that.
+  // For now, we simulate finality for blocks older than 2 blocks.
+  const finalizedNumber = blocks.length > 2 ? blocks[2].number : 0;
 
   useEffect(() => {
-    if (!isReady || !api) {
-      setLoading(false);
-      return;
+    if (data) {
+      const parsedBlocks: ExplorerBlock[] = data.blocks.map((b: any) => ({
+        number: b.number,
+        hash: b.hash,
+        timestamp: new Date(b.timestamp).getTime(),
+        extrinsics: b.extrinsicsCount,
+        author: b.author,
+        finalized: b.number <= finalizedNumber,
+      }));
+      setBlocks(parsedBlocks);
+
+      const parsedTxs: ExplorerTx[] = data.transactions.map((t: any, index: number) => ({
+        hash: t.hash,
+        block: t.blockNumber,
+        index, // Subsquid doesn't natively expose index easily without our custom parsing, but this works for unique keys
+        method: t.method,
+        signer: t.signer,
+        timestamp: new Date(t.timestamp).getTime(),
+      }));
+      setTxs(parsedTxs);
     }
-
-    let isMounted = true;
-    const unsubs: Array<() => void> = [];
-
-    const start = async () => {
-      try {
-        const unsubHeads = await api.derive.chain.subscribeNewHeads(async (header) => {
-          try {
-            const number = header.number.toNumber();
-            const hash = header.hash.toHex();
-            const author = (header as any).author?.toString();
-            const signedBlock = await api.rpc.chain.getBlock(header.hash);
-            const exts = signedBlock.block.extrinsics;
-            const now = Date.now();
-            const block: ExplorerBlock = {
-              number,
-              hash,
-              timestamp: now,
-              extrinsics: exts.length,
-              author,
-              finalized: false,
-            };
-            const blockTxs: ExplorerTx[] = exts
-              .map((ex, index) => ({
-                hash: ex.hash.toHex(),
-                block: number,
-                index,
-                method: `${ex.method.section}.${ex.method.method}`,
-                signer: ex.isSigned ? ex.signer.toString() : undefined,
-                timestamp: now,
-              }))
-              .filter((t) => t.signer);
-
-            if (!isMounted) return;
-            setBlocks((prev) => [block, ...prev.filter((b) => b.number !== number)].slice(0, limit));
-            setTxs((prev) => [...blockTxs, ...prev].slice(0, limit));
-            setLoading(false);
-          } catch (err) {
-            console.error('Failed to process new head:', err);
-          }
-        });
-        unsubs.push(unsubHeads as unknown as () => void);
-
-        const unsubFinal = await api.rpc.chain.subscribeFinalizedHeads((header) => {
-          if (!isMounted) return;
-          const fnum = header.number.toNumber();
-          setFinalizedNumber(fnum);
-          setBlocks((prev) => prev.map((b) => (b.finalized ? b : { ...b, finalized: b.number <= fnum })));
-        });
-        unsubs.push(unsubFinal as unknown as () => void);
-      } catch (err) {
-        console.error('Failed to subscribe to blocks:', err);
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    start();
-
-    return () => {
-      isMounted = false;
-      unsubs.forEach((u) => u && u());
-    };
-  }, [api, isReady, limit]);
+  }, [data, finalizedNumber]);
 
   return { blocks, txs, finalizedNumber, loading };
 }

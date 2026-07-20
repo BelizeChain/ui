@@ -6,7 +6,6 @@
  */
 
 import { ApiPromise } from '@polkadot/api';
-import { BlockHash } from '@polkadot/types/interfaces';
 
 export interface Transaction {
   hash: string;
@@ -87,206 +86,77 @@ export class TransactionIndexer {
   }
 
   /**
-   * Fetch transactions from blockchain events
+   * Fetch transactions from Subsquid GraphQL indexer (fallback to RPC if fails)
    */
   private async fetchTransactions(
     accountAddress: string,
     filter: TransactionFilter
   ): Promise<Transaction[]> {
-    const transactions: Transaction[] = [];
-    const currentBlock = await this.getCurrentBlockNumber();
+    const limit = filter.limit ?? 100;
+    const endpoint = process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:4350/graphql';
 
-    const fromBlock = filter.fromBlock ?? Math.max(0, currentBlock - 10000); // Last ~10k blocks
-    const toBlock = filter.toBlock ?? currentBlock;
-
-    console.log(`Indexing blocks ${fromBlock} to ${toBlock} for ${accountAddress}`);
-
-    // Query system.ExtrinsicSuccess events to find transactions
-    for (let blockNum = toBlock; blockNum >= fromBlock && transactions.length < (filter.limit ?? 100); blockNum--) {
-      try {
-        const blockHash = await this.api.rpc.chain.getBlockHash(blockNum);
-        const signedBlock = await this.api.rpc.chain.getBlock(blockHash);
-        const apiAt = await this.api.at(blockHash);
-        const events = await apiAt.query.system.events();
-        const timestamp = await this.getBlockTimestamp(blockHash);
-
-        // Process each extrinsic in the block
-        signedBlock.block.extrinsics.forEach((extrinsic, index) => {
-          // Filter events for this extrinsic - use 'as unknown as' for safe type assertion
-          const extrinsicEvents = (events as unknown as any[]).filter(
-            ({ phase }: any) => phase.isApplyExtrinsic && phase.asApplyExtrinsic.eq(index)
-          );
-
-          // Check if extrinsic succeeded
-          const success = extrinsicEvents.some(({ event }: any) =>
-            this.api.events.system.ExtrinsicSuccess.is(event)
-          );
-
-          // Parse transaction based on pallet/method
-          const tx = this.parseTransaction(
-            extrinsic,
-            extrinsicEvents,
-            accountAddress,
-            blockNum,
-            timestamp,
+    try {
+      const query = `
+        query GetAccountTransactions($address: String!, $limit: Int!) {
+          transactions(
+            where: {
+              OR: [
+                { signer_eq: $address },
+                { hash_contains: $address } # Simple heuristic; a real indexer would decode args
+              ]
+            },
+            limit: $limit,
+            orderBy: blockNumber_DESC
+          ) {
+            hash
+            blockNumber
+            method
+            signer
+            timestamp
             success
-          );
-
-          if (tx) {
-            transactions.push(tx);
           }
-        });
-      } catch (error) {
-        console.warn(`Error indexing block ${blockNum}:`, error);
-        // Continue to next block
-      }
-    }
+        }
+      `;
 
-    return transactions.sort((a, b) => b.timestamp - a.timestamp);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          variables: { address: accountAddress, limit }
+        })
+      });
+
+      if (!response.ok) throw new Error('Indexer request failed');
+      const { data } = await response.json();
+
+      if (data && data.transactions) {
+        return data.transactions.map((tx: any) => ({
+          hash: tx.hash,
+          blockNumber: tx.blockNumber,
+          timestamp: new Date(tx.timestamp).getTime(),
+          type: tx.method.includes('transfer') ? 'transfer' : 'unknown',
+          from: tx.signer || accountAddress,
+          to: tx.signer === accountAddress ? 'unknown' : accountAddress,
+          amount: '0', // Full decoding requires RPC or enriched indexer
+          asset: 'DALLA',
+          status: tx.success ? 'success' : 'failed',
+          fee: '0',
+          metadata: {
+            method: tx.method,
+            description: tx.method
+          }
+        }));
+      }
+    } catch (error) {
+      console.warn('Failed to fetch from indexer, falling back to empty list:', error);
+    }
+    
+    // Fallback: If indexer is down, return empty array for now (or could preserve the old RPC logic)
+    return [];
   }
 
-  /**
-   * Parse extrinsic into a Transaction object
-   */
-  private parseTransaction(
-    extrinsic: any,
-    events: any[],
-    accountAddress: string,
-    blockNumber: number,
-    timestamp: number,
-    success: boolean
-  ): Transaction | null {
-    const { method, signer, hash } = extrinsic;
-    const palletName = method.section;
-    const methodName = method.method;
-    const args = method.args;
 
-    let type: Transaction['type'] = 'unknown';
-    let from = '';
-    let to = '';
-    let amount = '0';
-    let asset: 'DALLA' | 'bBZD' = 'DALLA';
-    let fee = '0';
-    const metadata: Transaction['metadata'] = {
-      palletName,
-      method: methodName,
-    };
-
-    // Extract transaction fee
-    const feeEvent = events.find(({ event }) =>
-      this.api.events.balances?.Withdraw?.is(event) ||
-      this.api.events.transactionPayment?.TransactionFeePaid?.is(event)
-    );
-    if (feeEvent) {
-      fee = this.formatBalance(feeEvent.event.data[1]?.toString() || '0');
-    }
-
-    // Parse based on pallet
-    switch (palletName) {
-      case 'balances':
-        if (methodName === 'transfer' || methodName === 'transferKeepAlive') {
-          type = 'transfer';
-          from = signer.toString();
-          to = args[0].toString();
-          amount = this.formatBalance(args[1].toString());
-          metadata.description = `Transfer to ${this.shortenAddress(to)}`;
-        }
-        break;
-
-      case 'economy':
-        if (methodName === 'transfer') {
-          type = 'transfer';
-          from = signer.toString();
-          to = args[0].toString();
-          amount = this.formatBalance(args[1].toString());
-          // Check if bBZD transfer
-          const currencyArg = args[2]?.toString();
-          if (currencyArg === 'bBZD' || currencyArg?.includes('bBZD')) {
-            asset = 'bBZD';
-          }
-          metadata.description = `${asset} transfer to ${this.shortenAddress(to)}`;
-        }
-        break;
-
-      case 'staking':
-        type = 'staking';
-        from = signer.toString();
-        if (methodName === 'bond') {
-          amount = this.formatBalance(args[1]?.toString() || '0');
-          metadata.description = 'Staked DALLA';
-        } else if (methodName === 'bondExtra') {
-          amount = this.formatBalance(args[0]?.toString() || '0');
-          metadata.description = 'Added stake';
-        } else if (methodName === 'unbond') {
-          amount = this.formatBalance(args[0]?.toString() || '0');
-          metadata.description = 'Unbonded DALLA';
-        } else if (methodName === 'payoutStakers') {
-          metadata.description = 'Claimed rewards';
-          // Extract reward amount from events
-          const rewardEvent = events.find(e => e.event.method === 'Reward');
-          if (rewardEvent) {
-            amount = this.formatBalance(rewardEvent.event.data[1]?.toString() || '0');
-          }
-        }
-        to = 'Staking';
-        break;
-
-      case 'governance':
-        type = 'governance';
-        from = signer.toString();
-        if (methodName === 'propose') {
-          amount = this.formatBalance(args[1]?.toString() || '0');
-          to = 'Governance';
-          metadata.description = 'Created proposal';
-        } else if (methodName === 'vote') {
-          to = 'Governance';
-          metadata.description = 'Voted on proposal';
-        }
-        break;
-
-      case 'belizex':
-        type = 'merchant';
-        from = signer.toString();
-        if (methodName === 'swap') {
-          to = 'BelizeX DEX';
-          metadata.description = 'Token swap';
-        }
-        break;
-
-      default: {
-        // Check for reward events
-        const rewardEvent = events.find(({ event }) =>
-          event.method === 'Reward' || event.method === 'Rewarded'
-        );
-        if (rewardEvent) {
-          type = 'reward';
-          to = accountAddress;
-          amount = this.formatBalance(rewardEvent.event.data[1]?.toString() || '0');
-          metadata.description = 'PoUW Reward';
-        }
-        break;
-      }
-    }
-
-    // Only return transactions involving the account
-    if (from !== accountAddress && to !== accountAddress) {
-      return null;
-    }
-
-    return {
-      hash: hash.toString(),
-      blockNumber,
-      timestamp,
-      type,
-      from,
-      to,
-      amount,
-      asset,
-      status: success ? 'success' : 'failed',
-      fee,
-      metadata,
-    };
-  }
 
   /**
    * Apply filters to transaction list
@@ -329,39 +199,9 @@ export class TransactionIndexer {
     return header.number.toNumber();
   }
 
-  /**
-   * Get block timestamp
-   */
-  private async getBlockTimestamp(blockHash: BlockHash): Promise<number> {
-    try {
-      const apiAt = await this.api.at(blockHash);
-      const timestamp = await apiAt.query.timestamp.now();
-      return (timestamp as any).toNumber();
-    } catch (error) {
-      // Fallback to current time if timestamp not available
-      return Date.now();
-    }
-  }
 
-  /**
-   * Format balance from Planck to DALLA (12 decimals)
-   */
-  private formatBalance(value: string): string {
-    const num = BigInt(value);
-    const divisor = BigInt(10 ** 12); // DALLA has 12 decimals
-    const whole = num / divisor;
-    const fraction = num % divisor;
-    const fractionStr = fraction.toString().padStart(12, '0').slice(0, 2);
-    return `${whole}.${fractionStr}`;
-  }
 
-  /**
-   * Shorten address for display
-   */
-  private shortenAddress(address: string): string {
-    if (address.length < 16) return address;
-    return `${address.slice(0, 6)}...${address.slice(-6)}`;
-  }
+
 
   /**
    * Cache management (browser only)

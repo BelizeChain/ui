@@ -77,6 +77,11 @@ export default function TradePage() {
     return () => clearInterval(interval);
   }, [refreshPairs]);
 
+  const currentPair = useMemo(
+    () => pairs.find((p) => pairKey(p) === selectedPair) ?? null,
+    [pairs, selectedPair],
+  );
+
   useEffect(() => {
     async function fetchLpBalance() {
       if (!selectedAccount || !currentPair) {
@@ -96,11 +101,6 @@ export default function TradePage() {
     }
     fetchLpBalance();
   }, [selectedAccount, currentPair, txHash]);
-
-  const currentPair = useMemo(
-    () => pairs.find((p) => pairKey(p) === selectedPair) ?? null,
-    [pairs, selectedPair],
-  );
 
   const fromAsset: AssetSymbol | null = currentPair
     ? baseToQuote

@@ -102,7 +102,7 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
 
           {/* Connection Status */}
           <div className="hidden sm:block">
-            <NetworkStatusIndicator />
+            <NetworkStatusIndicator status={status === 'ready' ? 'connected' : status} />
           </div>
 
           <div className="hidden lg:block">

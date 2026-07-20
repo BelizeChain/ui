@@ -33,8 +33,8 @@ function shortAddress(addr: string): string {
 
 export default function ProposalDetailPage() {
   const params = useParams();
-  const proposalId = params.id as string;
-  const proposalIdNum = Number.parseInt(proposalId, 10);
+  const proposalId = params?.id as string;
+  const proposalIdNum = proposalId ? Number.parseInt(proposalId, 10) : 0;
 
   const { selectedAccount } = useWallet();
   const { showToast } = useToast();
