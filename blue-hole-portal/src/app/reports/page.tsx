@@ -83,10 +83,6 @@ export default function FinancialReportsPage() {
     'Health', 'Security', 'Environment', 'Economic Development'
   ];
 
-  React.useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
@@ -99,6 +95,10 @@ export default function FinancialReportsPage() {
       setLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    fetchAnalytics();
+  }, []);
 
   const generatePDFReport = async () => {
     if (!selectedTemplate) {

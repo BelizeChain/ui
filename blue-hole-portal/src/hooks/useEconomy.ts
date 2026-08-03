@@ -2,159 +2,94 @@
 
 import { useState, useEffect } from 'react';
 import { useBlockchain } from '@/lib/blockchain/hooks';
-import type { ApiPromise } from '@polkadot/api';
+import {
+  getTreasuryBalance,
+  getTreasurySpendProposals,
+  type TreasurySpendProposalView,
+} from '@/services/pallets/treasury';
 
 export interface TreasuryBalance {
   dalla: bigint;
   bBZD: bigint;
 }
 
-export interface CurrencySupply {
-  dalla: bigint;
-  bBZD: bigint;
-}
-
-export interface TreasuryProposal {
-  id: number;
-  proposer: string;
-  beneficiary: string;
-  amount: bigint;
-  currency: 'DALLA' | 'bBZD';
-  bond: bigint;
-  status: 'Proposed' | 'Approved' | 'Rejected' | 'Executed';
-  approvers: string[];
-  category: string;
-  title: string;
-  description: string;
-}
-
-export interface ExchangeRate {
-  dalla_bzd: number;
-  bbzd_bzd: number; // Always 1.0 (pegged)
-}
-
 /**
- * Hook for Economy pallet queries
- * Provides treasury balances, DALLA/bBZD supply, proposals, exchange rates
+ * Hook for Economy/Treasury pallet queries
+ * Provides treasury balances and proposals using the unified service.
  */
 export function useEconomy() {
-  const { api, isConnected } = useBlockchain();
+  const { isConnected } = useBlockchain();
   const [treasuryBalance, setTreasuryBalance] = useState<TreasuryBalance | null>(null);
-  const [totalSupply, setTotalSupply] = useState<CurrencySupply | null>(null);
-  const [proposals, setProposals] = useState<TreasuryProposal[]>([]);
-  const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
+  const [proposals, setProposals] = useState<TreasurySpendProposalView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!api || !isConnected) {
+    if (!isConnected) {
       setIsLoading(false);
       return;
     }
 
-    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    let timer: NodeJS.Timeout;
 
     const fetchEconomyData = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
-        // Query treasury balances from Economy pallet
-        const [dallaBalance, bBZDBalance] = await Promise.all([
-          api.query.belizeEconomy?.treasuryBalance('DALLA'),
-          api.query.belizeEconomy?.treasuryBalance('bBZD'),
+        const [balanceData, propsData] = await Promise.all([
+          getTreasuryBalance(),
+          getTreasurySpendProposals()
         ]);
 
-        setTreasuryBalance({
-          dalla: dallaBalance ? BigInt(dallaBalance.toString()) : 0n,
-          bBZD: bBZDBalance ? BigInt(bBZDBalance.toString()) : 0n,
-        });
-
-        // Query total supply for both currencies
-        const [dallaTotalSupply, bBZDTotalSupply] = await Promise.all([
-          api.query.belizeEconomy?.totalIssuance('DALLA'),
-          api.query.belizeEconomy?.totalIssuance('bBZD'),
-        ]);
-
-        setTotalSupply({
-          dalla: dallaTotalSupply ? BigInt(dallaTotalSupply.toString()) : 0n,
-          bBZD: bBZDTotalSupply ? BigInt(bBZDTotalSupply.toString()) : 0n,
-        });
-
-        // Query exchange rates (bBZD is always 1:1 with BZD)
-        const dallaRate = await api.query.belizeEconomy?.exchangeRate('DALLA');
-        setExchangeRate({
-          dalla_bzd: dallaRate ? parseFloat(dallaRate.toString()) / 1e12 : 0.5, // Default 0.5 BZD
-          bbzd_bzd: 1.0, // Always pegged 1:1
-        });
-
-        // Query treasury proposals
-        const proposalCount = await api.query.belizeEconomy?.proposalCount();
-        const count = proposalCount ? parseInt(proposalCount.toString()) : 0;
-
-        const proposalPromises = [];
-        for (let i = 0; i < count; i++) {
-          proposalPromises.push(api.query.belizeEconomy?.proposals(i));
+        if (!cancelled) {
+          setTreasuryBalance({
+            dalla: BigInt(balanceData.freePlanck),
+            bBZD: 0n, // bBZD not tracked in basic free planck yet
+          });
+          setProposals(propsData);
+          setIsLoading(false);
         }
-
-        const proposalResults = await Promise.all(proposalPromises);
-        const parsedProposals: TreasuryProposal[] = proposalResults
-          .map((result: any, index) => {
-            if (!result) return null;
-            const proposal = result.isSome ? result.unwrap() : result;
-            if (!proposal || !proposal.proposer) return null;
-            return {
-              id: index,
-              proposer: proposal.proposer.toString(),
-              beneficiary: proposal.beneficiary.toString(),
-              amount: BigInt(proposal.amount.toString()),
-              currency: proposal.currency.toString() as 'DALLA' | 'bBZD',
-              bond: BigInt(proposal.bond.toString()),
-              status: proposal.status.toString() as any,
-              approvers: proposal.approvers?.toArray().map((a: any) => a.toString()) || [],
-              category: proposal.category?.toString() || 'Infrastructure',
-              title: proposal.title?.toString() || `Proposal #${index}`,
-              description: proposal.description?.toString() || '',
-            };
-          })
-          .filter((p): p is TreasuryProposal => p !== null);
-
-        setProposals(parsedProposals);
-        setIsLoading(false);
       } catch (err) {
-        console.error('Economy pallet query error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch economy data');
-        setIsLoading(false);
+        if (!cancelled) {
+          console.error('Economy service query error:', err);
+          setError(err instanceof Error ? err.message : 'Failed to fetch economy data');
+          setIsLoading(false);
+        }
       }
     };
 
     fetchEconomyData();
-
-    // Subscribe to treasury balance changes
-    if (api.query.belizeEconomy?.treasuryBalance) {
-      api.query.belizeEconomy.treasuryBalance('DALLA', (balance: any) => {
-        setTreasuryBalance((prev) => ({
-          dalla: BigInt(balance.toString()),
-          bBZD: prev?.bBZD || 0n,
-        }));
-      }).then((unsub) => {
-        unsubscribe = unsub as any;
-      });
-    }
+    timer = setInterval(fetchEconomyData, 30_000);
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      cancelled = true;
+      if (timer) clearInterval(timer);
     };
-  }, [api, isConnected]);
+  }, [isConnected]);
 
   return {
     treasuryBalance,
-    totalSupply,
     proposals,
-    exchangeRate,
     isLoading,
     error,
     isConnected,
+    refetch: async () => {
+      try {
+        const [balanceData, propsData] = await Promise.all([
+          getTreasuryBalance(),
+          getTreasurySpendProposals()
+        ]);
+        setTreasuryBalance({
+          dalla: BigInt(balanceData.freePlanck),
+          bBZD: 0n,
+        });
+        setProposals(propsData);
+      } catch (err) {
+        console.error('Manual economy fetch error:', err);
+      }
+    }
   };
 }
 

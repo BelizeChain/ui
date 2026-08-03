@@ -83,3 +83,35 @@ export async function getRoundStatus(roundId: string): Promise<NawalRoundStatus 
     return null;
   }
 }
+
+/**
+ * Get currently active FL rounds
+ */
+export async function getActiveRounds(): Promise<NawalRoundStatus[]> {
+  try {
+    const response = await fetch(`${NAWAL_API_URL}/rounds?status=active`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch active rounds: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching active rounds:', error);
+    return [];
+  }
+}
+
+/**
+ * Get recently completed FL rounds
+ */
+export async function getRecentRounds(limit: number = 10): Promise<NawalRoundStatus[]> {
+  try {
+    const response = await fetch(`${NAWAL_API_URL}/rounds?status=completed&limit=${limit}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch recent rounds: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching recent rounds:', error);
+    return [];
+  }
+}

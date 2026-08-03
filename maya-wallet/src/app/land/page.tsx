@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, FileText, CalendarBlank, House } from 'phosphor-react';
+import { ArrowLeft, MapPin, FileText, CalendarBlank, House, Check } from 'phosphor-react';
 import { GlassCard } from '@/components/ui';
 
 export default function LandPage() {
@@ -65,7 +65,7 @@ export default function LandPage() {
                   </div>
                   {property.verified && (
                     <span className="inline-block mt-2 px-2 py-1 bg-green-500/100/20 text-green-400 rounded text-xs font-medium">
-                      ✓ Verified
+                      <Check size={12} weight="bold" className="inline mr-1" /> Verified
                     </span>
                   )}
                 </div>

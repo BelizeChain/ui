@@ -12,6 +12,8 @@ import {
   Users,
   CurrencyDollar,
   Check,
+  ClipboardText,
+  Confetti,
   Warning,
 } from 'phosphor-react';
 import { useForm } from 'react-hook-form';
@@ -63,10 +65,10 @@ export default function SendPage() {
 
   // Mock contacts
   const contacts = [
-    { id: '1', name: 'Maria Garcia', address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', avatar: '👩' },
-    { id: '2', name: 'Juan Martinez', address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty', avatar: '👨' },
-    { id: '3', name: 'Sarah Johnson', address: '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y', avatar: '👱‍♀️' },
-    { id: '4', name: 'Carlos Rodriguez', address: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy', avatar: '🧑' },
+    { id: '1', name: 'Maria Garcia', address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', avatar: <User size={24} weight="fill" className="text-gray-400" /> },
+    { id: '2', name: 'Juan Martinez', address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty', avatar: <User size={24} weight="fill" className="text-gray-400" /> },
+    { id: '3', name: 'Sarah Johnson', address: '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y', avatar: <User size={24} weight="fill" className="text-gray-400" /> },
+    { id: '4', name: 'Carlos Rodriguez', address: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy', avatar: <User size={24} weight="fill" className="text-gray-400" /> },
   ];
 
   const handleSelectContact = (contact: any) => {
@@ -75,7 +77,7 @@ export default function SendPage() {
   };
 
   const handleManualAddress = () => {
-    setSelectedContact({ name: 'Custom Address', address: '', avatar: '📋' });
+    setSelectedContact({ name: 'Custom Address', address: '', avatar: <ClipboardText size={24} weight="fill" className="text-gray-400" /> });
     setStep('amount');
   };
 
@@ -167,7 +169,9 @@ export default function SendPage() {
           <p className="text-bluehole-600 mb-6">
             {selectedContact?.name} received your {watchAmount} {watchCurrency}
           </p>
-          <div className="confetti">🎉</div>
+          <div className="confetti flex justify-center mt-4">
+            <Confetti size={32} weight="fill" className="text-yellow-500" />
+          </div>
         </div>
       </div>
     );

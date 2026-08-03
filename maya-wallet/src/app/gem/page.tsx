@@ -451,7 +451,7 @@ export default function GemPage() {
                 {faucetError
                   ? faucetError
                   : claimTxHash
-                    ? `✅ Claim submitted: ${claimTxHash.slice(0, 14)}…`
+                    ? `✓ Claim submitted: ${claimTxHash.slice(0, 14)}…`
                     : faucetStatus
                       ? faucetStatus.canClaim
                         ? 'Ready to claim'

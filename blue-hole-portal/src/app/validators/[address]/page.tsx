@@ -145,7 +145,7 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
                 <TrendUp size={20} className="text-purple-400" weight="duotone" />
                 <p className="text-xs text-gray-400">Estimated APY</p>
               </div>
-              <p className="text-2xl font-bold text-white">{validator.estimatedApy.toFixed(2)}%</p>
+              <p className="text-2xl font-bold text-white">{validator.estimatedApy !== null ? `${validator.estimatedApy.toFixed(2)}%` : '—'}</p>
               <p className="text-xs text-gray-400 mt-1">Annual Return</p>
             </div>
             <div className="p-4 bg-gray-800/50 rounded-lg">
@@ -153,7 +153,7 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
                 <Cube size={20} className="text-amber-400" weight="duotone" />
                 <p className="text-xs text-gray-400">Blocks Produced</p>
               </div>
-              <p className="text-2xl font-bold text-white">{validator.blocksProduced.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-white">{validator.blocksProduced !== null ? validator.blocksProduced.toLocaleString() : '—'}</p>
               <p className="text-xs text-gray-400 mt-1">This Era</p>
             </div>
           </div>
@@ -288,11 +288,11 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
             </div>
             <div className="flex items-center justify-between py-2 border-b border-gray-700/50">
               <span className="text-sm text-gray-400">Uptime</span>
-              <span className="text-sm text-white">{validator.uptime.toFixed(2)}%</span>
+              <span className="text-sm text-white">{validator.uptime !== null ? `${validator.uptime.toFixed(2)}%` : '—'}</span>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-gray-700/50">
               <span className="text-sm text-gray-400">Slashes</span>
-              <span className="text-sm text-white">{validator.slashes}</span>
+              <span className="text-sm text-white">{validator.slashes !== null ? validator.slashes : '—'}</span>
             </div>
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-gray-400">Current Block</span>

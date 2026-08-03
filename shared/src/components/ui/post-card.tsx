@@ -12,7 +12,7 @@ export interface PostCardProps {
       avatar: string | React.ReactNode;
       district?: string;
     };
-    content: string;
+    content: string | React.ReactNode;
     timestamp: string;
     likes: number;
     comments: number;

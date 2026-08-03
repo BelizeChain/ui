@@ -73,7 +73,7 @@ export function ShellReadinessPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         {items.map((item) => (
           <article
             key={item.id}

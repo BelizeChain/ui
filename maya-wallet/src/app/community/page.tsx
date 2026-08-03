@@ -12,7 +12,17 @@ import {
   ChartBar,
   Medal,
   TrendUp,
-  Fire
+  Fire,
+  User,
+  Confetti,
+  CheckSquare,
+  Tree,
+  Shield,
+  ChartLineUp,
+  Trophy,
+  Star,
+  RocketLaunch,
+  UsersThree
 } from 'phosphor-react';
 
 export default function CommunityPage() {
@@ -33,15 +43,15 @@ export default function CommunityPage() {
   });
 
   // Posts state
-  const [posts, setPosts] = useState([
+  const [posts, setPosts] = useState<any[]>([
     {
       id: '1',
       author: {
         name: 'Maria Garcia',
-        avatar: '👩🏽',
+        avatar: <User size={24} weight="fill" className="text-gray-400" />,
         district: 'Belize City'
       },
-      content: 'Just completed my first PoUW cycle! Earned 50 DALLA for contributing to the federated learning network. This is amazing! 🎉',
+      content: <>Just completed my first PoUW cycle! Earned 50 DALLA for contributing to the federated learning network. This is amazing! <Confetti size={20} weight="fill" className="inline text-yellow-500 mb-1" /></>,
       timestamp: '2h ago',
       likes: 24,
       comments: 8,
@@ -52,10 +62,10 @@ export default function CommunityPage() {
       id: '2',
       author: {
         name: 'John Martinez',
-        avatar: '👨🏾',
+        avatar: <User size={24} weight="fill" className="text-gray-400" />,
         district: 'Orange Walk'
       },
-      content: 'Proposal #42 for the new community center passed! Voting power: 1,250 DALLA. Democracy in action! 🗳️',
+      content: <>Proposal #42 for the new community center passed! Voting power: 1,250 DALLA. Democracy in action! <CheckSquare size={20} weight="fill" className="inline text-blue-500 mb-1" /></>,
       timestamp: '5h ago',
       likes: 67,
       comments: 15,
@@ -66,10 +76,10 @@ export default function CommunityPage() {
       id: '3',
       author: {
         name: 'Sarah Williams',
-        avatar: '👩🏻',
+        avatar: <User size={24} weight="fill" className="text-gray-400" />,
         district: 'Cayo'
       },
-      content: 'Planted 50 trees at the coastal restoration site today. Belize natural beauty is worth protecting! 🌴',
+      content: <>Planted 50 trees at the coastal restoration site today. Belize natural beauty is worth protecting! <Tree size={20} weight="fill" className="inline text-emerald-500 mb-1" /></>,
       timestamp: '1d ago',
       likes: 143,
       comments: 32,
@@ -88,7 +98,7 @@ export default function CommunityPage() {
       id: Date.now().toString(),
       author: {
         name: 'You',
-        avatar: '😊',
+        avatar: <User size={24} weight="fill" className="text-gray-400" />,
         district: newPost.district ?? 'Belize City',
       },
       content: newPost.content,
@@ -150,7 +160,7 @@ export default function CommunityPage() {
     {
       id: 'early-adopter',
       name: 'Early Adopter',
-      icon: '🚀',
+      icon: <RocketLaunch size={20} weight="fill" className="text-purple-500" />,
       description: 'Joined BelizeChain in the first month',
       rarity: 'legendary' as const,
       earned: true
@@ -158,7 +168,7 @@ export default function CommunityPage() {
     {
       id: 'community-champion',
       name: 'Community Champion',
-      icon: '👥',
+      icon: <UsersThree size={20} weight="fill" className="text-blue-400" />,
       description: 'Participated in 50+ governance votes',
       rarity: 'epic' as const,
       earned: true
@@ -166,7 +176,7 @@ export default function CommunityPage() {
     {
       id: 'eco-warrior',
       name: 'Eco Warrior',
-      icon: '🌿',
+      icon: <Tree size={20} weight="fill" className="text-emerald-500" />,
       description: 'Planted 100 trees',
       rarity: 'rare' as const,
       earned: false
@@ -174,7 +184,7 @@ export default function CommunityPage() {
     {
       id: 'validator',
       name: 'Validator',
-      icon: '🛡️',
+      icon: <Shield size={20} weight="fill" className="text-blue-500" />,
       description: 'Ran a validator node for 30 days',
       rarity: 'epic' as const,
       earned: false
@@ -182,7 +192,7 @@ export default function CommunityPage() {
     {
       id: 'first-vote',
       name: 'First Vote',
-      icon: '🗳️',
+      icon: <CheckSquare size={20} weight="fill" className="text-teal-500" />,
       description: 'Cast your first governance vote',
       rarity: 'common' as const,
       earned: true
@@ -190,7 +200,7 @@ export default function CommunityPage() {
     {
       id: 'master-trader',
       name: 'Master Trader',
-      icon: '💹',
+      icon: <ChartLineUp size={20} weight="fill" className="text-green-500" />,
       description: 'Complete 1000 trades on BelizeX',
       rarity: 'legendary' as const,
       earned: false
@@ -198,11 +208,11 @@ export default function CommunityPage() {
   ];
 
   const rankings = [
-    { rank: 1, name: 'Sarah Williams', avatar: '👩🏻', level: 42, xp: 12500, badge: '🏆' },
-    { rank: 2, name: 'John Martinez', avatar: '👨🏾', level: 38, xp: 11200, badge: '🥈' },
-    { rank: 3, name: 'Maria Garcia', avatar: '👩🏽', level: 35, xp: 10100, badge: '🥉' },
-    { rank: 4, name: 'You', avatar: '😊', level: 28, xp: 7850, badge: '⭐' },
-    { rank: 5, name: 'David Chen', avatar: '👨🏻', level: 24, xp: 6500, badge: '🌟' }
+    { rank: 1, name: 'Sarah Williams', avatar: <User size={24} weight="fill" className="text-gray-400" />, level: 42, xp: 12500, badge: <Trophy size={20} weight="fill" className="text-yellow-500" /> },
+    { rank: 2, name: 'John Martinez', avatar: <User size={24} weight="fill" className="text-gray-400" />, level: 38, xp: 11200, badge: <Medal size={20} weight="fill" className="text-gray-300" /> },
+    { rank: 3, name: 'Maria Garcia', avatar: <User size={24} weight="fill" className="text-gray-400" />, level: 35, xp: 10100, badge: <Medal size={20} weight="fill" className="text-amber-700" /> },
+    { rank: 4, name: 'You', avatar: <User size={24} weight="fill" className="text-gray-400" />, level: 28, xp: 7850, badge: <Star size={20} weight="fill" className="text-yellow-400" /> },
+    { rank: 5, name: 'David Chen', avatar: <User size={24} weight="fill" className="text-gray-400" />, level: 24, xp: 6500, badge: <Star size={20} weight="fill" className="text-yellow-400" /> }
   ];
 
   return (
@@ -356,9 +366,16 @@ export default function CommunityPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="text-2xl font-bold text-gray-400 w-8">{user.badge}</div>
-                          <div className="text-3xl">{user.avatar}</div>
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center justify-center w-6 text-xl font-bold text-gray-500">
+                            #{user.rank}
+                          </div>
+                          <div className="flex items-center justify-center w-8">
+                            {user.badge}
+                          </div>
+                          <div className="flex items-center justify-center w-10 h-10 bg-gray-800 rounded-full border border-gray-700">
+                            {user.avatar}
+                          </div>
                           <div>
                             <p className={`font-semibold ${user.name === 'You' ? 'text-emerald-400' : 'text-white'}`}>
                               {user.name}

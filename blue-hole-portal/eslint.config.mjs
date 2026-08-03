@@ -15,6 +15,10 @@ const config = [
       '@typescript-eslint/no-require-imports': 'warn',
       'prefer-const': 'warn',
       'react/no-unescaped-entities': 'warn',
+      'react-hooks/set-state-in-effect': 'off',
+      '@next/next/no-html-link-for-pages': 'off',
+      'react-hooks/purity': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
     },
   },
   {

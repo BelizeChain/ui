@@ -20,104 +20,19 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { blockchainService } from '@/services/blockchain';
 
-interface Validator {
-  id: number;
-  address: string;
-  name: string;
-  commission: number;
-  totalStake: string;
-  ownStake: string;
-  // PoUW / PQW scores, uptime, blocks-produced, and historical rewards are
-  // not exposed on a single storage map; they require an indexer or a custom
-  // RPC. Until that's in place we surface them as `null` and the UI renders
-  // a dash instead of a fabricated value.
-  pouWScore: number | null;
-  pqwScore: number | null;
-  uptime: number | null;
-  blocksProduced: number | null;
-  slashes: number | null;
-  status: 'Active' | 'Waiting' | 'Inactive';
-  rewardsPaid: string | null;
-}
+import { useStaking, type Validator } from '@/hooks/useStaking';
 
 export default function ValidatorsPage() {
   const router = useRouter();
-  const [validators, setValidators] = useState<Validator[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { validators, stats, isLoading: loading, error, refetch } = useStaking();
   const [sortBy, setSortBy] = useState<'stake' | 'pouw' | 'pqw' | 'uptime'>('stake');
-
-  useEffect(() => {
-    loadValidators();
-    const interval = setInterval(loadValidators, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function loadValidators() {
-    try {
-      setError(null);
-      await blockchainService.initialize();
-      const api = await blockchainService.getApi();
-      
-      // Get current era
-      const activeEra = await api.query.staking?.activeEra();
-      const currentEra = (activeEra as any)?.unwrap()?.index?.toNumber() || 0;
-      
-      // Get all validators
-      const allValidators = await api.query.staking?.validators.entries();
-      const sessionValidators = await api.query.session?.validators();
-      const activeSet = new Set((sessionValidators as any)?.map((v: any) => v.toString()) || []);
-      
-      const validatorList: Validator[] = [];
-      let idCounter = 1;
-      
-      for (const [key, prefs] of allValidators || []) {
-        const address = key.args[0].toString();
-        const commission = (prefs as any).commission.toNumber() / 10000000;
-        
-        const exposure: any = await api.query.staking?.erasStakers(currentEra, address);
-        const total = exposure?.total?.toString() || '0';
-        const own = exposure?.own?.toString() || '0';
-        
-        const formatBalance = (val: string) => {
-          const num = BigInt(val);
-          return (num / BigInt(10 ** 12)).toLocaleString();
-        };
-        
-        validatorList.push({
-          id: idCounter++,
-          address,
-          name: address.slice(0, 8) + '...' + address.slice(-6),
-          commission,
-          totalStake: formatBalance(total),
-          ownStake: formatBalance(own),
-          // Per-validator PoUW/PQW/uptime/block-production/rewards history
-          // require an indexer; left null for the UI to render "—".
-          pouWScore: null,
-          pqwScore: null,
-          uptime: null,
-          blocksProduced: null,
-          slashes: null,
-          status: activeSet.has(address) ? 'Active' : 'Waiting',
-          rewardsPaid: null,
-        });
-      }
-      
-      setValidators(validatorList);
-      setLoading(false);
-    } catch (err) {
-      console.error('Failed to load validators:', err);
-      setError('Failed to load validator data');
-      setLoading(false);
-    }
-  }
 
   const sortedValidators = [...validators].sort((a, b) => {
     switch (sortBy) {
       case 'stake':
-        return parseInt(b.totalStake.replace(/,/g, '')) - parseInt(a.totalStake.replace(/,/g, ''));
+        return a.totalStake < b.totalStake ? 1 : a.totalStake > b.totalStake ? -1 : 0;
       case 'pouw':
-        return (b.pouWScore ?? -1) - (a.pouWScore ?? -1);
+        return (b.pouwScore ?? -1) - (a.pouwScore ?? -1);
       case 'pqw':
         return (b.pqwScore ?? -1) - (a.pqwScore ?? -1);
       case 'uptime':
@@ -127,7 +42,7 @@ export default function ValidatorsPage() {
     }
   });
 
-  const totalStake = validators.reduce((sum, v) => sum + parseInt(v.totalStake.replace(/,/g, '')), 0);
+  const totalStake = validators.reduce((sum, v) => sum + v.totalStake, 0n);
   const avgCommission = validators.length > 0
     ? validators.reduce((sum, v) => sum + v.commission, 0) / validators.length
     : 0;
@@ -143,7 +58,7 @@ export default function ValidatorsPage() {
       {error && (
         <GlassCard variant="dark" blur="lg" className="p-6">
           <p className="text-red-400">{error}</p>
-          <Button onClick={loadValidators} className="mt-4">Retry</Button>
+          <Button onClick={refetch} className="mt-4">Retry</Button>
         </GlassCard>
       )}
       {!loading && !error && (
@@ -228,9 +143,9 @@ export default function ValidatorsPage() {
       <div className="space-y-4">
         {sortedValidators.map((validator) => (
           <ValidatorCard
-            key={validator.id}
+            key={validator.address}
             validator={validator}
-            onStake={() => router.push(`/validators/${validator.id}/stake`)}
+            onStake={() => router.push(`/validators/${validator.address}/stake`)}
           />
         ))}
       </div>
@@ -310,7 +225,7 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-gray-400 mb-1">Total Stake</p>
-            <p className="text-lg font-bold text-white">{validator.totalStake}</p>
+            <p className="text-lg font-bold text-white">{(Number(validator.totalStake) / 1e12).toLocaleString()}</p>
             <p className="text-xs text-gray-500">DALLA</p>
           </div>
           <div>
@@ -319,7 +234,7 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">PoUW Score</p>
-            <p className="text-lg font-bold text-purple-400">{fmt(validator.pouWScore, '%')}</p>
+            <p className="text-lg font-bold text-purple-400">{fmt(validator.pouwScore, '%')}</p>
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">PQW Score</p>

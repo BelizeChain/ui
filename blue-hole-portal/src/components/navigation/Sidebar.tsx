@@ -46,7 +46,7 @@ export function Sidebar({ className }: SidebarProps) {
   // Calculate badge counts
   const badgeCounts = {
     proposals: proposals.filter(p => p.status === 'Active').length,
-    compliance: complianceStats?.pendingReview || 0,
+    compliance: 0,
   };
 
   const navigationSections: { title: string; items: NavItem[] }[] = [
@@ -254,7 +254,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   // Calculate badge counts
   const badgeCounts = {
     proposals: proposals.filter(p => p.status === 'Active').length,
-    compliance: complianceStats?.pendingReview || 0,
+    compliance: 0,
   };
 
   const navigationSections: { title: string; items: NavItem[] }[] = [

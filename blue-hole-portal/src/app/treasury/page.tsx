@@ -49,6 +49,8 @@ interface SpendProposal {
   category: 'Infrastructure' | 'Social' | 'Economic' | 'Emergency';
 }
 
+import { useEconomy } from '@/hooks/useEconomy';
+
 const EMPTY_METRICS: TreasuryMetrics = {
   dallaBalance: '0',
   totalSpendProposals: 0,
@@ -98,58 +100,23 @@ export default function TreasuryPage() {
   const router = useRouter();
   const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
-  const [metrics, setMetrics] = useState<TreasuryMetrics>(EMPTY_METRICS);
-  const [spendProposals, setSpendProposals] = useState<SpendProposal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { treasuryBalance, proposals: chainProposals, isLoading: loading, refetch } = useEconomy();
+  
+  const uiProposals = chainProposals.map(toUiSpendProposal);
+  const activeCount = uiProposals.filter((p) => p.status === 'Pending').length;
+  
+  const metrics: TreasuryMetrics = {
+    dallaBalance: treasuryBalance ? (Number(treasuryBalance.dalla) / 1e12).toFixed(2) : '0',
+    totalSpendProposals: uiProposals.length,
+    activeSpendProposals: activeCount,
+  };
+  
+  const spendProposals = uiProposals;
+
   const [voteError, setVoteError] = useState<string | null>(null);
   const [submittingApprovalFor, setSubmittingApprovalFor] = useState<number | null>(null);
   const [pendingApproval, setPendingApproval] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Pending' | 'Approved' | 'Executed'>('All');
-  // `lastGood` keeps the most recent successful fetch around so transient RPC
-  // failures don't blank the page mid-render.
-  const lastGood = useRef<{ metrics: TreasuryMetrics; proposals: SpendProposal[] } | null>(null);
-
-  const refresh = async () => {
-    try {
-      const [balance, chainProposals] = await Promise.all([
-        getTreasuryBalance(),
-        getTreasurySpendProposals(),
-      ]);
-      const uiProposals = chainProposals.map(toUiSpendProposal);
-      const activeCount = uiProposals.filter((p) => p.status === 'Pending').length;
-      const nextMetrics: TreasuryMetrics = {
-        dallaBalance: balance.freeDalla,
-        totalSpendProposals: uiProposals.length,
-        activeSpendProposals: activeCount,
-      };
-      lastGood.current = { metrics: nextMetrics, proposals: uiProposals };
-      setMetrics(nextMetrics);
-      setSpendProposals(uiProposals);
-    } catch (error) {
-      console.error('Treasury refresh failed:', error);
-      if (lastGood.current) {
-        setMetrics(lastGood.current.metrics);
-        setSpendProposals(lastGood.current.proposals);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isReady) return;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      await refresh();
-    };
-    void tick();
-    const interval = setInterval(tick, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [isReady]);
 
   const filteredProposals = spendProposals.filter(
     (p) => filterStatus === 'All' || p.status === filterStatus,
@@ -176,7 +143,7 @@ export default function TreasuryPage() {
     setSubmittingApprovalFor(proposalId);
     try {
       await voteOnProposal(selectedAccount.address, proposalId, 'Aye');
-      await refresh();
+      if (refetch) await refetch();
       setPendingApproval(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Vote failed.';

@@ -12,6 +12,7 @@ import {
   StarFour,
   User,
   CheckCircle,
+  Circle,
   PaperPlaneTilt
 } from 'phosphor-react';
 
@@ -135,7 +136,7 @@ export default function ContactsPage() {
                     <p className={`text-xs mt-1 ${
                       contact.lastSeen === 'Online' ? 'text-emerald-400' : 'text-gray-400'
                     }`}>
-                      {contact.lastSeen === 'Online' ? '🟢 Online' : `Last seen ${contact.lastSeen}`}
+                      {contact.lastSeen === 'Online' ? <><Circle size={10} weight="fill" className="inline text-emerald-400 mr-1" /> Online</> : `Last seen ${contact.lastSeen}`}
                     </p>
                   </div>
                 </div>

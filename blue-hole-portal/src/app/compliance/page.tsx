@@ -11,14 +11,8 @@ import {
   FunnelSimple,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
-import {
-  getComplianceRecords,
-  getComplianceStats,
-  type ComplianceRecord,
-  type ComplianceStats,
-  type VerificationLevel,
-  type RiskLevel,
-} from '@/services/pallets/compliance';
+import { useCompliance } from '@/hooks/useCompliance';
+import type { VerificationLevel, RiskLevel, ComplianceRecord } from '@/services/pallets/compliance';
 
 const VERIFICATION_FILTERS: Array<'All' | VerificationLevel> = [
   'All',
@@ -31,42 +25,9 @@ const VERIFICATION_FILTERS: Array<'All' | VerificationLevel> = [
 const RISK_FILTERS: Array<'All' | RiskLevel> = ['All', 'Low', 'Medium', 'High', 'Prohibited'];
 
 export default function CompliancePage() {
-  const [records, setRecords] = useState<ComplianceRecord[]>([]);
-  const [stats, setStats] = useState<ComplianceStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { records, stats, isLoading: loading, error } = useCompliance();
   const [filterVerification, setFilterVerification] = useState<'All' | VerificationLevel>('All');
   const [filterRisk, setFilterRisk] = useState<'All' | RiskLevel>('All');
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const [recs, st] = await Promise.all([
-          getComplianceRecords(),
-          getComplianceStats(),
-        ]);
-        if (cancelled) return;
-        setRecords(recs);
-        setStats(st);
-        setError(null);
-      } catch (err) {
-        if (cancelled) return;
-        console.error('Failed to load compliance data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load compliance data');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    const timer = setInterval(load, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
 
   const filtered = records.filter((r) => {
     if (filterVerification !== 'All' && r.verificationLevel !== filterVerification) return false;

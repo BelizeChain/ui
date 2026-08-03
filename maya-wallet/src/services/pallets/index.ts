@@ -50,7 +50,7 @@ export { getQuantumBackends, submitQuantumJob, getQuantumJob, getUserQuantumJobs
 export { getCommunityGroups, createCommunityGroup, joinCommunityGroup, getCommunityProposals, submitCommunityProposal, voteOnCommunityProposal, contributeToCommunityFund, getCommunityEvents, rsvpToEvent, getUserCommunityGroups } from './community';
 
 // Nawal AI
-export { getParticipantStats, getSystemMetrics, getRoundStatus } from './nawal';
+export { getParticipantStats, getSystemMetrics, getRoundStatus, getActiveRounds, getRecentRounds } from './nawal';
 
 // Smart Contracts (GEM Platform) — see src/services/gem.ts for the
 // ContractPromise-based implementation. The legacy ./contracts module

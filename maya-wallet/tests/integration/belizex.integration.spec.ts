@@ -53,11 +53,11 @@ test.describe('BelizeX Trading Integration @integration', () => {
 
   test('should display trading statistics', async ({ page }) => {
     // Wait for stats section
-    await page.waitForSelector('text=/Volume|Liquidity|TVL/', {
+    await page.waitForSelector(':text("Total Reserves"), :text("Active"), :text("Pairs")', {
       timeout: 10000
     });
     
-    const statsVisible = await page.locator('text="24h Volume"').count();
+    const statsVisible = await page.locator('text=/Total Reserves|Active|Pairs/i').count();
     expect(statsVisible).toBeGreaterThanOrEqual(0);
   });
 });

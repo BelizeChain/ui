@@ -19,6 +19,7 @@ import {
   Clock,
   MagnifyingGlass,
   Storefront,
+  Lightbulb,
 } from 'phosphor-react';
 
 interface Service {
@@ -334,8 +335,8 @@ export default function ServicesPage() {
 
         {/* Info Banner */}
         <div className="mt-6 p-4 bg-gradient-to-r from-caribbean-50 to-jungle-50 rounded-xl border border-caribbean-200">
-          <p className="text-sm text-gray-700 font-medium mb-1">
-            💡 New to government services?
+          <p className="text-sm text-gray-700 font-medium mb-1 flex items-center">
+            <Lightbulb size={18} weight="fill" className="text-amber-500 mr-2" /> New to government services?
           </p>
           <p className="text-xs text-gray-600">
             Most services can be completed online. Pay with DALLA or bBZD directly from your wallet.

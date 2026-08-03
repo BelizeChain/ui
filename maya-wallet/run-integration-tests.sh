@@ -44,7 +44,7 @@ else
     echo "Starting blockchain node..."
     
     cd ../..
-    ./target/release/belizechain-node --dev --tmp > /tmp/blockchain-integration.log 2>&1 &
+    ./belizechain/target/release/belizechain-node --dev --tmp > /tmp/blockchain-integration.log 2>&1 &
     BLOCKCHAIN_PID=$!
     cd ui/maya-wallet
     
@@ -106,7 +106,7 @@ echo "Tests will connect to real blockchain and verify data"
 echo ""
 
 # Run tests tagged with @integration
-if npx playwright test --grep "@integration" --project=chromium --workers=1; then
+if npx playwright test ./tests/integration --grep "@integration" --project=chromium --workers=1; then
     echo -e "\n${GREEN}╔════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║   ✅ ALL INTEGRATION TESTS PASSED! 🎉     ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"

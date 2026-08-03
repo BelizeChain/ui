@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBlockchain } from '@/lib/blockchain/hooks';
+import { connectionManager } from '@/lib/blockchain/connection';
 
 export interface Validator {
   address: string;
@@ -10,13 +11,14 @@ export interface Validator {
   totalStake: bigint;
   ownStake: bigint;
   nominatorsCount: number;
-  pouwScore: number; // Proof of Useful Work score (0-100)
-  pqwScore: number; // Proof of Quantum Work score (0-100)
-  uptime: number; // Percentage (0-100)
-  estimatedApy: number; // Percentage
+  pouwScore: number | null; // Proof of Useful Work score (0-100)
+  pqwScore: number | null; // Proof of Quantum Work score (0-100)
+  uptime: number | null; // Percentage (0-100)
+  estimatedApy: number | null; // Percentage
   status: 'Active' | 'Waiting' | 'Inactive';
-  blocksProduced: number;
-  slashes: number;
+  blocksProduced: number | null;
+  slashes: number | null;
+  rewardsPaid: number | null;
 }
 
 export interface Nominator {
@@ -31,136 +33,132 @@ export interface StakingStats {
   activeValidators: number;
   waitingValidators: number;
   totalNominators: number;
-  averageApy: number;
+  averageApy: number | null;
   currentEra: number;
 }
 
 /**
- * Hook for Staking pallet queries
- * Provides validators, nominators, staking statistics
+ * Hook for Staking queries
+ * Provides validators and staking statistics using pallet_staking and pallet_session.
  */
 export function useStaking() {
-  const { api, isConnected } = useBlockchain();
+  const { isConnected } = useBlockchain();
   const [validators, setValidators] = useState<Validator[]>([]);
   const [stats, setStats] = useState<StakingStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!api || !isConnected) {
+    if (!isConnected) {
       setIsLoading(false);
       return;
     }
 
-    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    let timer: NodeJS.Timeout;
 
     const fetchStakingData = async () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        const api = await connectionManager.connect();
+        
+        // Get current era
+        const activeEra = await api.query.staking?.activeEra();
+        const currentEra = (activeEra as any)?.unwrapOrDefault()?.index?.toNumber() || 0;
+        
+        // Get all validators
+        const allValidators = await api.query.staking?.validators.entries();
+        const sessionValidators = await api.query.session?.validators();
+        const activeSet = new Set((sessionValidators as any)?.map((v: any) => v.toString()) || []);
+        
+        const validatorList: Validator[] = [];
+        let totalStaked = 0n;
+        
+        for (const [key, prefs] of allValidators || []) {
+          const address = key.args[0].toString();
+          const commission = (prefs as any).commission.toNumber() / 10_000_000;
+          
+          const exposure: any = await api.query.staking?.erasStakers(currentEra, address);
+          const total = exposure?.total ? BigInt(exposure.total.toString()) : 0n;
+          const own = exposure?.own ? BigInt(exposure.own.toString()) : 0n;
+          const others = exposure?.others || [];
+          
+          totalStaked += total;
 
-        // Query active validators
-        const activeValidators: any = await api.query.belizeStaking?.validators();
-        const validatorAddresses = activeValidators?.toArray().map((v: any) => v.toString()) || [];
-
-        // Query current era
-        const currentEra = await api.query.belizeStaking?.currentEra();
-        const eraNumber = currentEra ? parseInt(currentEra.toString()) : 0;
-
-        // Fetch detailed validator info
-        const validatorPromises = validatorAddresses.map(async (address: string) => {
-          const [prefs, exposure, pouwScore, pqwScore, uptime, blocks, identityRaw, slashingSpan]: any[] = await Promise.all([
-            api.query.belizeStaking?.validators(address),
-            api.query.belizeStaking?.erasStakers(eraNumber, address),
-            api.query.belizeStaking?.pouwScores(address), // Proof of Useful Work
-            api.query.belizeConsensus?.pqwScores(address), // Proof of Quantum Work
-            api.query.belizeStaking?.validatorUptime(address),
-            api.query.belizeStaking?.blocksProduced(address),
-            api.query.identity?.identityOf?.(address), // On-chain display name
-            (api.query.belizeStaking?.slashingSpans || api.query.staking?.slashingSpans)?.(address), // Slash history
-          ]);
-
-          const commission = prefs ? parseInt(prefs.commission?.toString() || '100000000') / 1e7 : 10; // Perbill to percentage
-          const totalStake = exposure?.total ? BigInt(exposure.total.toString()) : 0n;
-          const ownStake = exposure?.own ? BigInt(exposure.own.toString()) : 0n;
-          const nominators = exposure?.others?.length || 0;
-
-          // Resolve on-chain identity display, falling back to a shortened address
-          const identity = identityRaw?.toJSON?.() as any;
-          const displayName =
-            identity?.info?.display?.Raw ||
-            identity?.display ||
-            identity?.name ||
-            `Validator ${address.slice(0, 8)}`;
-
-          // Slash count = number of prior spans (+ current span if any)
-          const slashSpans = slashingSpan?.toJSON?.() as any;
-          const slashes = slashSpans?.prior ? slashSpans.prior.length + 1 : 0;
-
-          return {
+          // Attempt to get identity
+          const identityOpt: any = await api.query.identity?.identityOf(address);
+          let displayName = `${address.slice(0, 6)}…${address.slice(-4)}`;
+          if (identityOpt && identityOpt.isSome) {
+             const identity = identityOpt.unwrap();
+             const rawName = identity.info?.display?.asRaw;
+             if (rawName) {
+                displayName = new TextDecoder().decode(rawName);
+             }
+          }
+          
+          validatorList.push({
             address,
             name: displayName,
             commission,
-            totalStake,
-            ownStake,
-            nominatorsCount: nominators,
-            pouwScore: pouwScore ? parseFloat(pouwScore.toString()) : 0,
-            pqwScore: pqwScore ? parseFloat(pqwScore.toString()) : 0,
-            uptime: uptime ? parseFloat(uptime.toString()) : 99.0,
-            estimatedApy: calculateApy(commission, totalStake),
-            status: 'Active' as const,
-            blocksProduced: blocks ? parseInt(blocks.toString()) : 0,
-            slashes,
-          };
+            totalStake: total,
+            ownStake: own,
+            nominatorsCount: others.length,
+            pouwScore: null,
+            pqwScore: null,
+            uptime: null,
+            estimatedApy: null,
+            status: activeSet.has(address) ? 'Active' : 'Waiting',
+            blocksProduced: null,
+            slashes: null,
+            rewardsPaid: null,
+          });
+        }
+        
+        // Sort active first, then by total stake
+        validatorList.sort((a, b) => {
+          if (a.status === 'Active' && b.status !== 'Active') return -1;
+          if (a.status !== 'Active' && b.status === 'Active') return 1;
+          return a.totalStake > b.totalStake ? -1 : 1;
         });
 
-        const validatorData = await Promise.all(validatorPromises);
-        setValidators(validatorData);
-
-        // Calculate staking statistics
-        const totalStaked = validatorData.reduce((sum, v) => sum + v.totalStake, 0n);
-        const averageApy = validatorData.reduce((sum, v) => sum + v.estimatedApy, 0) / validatorData.length;
-
-        // Query waiting validators
-        const waiting: any = await api.query.belizeStaking?.waitingValidators();
-        const waitingCount = waiting?.toArray().length || 0;
-
-        // Query total nominators
-        const nominators: any = await api.query.belizeStaking?.nominators.entries();
+        // Nominators
+        const nominators = await api.query.staking?.nominators.entries();
         const nominatorsCount = nominators?.length || 0;
 
-        setStats({
-          totalStaked,
-          activeValidators: validatorData.length,
-          waitingValidators: waitingCount,
-          totalNominators: nominatorsCount,
-          averageApy,
-          currentEra: eraNumber,
-        });
+        const activeCount = validatorList.filter(v => v.status === 'Active').length;
+        const waitingCount = validatorList.filter(v => v.status === 'Waiting').length;
 
-        setIsLoading(false);
+        if (!cancelled) {
+          setValidators(validatorList);
+          setStats({
+            totalStaked,
+            activeValidators: activeCount,
+            waitingValidators: waitingCount,
+            totalNominators: nominatorsCount,
+            averageApy: null,
+            currentEra,
+          });
+          setIsLoading(false);
+        }
       } catch (err) {
-        console.error('Staking pallet query error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch staking data');
-        setIsLoading(false);
+        if (!cancelled) {
+          console.error('Staking data query error:', err);
+          setError(err instanceof Error ? err.message : 'Failed to fetch staking data');
+          setIsLoading(false);
+        }
       }
     };
 
     fetchStakingData();
-
-    // Subscribe to validator set changes
-    if (api.query.belizeStaking?.validators) {
-      api.query.belizeStaking.validators((validators: any) => {
-        fetchStakingData(); // Refetch on validator changes
-      }).then((unsub) => {
-        unsubscribe = unsub as any;
-      });
-    }
+    timer = setInterval(fetchStakingData, 30_000);
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      cancelled = true;
+      if (timer) clearInterval(timer);
     };
-  }, [api, isConnected]);
+  }, [isConnected]);
 
   return {
     validators,
@@ -168,64 +166,52 @@ export function useStaking() {
     isLoading,
     error,
     isConnected,
-  };
-}
-
-/**
- * Hook to get nominator data for specific account
- */
-export function useNominator(address: string | null) {
-  const { api, isConnected } = useBlockchain();
-  const [nominator, setNominator] = useState<Nominator | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!api || !isConnected || !address) {
-      setNominator(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchNominator = async () => {
+    refetch: async () => {
       try {
         setIsLoading(true);
-        const nominatorData: any = await api.query.belizeStaking?.nominators(address);
-        
-        if (!nominatorData || nominatorData.isNone) {
-          setNominator(null);
-          setIsLoading(false);
-          return;
+        const api = await connectionManager.connect();
+        const activeEra = await api.query.staking?.activeEra();
+        const currentEra = (activeEra as any)?.unwrapOrDefault()?.index?.toNumber() || 0;
+        const allValidators = await api.query.staking?.validators.entries();
+        const sessionValidators = await api.query.session?.validators();
+        const activeSet = new Set((sessionValidators as any)?.map((v: any) => v.toString()) || []);
+        const validatorList: Validator[] = [];
+        let totalStaked = 0n;
+        for (const [key, prefs] of allValidators || []) {
+          const address = key.args[0].toString();
+          const commission = (prefs as any).commission.toNumber() / 10_000_000;
+          const exposure: any = await api.query.staking?.erasStakers(currentEra, address);
+          const total = exposure?.total ? BigInt(exposure.total.toString()) : 0n;
+          const own = exposure?.own ? BigInt(exposure.own.toString()) : 0n;
+          const others = exposure?.others || [];
+          totalStaked += total;
+          let displayName = `${address.slice(0, 6)}…${address.slice(-4)}`;
+          validatorList.push({
+            address, name: displayName, commission, totalStake: total, ownStake: own,
+            nominatorsCount: others.length, pouwScore: null, pqwScore: null, uptime: null,
+            estimatedApy: null, status: activeSet.has(address) ? 'Active' : 'Waiting',
+            blocksProduced: null, slashes: null, rewardsPaid: null
+          });
         }
-
-        const nom = nominatorData.unwrap ? nominatorData.unwrap() : nominatorData;
-        setNominator({
-          address,
-          amount: BigInt(nom.amount?.toString() || '0'),
-          targets: nom.targets?.toArray().map((t: any) => t.toString()) || [],
-          timestamp: nom.timestamp ? parseInt(nom.timestamp.toString()) : Date.now(),
+        validatorList.sort((a, b) => {
+          if (a.status === 'Active' && b.status !== 'Active') return -1;
+          if (a.status !== 'Active' && b.status === 'Active') return 1;
+          return a.totalStake > b.totalStake ? -1 : 1;
+        });
+        const nominators = await api.query.staking?.nominators.entries();
+        const nominatorsCount = nominators?.length || 0;
+        const activeCount = validatorList.filter(v => v.status === 'Active').length;
+        const waitingCount = validatorList.filter(v => v.status === 'Waiting').length;
+        setValidators(validatorList);
+        setStats({
+          totalStaked, activeValidators: activeCount, waitingValidators: waitingCount,
+          totalNominators: nominatorsCount, averageApy: null, currentEra,
         });
         setIsLoading(false);
       } catch (err) {
-        console.error('Nominator query error:', err);
-        setNominator(null);
+        console.error('Manual staking fetch error:', err);
         setIsLoading(false);
       }
-    };
-
-    fetchNominator();
-  }, [api, isConnected, address]);
-
-  return { nominator, isLoading };
-}
-
-/**
- * Calculate estimated APY based on commission and stake
- */
-function calculateApy(commission: number, totalStake: bigint): number {
-  // Base APY calculation (simplified)
-  // Real calculation would include era rewards, inflation, etc.
-  const baseApy = 20; // 20% base
-  const commissionFactor = (100 - commission) / 100;
-  const stakeFactor = totalStake > 1_000_000n ? 0.9 : 1.0; // Reduce APY for large validators
-  return baseApy * commissionFactor * stakeFactor;
+    }
+  };
 }

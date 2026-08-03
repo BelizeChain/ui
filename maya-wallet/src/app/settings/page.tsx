@@ -16,6 +16,7 @@ import {
   SignOut,
   UserCircle,
   Fingerprint,
+  Check,
 } from 'phosphor-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/ui';
@@ -106,7 +107,7 @@ export default function SettingsPage() {
                 <div className="flex items-center space-x-2 mt-1">
                   {account.isVerified && (
                     <Badge variant="success" className="text-xs flex items-center">
-                      ✓ Verified
+                      <Check size={12} weight="bold" className="mr-1 inline" /> Verified
                     </Badge>
                   )}
                   <Badge variant="info" className="text-xs">
@@ -241,9 +242,9 @@ export default function SettingsPage() {
             <Select
               label="Display Currency"
               options={[
-                { value: 'USD', label: '🇺🇸 US Dollar (USD)' },
-                { value: 'BZD', label: '🇧🇿 Belize Dollar (BZD)' },
-                { value: 'DALLA', label: '⛓️ DALLA (Native)' },
+                { value: 'USD', label: 'US Dollar (USD)' },
+                { value: 'BZD', label: 'Belize Dollar (BZD)' },
+                { value: 'DALLA', label: 'DALLA (Native)' },
               ]}
               value={currency}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCurrency(e.target.value)}
@@ -251,12 +252,12 @@ export default function SettingsPage() {
             <Select
               label={t.common.language}
               options={[
-                { value: 'en', label: '🇬🇧 English' },
-                { value: 'es', label: '🇪🇸 Español' },
-                { value: 'kri', label: '🇧🇿 Kriol' },
-                { value: 'qek', label: '🇬🇹 Q\'eqchi\' Maya' },
-                { value: 'gar', label: '🇭🇳 Garífuna' },
-                { value: 'mop', label: '🇧🇿 Mopan Maya' },
+                { value: 'en', label: 'English' },
+                { value: 'es', label: 'Español' },
+                { value: 'kri', label: 'Kriol' },
+                { value: 'qek', label: 'Q\'eqchi\' Maya' },
+                { value: 'gar', label: 'Garífuna' },
+                { value: 'mop', label: 'Mopan Maya' },
               ]}
               value={locale}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLocale(e.target.value as any)}

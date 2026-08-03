@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Tests blockchain integration, wallet connection, and user workflows
  */
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './tests',
   
   // Maximum time one test can run
   timeout: 60 * 1000,

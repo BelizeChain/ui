@@ -43,7 +43,7 @@ export { useI18n, getTranslations, localeInfo, type Locale, type Translations } 
 
 // API Clients (export only client classes/functions to avoid type conflicts)
 export { KinichClient, getKinichClient, type QuantumJob } from './api/kinich-client';
-export { NawalClient, getNawalClient } from './api/nawal-client';
+export { NawalClient, getNawalClient, type FLTask, type GenomeInfo } from './api/nawal-client';
 export { 
   PakitClient, 
   getPakitClient,

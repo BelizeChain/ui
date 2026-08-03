@@ -121,51 +121,23 @@ interface Proposal {
   category: 'Treasury' | 'Policy' | 'Technical' | 'Emergency';
 }
 
+import { useGovernance } from '@/hooks/useGovernance';
+
 // Proposal data is fetched live from `pallet_governance::Proposals` via
-// `getActiveProposals()` below — no hardcoded fixtures.
+// `getActiveProposals()` inside the `useGovernance` hook.
 
 export default function GovernanceProposalsPage() {
   const router = useRouter();
   const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { proposals: chainProposals, isLoading: loading, refetch } = useGovernance();
+  const proposals = chainProposals.map(chainToUiProposal);
+  
   const [voteError, setVoteError] = useState<string | null>(null);
   const [submittingVoteFor, setSubmittingVoteFor] = useState<number | null>(null);
   const [pendingVote, setPendingVote] = useState<{ proposalId: number; vote: VoteType } | null>(null);
   const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'All'>('All');
   const [sortBy, setSortBy] = useState<'newest' | 'ending' | 'votes'>('newest');
-
-  // Poll `pallet_governance::Proposals` every 15s while the page is open.
-  // We keep the last successful snapshot on transient errors so the list does
-  // not flicker to empty between connection blips.
-  useEffect(() => {
-    if (!isReady) return;
-    let cancelled = false;
-    let lastGood: Proposal[] | null = null;
-
-    const tick = async () => {
-      try {
-        const live = await getActiveProposals();
-        if (cancelled) return;
-        const mapped = live.map(chainToUiProposal);
-        lastGood = mapped;
-        setProposals(mapped);
-      } catch (err) {
-        console.error('getActiveProposals failed:', err);
-        if (lastGood && !cancelled) setProposals(lastGood);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [isReady]);
 
   // Filter and sort proposals
   const filteredProposals = proposals
@@ -208,8 +180,7 @@ export default function GovernanceProposalsPage() {
       const { hash } = await voteOnProposal(selectedAccount.address, proposalId, vote);
       console.log(`Vote ${vote} for proposal ${proposalId} in block`, hash);
       // Optimistic refresh: pick up the new tally on the next poll tick.
-      const refreshed = await getActiveProposals();
-      setProposals(refreshed.map(chainToUiProposal));
+      if (refetch) await refetch();
       setPendingVote(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Vote submission failed';

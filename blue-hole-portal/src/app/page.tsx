@@ -66,7 +66,7 @@ export default function NationalDashboard() {
   const { treasuryBalance, proposals: treasuryProposals, isLoading: economyLoading } = useEconomy();
   const { validators, stats: stakingStats, isLoading: stakingLoading } = useStaking();
   const { proposals: governanceProposals, isLoading: governanceLoading } = useGovernance();
-  const { applications, stats: complianceStats, isLoading: complianceLoading } = useCompliance();
+  const { records: complianceRecords, stats: complianceStats, isLoading: complianceLoading } = useCompliance();
   const { systemInfo, networkStats, isLoading: systemLoading } = useSystem();
 
   // Loading state
@@ -248,14 +248,14 @@ export default function NationalDashboard() {
             ) : (
               governanceProposals.slice(0, 5).map((proposal) => (
                 <ActivityItem
-                  key={proposal.id}
+                  key={proposal.index}
                   icon={FileText}
                   iconColor="text-blue-400"
                   iconBg="bg-blue-500/20"
                   title={proposal.title}
-                  subtitle={`Proposal #${proposal.id} • ${proposal.status}`}
+                  subtitle={`Proposal #${proposal.index} • ${proposal.status}`}
                   action="View"
-                  onClick={() => router.push(`/governance/proposals/${proposal.id}`)}
+                  onClick={() => router.push(`/governance/proposals/${proposal.index}`)}
                 />
               ))
             )}

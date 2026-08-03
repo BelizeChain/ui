@@ -1,0 +1,35 @@
+
+/home/wicked/Projects/Belizechain/ui/blue-hole-portal/src/app/reports/page.tsx
+  87:5  error  Error: Cannot access variable before it is declared
+
+`fetchAnalytics` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/home/wicked/Projects/Belizechain/ui/blue-hole-portal/src/app/reports/page.tsx:87:5
+  85 |
+  86 |   React.useEffect(() => {
+> 87 |     fetchAnalytics();
+     |     ^^^^^^^^^^^^^^ `fetchAnalytics` accessed before it is declared
+  88 |   }, []);
+  89 |
+  90 |   async function fetchAnalytics() {
+
+/home/wicked/Projects/Belizechain/ui/blue-hole-portal/src/app/reports/page.tsx:90:3
+   88 |   }, []);
+   89 |
+>  90 |   async function fetchAnalytics() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  91 |     try {
+      | ^^^^^^^^^
+>  92 |       setLoading(true);
+      …
+      | ^^^^^^^^^
+> 100 |     }
+      | ^^^^^^^^^
+> 101 |   };
+      | ^^^^ `fetchAnalytics` is declared here
+  102 |
+  103 |   const generatePDFReport = async () => {
+  104 |     if (!selectedTemplate) {  react-hooks/immutability
+
+✖ 1 problem (1 error, 0 warnings)
+

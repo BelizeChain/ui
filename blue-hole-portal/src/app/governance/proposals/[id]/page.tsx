@@ -15,6 +15,7 @@ import {
   voteOnProposal,
   type Proposal as ChainProposal,
 } from '@/services/pallets/governance';
+import { useProposal } from '@/hooks/useGovernance';
 
 interface Proposal {
   id: number;
@@ -96,46 +97,11 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
-  const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { proposal: chainProposal, isLoading: loading, error: loadError, refetch } = useProposal(proposalId);
+  const proposal = chainProposal ? chainToUiProposal(chainProposal) : null;
   const [userVote, setUserVote] = useState<'Aye' | 'Nay' | 'Abstain' | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [isVoting, setIsVoting] = useState(false);
-
-  // Poll the on-chain proposal every 15s. We deliberately ignore the legacy
-  // `voteAmount` UI field below \u2014 `pallet_governance::castVote` weights by
-  // stake, not arbitrary planck input.
-  useEffect(() => {
-    if (!isReady || !Number.isFinite(proposalId)) return;
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const live = await getProposalById(proposalId);
-        if (cancelled) return;
-        if (!live) {
-          setLoadError(`Proposal #${proposalId} not found on chain.`);
-          setProposal(null);
-        } else {
-          setLoadError(null);
-          setProposal(chainToUiProposal(live));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('getProposalById failed:', err);
-          setLoadError(err instanceof Error ? err.message : 'Failed to load proposal.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    tick();
-    const id = setInterval(tick, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [isReady, proposalId]);
 
   const approvalPercentage = proposal && proposal.votes.total > 0
     ? (proposal.votes.aye / proposal.votes.total) * 100
@@ -157,8 +123,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
       await voteOnProposal(selectedAccount.address, proposal.id, vote);
       setUserVote(vote);
       // Refresh immediately so the tally reflects this vote.
-      const live = await getProposalById(proposal.id);
-      if (live) setProposal(chainToUiProposal(live));
+      if (refetch) await refetch();
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : 'Vote submission failed.');
     } finally {

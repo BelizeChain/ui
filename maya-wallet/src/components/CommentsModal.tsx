@@ -3,17 +3,17 @@
 import React, { useState } from 'react';
 import { GlassCard } from './ui';
 import { useWallet } from '@/contexts/WalletContext';
-import { X, PaperPlaneRight, Heart } from 'phosphor-react';
+import { X, PaperPlaneRight, Heart, User, Confetti } from 'phosphor-react';
 import { cn } from '@/lib/utils';
 
 interface Comment {
   id: string;
   author: {
     name: string;
-    avatar: string;
+    avatar: React.ReactNode;
     address: string;
   };
-  content: string;
+  content: React.ReactNode;
   timestamp: string;
   likes: number;
   liked?: boolean;
@@ -41,10 +41,10 @@ export function CommentsModal({
       id: '1',
       author: {
         name: 'Sarah Williams',
-        avatar: '👩🏻',
+        avatar: <User size={24} weight="fill" className="text-gray-400" />,
         address: '5FHne...',
       },
-      content: 'This is amazing! Congrats on completing your first cycle! 🎉',
+      content: <>This is amazing! Congrats on completing your first cycle! <Confetti size={20} weight="fill" className="inline text-yellow-500 mb-1" /></>,
       timestamp: '1h ago',
       likes: 5,
       liked: false,
@@ -53,7 +53,7 @@ export function CommentsModal({
       id: '2',
       author: {
         name: 'John Martinez',
-        avatar: '👨🏾',
+        avatar: <User size={24} weight="fill" className="text-gray-400" />,
         address: '5DAn3...',
       },
       content: 'Welcome to the PoUW network! Keep contributing!',
@@ -70,7 +70,7 @@ export function CommentsModal({
       id: Date.now().toString(),
       author: {
         name: selectedAccount.name || 'Anonymous',
-        avatar: selectedAccount.name?.[0] || '👤',
+        avatar: selectedAccount.name ? <User size={24} weight="fill" className="text-gray-400" /> : <User size={24} weight="fill" className="text-gray-400" />,
         address: `${selectedAccount.address.slice(0, 5)}...`,
       },
       content: newComment.trim(),

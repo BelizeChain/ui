@@ -2,23 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useBlockchain } from '@/lib/blockchain/hooks';
+import {
+  getActiveProposals,
+  getProposalById,
+  type Proposal as ChainProposal,
+} from '@/services/pallets/governance';
 
-export interface Proposal {
-  id: number;
-  hash: string;
-  proposer: string;
-  title: string;
-  description: string;
-  amount: bigint;
-  currency: 'DALLA' | 'bBZD';
-  beneficiary: string;
-  status: 'Active' | 'Passed' | 'Failed' | 'Rejected' | 'Executed';
-  category: 'Treasury' | 'Policy' | 'Technical' | 'Emergency';
-  createdAt: number;
-  endsAt: number;
-  deposit: bigint;
-  threshold: number; // Percentage needed to pass (e.g., 66 for 66%)
-}
+export type Proposal = ChainProposal;
 
 export interface Vote {
   voter: string;
@@ -37,108 +27,134 @@ export interface VoteTally {
 
 /**
  * Hook for Governance pallet queries
- * Provides proposals, voting data, referendum info
+ * Provides proposals using the unified service.
  */
 export function useGovernance() {
-  const { api, isConnected } = useBlockchain();
+  const { isConnected } = useBlockchain();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!api || !isConnected) {
+    if (!isConnected) {
       setIsLoading(false);
       return;
     }
 
-    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    let timer: NodeJS.Timeout;
 
     const fetchProposals = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
-        // Query public proposals (active)
-        const publicProps: any = await api.query.belizeGovernance?.publicProps();
-        const propArray = publicProps?.toArray() || [];
+        const fetchedProposals = await getActiveProposals();
 
-        // Query referendum count
-        const refCount = await api.query.belizeGovernance?.referendumCount();
-        const count = refCount ? parseInt(refCount.toString()) : 0;
-
-        // Fetch all referendums
-        const refPromises = [];
-        for (let i = 0; i < count; i++) {
-          refPromises.push(api.query.belizeGovernance?.referendumInfoOf(i));
+        if (!cancelled) {
+          setProposals(fetchedProposals);
+          setIsLoading(false);
         }
-
-        const refResults = await Promise.all(refPromises);
-        const parsedProposals = refResults
-          .map((result: any, index) => {
-            if (!result) return null;
-            const ref = result.isSome ? result.unwrap() : result;
-            if (!ref) return null;
-            
-            // Parse referendum data
-            const ongoing = ref.isOngoing ? ref.asOngoing : ref;
-            if (!ongoing) return null;
-
-            return {
-              id: index,
-              hash: ongoing.proposalHash?.toString() || '',
-              proposer: ongoing.proposer?.toString() || 'Unknown',
-              title: ongoing.title?.toString() || `Referendum #${index}`,
-              description: ongoing.description?.toString() || '',
-              amount: ongoing.amount ? BigInt(ongoing.amount.toString()) : 0n,
-              currency: ongoing.currency?.toString() as 'DALLA' | 'bBZD' || 'DALLA',
-              beneficiary: ongoing.beneficiary?.toString() || '',
-              status: 'Active' as const,
-              category: ongoing.category?.toString() as any || 'Policy',
-              createdAt: ongoing.createdAt ? parseInt(ongoing.createdAt.toString()) : Date.now(),
-              endsAt: ongoing.endsAt ? parseInt(ongoing.endsAt.toString()) : Date.now() + 30 * 24 * 60 * 60 * 1000,
-              deposit: ongoing.deposit ? BigInt(ongoing.deposit.toString()) : 0n,
-              threshold: ongoing.threshold ? parseInt(ongoing.threshold.toString()) : 66,
-            } as Proposal;
-          })
-          .filter((p): p is Proposal => p !== null);
-
-        setProposals(parsedProposals);
-        setIsLoading(false);
       } catch (err) {
-        console.error('Governance pallet query error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch proposals');
-        setIsLoading(false);
+        if (!cancelled) {
+          console.error('Governance service query error:', err);
+          setError(err instanceof Error ? err.message : 'Failed to fetch proposals');
+          setIsLoading(false);
+        }
       }
     };
 
     fetchProposals();
-
-    // Subscribe to proposal changes
-    if (api.query.belizeGovernance?.publicProps) {
-      api.query.belizeGovernance.publicProps((props: any) => {
-        fetchProposals(); // Refetch on changes
-      }).then((unsub) => {
-        unsubscribe = unsub as any;
-      });
-    }
+    timer = setInterval(fetchProposals, 30_000);
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      cancelled = true;
+      if (timer) clearInterval(timer);
     };
-  }, [api, isConnected]);
+  }, [isConnected]);
 
   return {
     proposals,
     isLoading,
     error,
     isConnected,
+    refetch: async () => {
+      try {
+        const fetchedProposals = await getActiveProposals();
+        setProposals(fetchedProposals);
+      } catch (err) {
+        console.error('Manual proposals fetch error:', err);
+      }
+    }
   };
 }
 
 /**
  * Hook to get specific proposal by ID
  */
-export function useProposal(proposalId: number) {
+export function useProposal(id: number) {
+  const { isConnected } = useBlockchain();
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isConnected) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timer: NodeJS.Timeout;
+
+    const fetchProposalDetails = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const fetchedProposal = await getProposalById(id);
+        
+        if (!cancelled) {
+          setProposal(fetchedProposal);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Proposal details query error:', err);
+          setError(err instanceof Error ? err.message : 'Failed to fetch proposal details');
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchProposalDetails();
+    timer = setInterval(fetchProposalDetails, 30_000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [isConnected, id]);
+
+  return {
+    proposal,
+    isLoading,
+    error,
+    refetch: async () => {
+      try {
+        const fetchedProposal = await getProposalById(id);
+        setProposal(fetchedProposal);
+      } catch (err) {
+        console.error('Manual proposal fetch error:', err);
+      }
+    }
+  };
+}
+
+/**
+ * Hook to get specific proposal by ID (Raw chain data)
+ */
+export function useProposalRaw(proposalId: number) {
   const { api, isConnected } = useBlockchain();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
@@ -175,20 +191,22 @@ export function useProposal(proposalId: number) {
 
         // Parse proposal
         const parsedProposal: Proposal = {
-          id: proposalId,
+          index: proposalId,
           hash: ongoing.proposalHash?.toString() || '',
           proposer: ongoing.proposer?.toString() || 'Unknown',
           title: ongoing.title?.toString() || `Referendum #${proposalId}`,
           description: ongoing.description?.toString() || '',
-          amount: ongoing.amount ? BigInt(ongoing.amount.toString()) : 0n,
-          currency: ongoing.currency?.toString() as 'DALLA' | 'bBZD' || 'DALLA',
+          value: ongoing.amount ? ongoing.amount.toString() : '0',
           beneficiary: ongoing.beneficiary?.toString() || '',
           status: 'Active',
           category: ongoing.category?.toString() as any || 'Policy',
           createdAt: ongoing.createdAt ? parseInt(ongoing.createdAt.toString()) : Date.now(),
-          endsAt: ongoing.endsAt ? parseInt(ongoing.endsAt.toString()) : Date.now() + 30 * 24 * 60 * 60 * 1000,
-          deposit: ongoing.deposit ? BigInt(ongoing.deposit.toString()) : 0n,
-          threshold: ongoing.threshold ? parseInt(ongoing.threshold.toString()) : 66,
+          voteEnd: ongoing.endsAt ? parseInt(ongoing.endsAt.toString()) : Date.now() + 30 * 24 * 60 * 60 * 1000,
+          bond: ongoing.deposit ? ongoing.deposit.toString() : '0',
+          voteCount: {
+            ayes: ongoing.tally?.ayes ? parseInt(ongoing.tally.ayes.toString()) : 0,
+            nays: ongoing.tally?.nays ? parseInt(ongoing.tally.nays.toString()) : 0,
+          }
         };
 
         setProposal(parsedProposal);
