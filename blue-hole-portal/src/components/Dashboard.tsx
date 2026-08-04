@@ -1737,7 +1737,7 @@ function ComplianceTab() {
 
         // Get flagged accounts from compliance pallet FIRST so the KYC risk
         // score can incorporate real AML flags instead of a random number.
-        const flaggedEntries = await api.query.compliance.flaggedAccounts.entries();
+        const flaggedEntries = await api.query.compliance?.flaggedAccounts?.entries?.() || [];
         const flaggedData = flaggedEntries.map(([key, value]: [any, any]) => {
           const accountId = key.args[0].toString();
           const data = value.toJSON() as any;
@@ -1756,7 +1756,7 @@ function ComplianceTab() {
         );
 
         // Get pending verifications from identity pallet
-        const entries = await api.query.identity.pendingVerifications.entries();
+        const entries = await api.query.identity?.pendingVerifications?.entries?.() || [];
         const kycData = await Promise.all(
           entries.map(async ([key, value]: [any, any]) => {
             const accountId = key.args[0].toString();

@@ -129,7 +129,7 @@ export async function getUserLandTitles(address: string): Promise<LandTitle[]> {
   const api = await initializeApi();
   
   try {
-    const allTitles: any = await api.query.landLedger?.titles.entries();
+    const allTitles: any = await api.query.landLedger?.titles?.entries?.() || [];
     
     if (!allTitles || allTitles.length === 0) {
       return [];
@@ -179,7 +179,7 @@ export async function getPropertyDocuments(titleId: string): Promise<PropertyDoc
   const api = await initializeApi();
   
   try {
-    const documents: any = await api.query.landLedger?.documents.entries(titleId);
+    const documents: any = await api.query.landLedger?.documents?.entries?.(titleId) || [];
     
     if (!documents || documents.length === 0) {
       return [];
@@ -305,7 +305,7 @@ export async function getPropertyTransferHistory(titleId: string): Promise<Prope
   const api = await initializeApi();
   
   try {
-    const transfers: any = await api.query.landLedger?.transfers.entries(titleId);
+    const transfers: any = await api.query.landLedger?.transfers?.entries?.(titleId) || [];
     
     if (!transfers || transfers.length === 0) {
       return [];
@@ -342,7 +342,7 @@ export async function searchLandByLocation(district: string, village?: string): 
   const api = await initializeApi();
   
   try {
-    const allTitles: any = await api.query.landLedger?.titles.entries();
+    const allTitles: any = await api.query.landLedger?.titles?.entries?.() || [];
     
     if (!allTitles || allTitles.length === 0) {
       return [];

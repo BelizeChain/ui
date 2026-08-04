@@ -126,7 +126,7 @@ export async function getSalaryPayments(
   const api = await initializeApi();
   
   try {
-    const payments: any = await api.query.payroll?.payments.entries(address);
+    const payments: any = await api.query.payroll?.payments?.entries?.(address) || [];
     
     if (!payments || payments.length === 0) {
       return [];

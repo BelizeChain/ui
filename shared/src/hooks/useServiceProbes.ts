@@ -36,7 +36,13 @@ function buildProbeUrls(baseUrl: string, probePaths: string[]): string[] {
 
   return Array.from(
     new Set(
-      probePaths.map((probePath) => new URL(probePath.replace(/^\/+/, ''), normalizedBaseUrl).toString())
+      probePaths.map((probePath) => {
+        const path = probePath.replace(/^\/+/, '');
+        if (normalizedBaseUrl.startsWith('/')) {
+          return `${normalizedBaseUrl}${path}`;
+        }
+        return new URL(path, normalizedBaseUrl).toString();
+      })
     )
   );
 }

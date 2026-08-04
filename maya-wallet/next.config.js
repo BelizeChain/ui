@@ -40,6 +40,22 @@ const nextConfig = {
     }
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/proxy/nawal/:path*',
+        destination: 'http://100.81.45.25:8080/:path*',
+      },
+      {
+        source: '/api/proxy/kinich/:path*',
+        destination: 'http://100.81.45.25:8888/:path*',
+      },
+      {
+        source: '/api/proxy/pakit/:path*',
+        destination: 'http://100.81.45.25:8001/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = withPWA(nextConfig);

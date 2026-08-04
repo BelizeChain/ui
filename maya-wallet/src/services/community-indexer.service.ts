@@ -30,7 +30,7 @@ export class CommunityIndexerService {
     try {
       return await withRetry(async () => {
         const api = (await initializeApi()) as any;
-        const entries = await api.query.community.srsScores.entries();
+        const entries = await api.query.community?.srsScores?.entries?.() || [];
         const scores = entries.map(([key, opt]: [any, any]) => ({
           account: key.args[0].toString(),
           srs: opt.unwrapOrDefault(),
@@ -49,7 +49,7 @@ export class CommunityIndexerService {
     try {
       return await withRetry(async () => {
         const api = (await initializeApi()) as any;
-        const entries = await api.query.community.communityProposals.entries();
+        const entries = await api.query.community?.communityProposals?.entries?.() || [];
         return entries.map(([key, opt]: [any, any]) => ({
           id: key.args[0].toNumber(),
           proposal: opt.unwrapOrDefault(),

@@ -57,7 +57,7 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
   const api = await initializeApi();
   
   try {
-    const identity: any = await api.query.identity?.identities(address);
+    const identity: any = await api.query.identity?.identities?.(address);
     
     if (!identity || identity.isNone) {
       return null;
@@ -80,8 +80,8 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
       registrationDate: data.registrationDate.toNumber(),
       expiryDate: data.expiryDate.toNumber(),
     };
-  } catch (error) {
-    console.error('Failed to fetch BelizeID:', error);
+    } catch (error) {
+    console.debug('Failed to fetch BelizeID:', error);
     return null;
   }
 }
@@ -193,7 +193,7 @@ export async function getSSNRecord(address: string): Promise<SSNRecord | null> {
   const api = await initializeApi();
   
   try {
-    const ssnRecord: any = await api.query.identity?.ssnRecords(address);
+    const ssnRecord: any = await api.query.identity?.ssnRecords?.(address);
     
     if (!ssnRecord || ssnRecord.isNone) {
       return null;
@@ -237,7 +237,7 @@ export async function getPassportRecord(address: string): Promise<PassportRecord
   const api = await initializeApi();
   
   try {
-    const passportRecord: any = await api.query.identity?.passportRecords(address);
+    const passportRecord: any = await api.query.identity?.passportRecords?.(address);
     
     if (!passportRecord || passportRecord.isNone) {
       return null;
@@ -285,7 +285,7 @@ export async function getKYCStatus(address: string): Promise<KYCStatus> {
   const api = await initializeApi();
   
   try {
-    const kycRecord: any = await api.query.compliance?.kycRecords(address);
+    const kycRecord: any = await api.query.compliance?.kycRecords?.(address);
     
     if (!kycRecord || kycRecord.isNone) {
       return {
@@ -361,7 +361,7 @@ export async function getAccountType(address: string): Promise<'Citizen' | 'Busi
   const api = await initializeApi();
   
   try {
-    const accountData: any = await api.query.economy?.accounts(address);
+    const accountData: any = await api.query.economy?.accounts?.(address);
     
     if (!accountData || accountData.isNone) {
       return null;

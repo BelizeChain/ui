@@ -88,7 +88,23 @@ async function dryRunQuery<T = unknown>(
     output: { toJSON: () => T } | null;
   };
   if (!result.isOk || !output) return null;
-  return output.toJSON();
+  
+  let json: any = output.toJSON();
+  while (json !== null && typeof json === 'object') {
+    if ('ok' in json) json = json.ok;
+    else if ('Ok' in json) json = json.Ok;
+    else if ('err' in json) throw new Error(`Contract error: ${JSON.stringify(json.err)}`);
+    else if ('Err' in json) throw new Error(`Contract error: ${JSON.stringify(json.Err)}`);
+    else break;
+  }
+  
+  // Some balances are returned as `{ raw: 1000 }` or string formats from custom types.
+  // We will leave them intact for the callers to parse, or unwrap if it's explicitly raw.
+  if (json !== null && typeof json === 'object' && 'raw' in json) {
+      json = json.raw;
+  }
+  
+  return json as T;
 }
 
 /* ───────────── DALLA Token (PSP22) ───────────── */
@@ -125,8 +141,11 @@ export async function getDallaBalance(caller: string, owner: string): Promise<st
   const api = await initializeApi();
   const contract = getGemContract(api, 'dalla');
   if (!contract) return '0';
-  const balance = await dryRunQuery<string>(contract, caller, 'balanceOf', [owner]);
-  return String(balance ?? '0');
+  const balance = await dryRunQuery<any>(contract, caller, 'psp22::balanceOf', [owner]) 
+    .catch(() => dryRunQuery<any>(contract, caller, 'balanceOf', [owner]));
+    
+  if (balance === null) return '0';
+  return String(balance);
 }
 
 export async function transferDalla(

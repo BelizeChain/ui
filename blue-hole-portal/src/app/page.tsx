@@ -11,6 +11,7 @@ import {
   Activity,
   Warning,
   Spinner,
+  BookOpen,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
@@ -284,7 +285,12 @@ export default function NationalDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <QuickActionButton
+            icon={BookOpen}
+            label="View User Guide"
+            onClick={() => router.push('/guide')}
+          />
           <QuickActionButton
             icon={FileText}
             label="Create Proposal"

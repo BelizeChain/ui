@@ -50,8 +50,8 @@ export async function getStakingInfo(address: string): Promise<StakingInfo> {
   
   try {
     const [stakingLedger, currentEra]: any = await Promise.all([
-      api.query.staking?.ledger(address),
-      api.query.staking?.currentEra(),
+      api.query.staking?.ledger?.(address),
+      api.query.staking?.currentEra?.(),
     ]);
 
     if (!stakingLedger || stakingLedger.isNone) {
@@ -67,8 +67,8 @@ export async function getStakingInfo(address: string): Promise<StakingInfo> {
     }
 
     const ledger = stakingLedger.unwrap();
-    const validatorPrefs: any = await api.query.staking?.validators(address);
-    const nominatorPrefs: any = await api.query.staking?.nominators(address);
+    const validatorPrefs: any = await api.query.staking?.validators?.(address);
+    const nominatorPrefs: any = await api.query.staking?.nominators?.(address);
     
     // Calculate unbonding amount
     const unbonding = ledger.unlocking?.reduce((sum: number, chunk: any) => {
@@ -76,7 +76,7 @@ export async function getStakingInfo(address: string): Promise<StakingInfo> {
     }, 0) || 0;
 
     // Get rewards
-    const rewardsRecord: any = await api.query.staking?.rewards(address);
+    const rewardsRecord: any = await api.query.staking?.rewards?.(address);
     const rewards = rewardsRecord?.toString() || '0';
 
     return {
@@ -214,7 +214,7 @@ export async function getPoUWContributions(address: string, limit: number = 20):
   const api = await initializeApi();
   
   try {
-    const contributions: any = await api.query.staking?.pouwContributions.entries(address);
+    const contributions: any = await api.query.staking?.pouwContributions?.entries?.(address);
     
     if (!contributions || contributions.length === 0) {
       return [];
@@ -249,18 +249,18 @@ export async function getActiveValidators(): Promise<Validator[]> {
   const api = await initializeApi();
   
   try {
-    const validators: any = await api.query.staking.validators.entries();
-    const currentEra: any = await api.query.staking.currentEra();
+    const validators: any = await api.query.staking?.validators?.entries?.() || [];
+    const currentEra: any = await api.query.staking?.currentEra?.();
     
     const validatorList = await Promise.all(
       validators.map(async ([key, prefs]: [any, any]) => {
         const address = key.args[0].toString();
-        const exposure: any = await api.query.staking.erasStakers(currentEra, address);
-        const points: any = await api.query.staking.erasRewardPoints(currentEra);
+        const exposure: any = await api.query.staking?.erasStakers?.(currentEra, address) || { total: 0, own: 0, others: [] };
+        const points: any = await api.query.staking?.erasRewardPoints?.(currentEra) || { individual: new Map() };
         
         return {
           address,
-          commission: prefs.commission.toNumber() / 10000000, // Convert from perbill
+          commission: prefs?.commission ? prefs.commission.toNumber() / 10000000 : 0, // Convert from perbill
           totalStake: formatBalance(exposure.total.toString()),
           ownStake: formatBalance(exposure.own.toString()),
           nominatorCount: exposure.others.length,

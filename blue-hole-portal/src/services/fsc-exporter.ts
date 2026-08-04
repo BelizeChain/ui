@@ -120,7 +120,7 @@ export class FSCExporter {
 
     try {
       // Query all identity registrations
-      const identities = await this.api.query.identity?.identityOf.entries();
+      const identities = await this.api.query.identity?.identityOf?.entries?.() || [];
 
       for (const [key, value] of identities || []) {
         const accountId = key.args[0].toString();
@@ -222,7 +222,7 @@ export class FSCExporter {
       const currentEra = (activeEra as any)?.unwrap()?.index?.toNumber() || 0;
 
       let totalStaked = BigInt(0);
-      const allValidators = await this.api.query.staking?.validators.entries();
+      const allValidators = await this.api.query.staking?.validators?.entries?.() || [];
 
       for (const [key] of allValidators || []) {
         const accountId = key.args[0].toString();
@@ -231,7 +231,7 @@ export class FSCExporter {
       }
 
       // Get slashing events
-      const slashingSpans = await this.api.query.staking?.slashingSpans.entries();
+      const slashingSpans = await this.api.query.staking?.slashingSpans?.entries?.() || [];
 
       return {
         activeValidators,

@@ -66,7 +66,7 @@ export async function getVerifiedMerchant(merchantId: string): Promise<VerifiedM
   const api = await initializeApi();
   
   try {
-    const merchantData: any = await api.query.oracle?.verifiedMerchants(merchantId);
+    const merchantData: any = await api.query.oracle?.verifiedMerchants?.(merchantId);
     
     if (!merchantData || merchantData.isNone) {
       return null;
@@ -107,7 +107,7 @@ export async function getVerifiedMerchants(
   const api = await initializeApi();
   
   try {
-    const merchants: any = await api.query.oracle?.verifiedMerchants.entries();
+    const merchants: any = await api.query.oracle?.verifiedMerchants?.entries?.() || [];
     
     if (!merchants || merchants.length === 0) {
       return [];
@@ -156,7 +156,7 @@ export async function isMerchantVerified(address: string): Promise<boolean> {
   const api = await initializeApi();
   
   try {
-    const merchantRecord: any = await api.query.oracle?.merchantsByAddress(address);
+    const merchantRecord: any = await api.query.oracle?.merchantsByAddress?.(address);
     
     if (!merchantRecord || merchantRecord.isNone) {
       return false;
@@ -179,7 +179,7 @@ export async function getTourismRewards(address: string, limit: number = 50): Pr
   const api = await initializeApi();
   
   try {
-    const rewards: any = await api.query.oracle?.tourismRewards.entries(address);
+    const rewards: any = await api.query.oracle?.tourismRewards?.entries?.(address) || [];
     
     if (!rewards || rewards.length === 0) {
       return [];

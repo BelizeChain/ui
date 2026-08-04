@@ -8,6 +8,16 @@ import { WalletProvider } from '@/contexts/WalletContext';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { MessagingProvider } from '@/contexts/MessagingContext';
 
+if (typeof window !== 'undefined') {
+  const originalError = console.error;
+  console.error = (...args: any[]) => {
+    if (typeof args[0] === 'string' && (args[0].includes('VEC:') || args[0].includes('RPC-CORE:'))) {
+      return;
+    }
+    originalError.apply(console, args);
+  };
+}
+
 function I18nHydration({ children }: { children: React.ReactNode }) {
   const { locale, setLocale } = useI18n();
 

@@ -142,7 +142,7 @@ export async function getActiveProposals(): Promise<Proposal[]> {
   const api = await connectionManager.connect();
   try {
     if (!api.query.governance?.proposals) return [];
-    const entries: any[] = await api.query.governance.proposals.entries();
+    const entries: any[] = await api.query.governance?.proposals?.entries?.() || [];
     if (!entries || entries.length === 0) return [];
 
     const results: Proposal[] = [];

@@ -54,7 +54,7 @@ export default function NominatePage() {
         const activeEra = await api.query.staking?.activeEra();
         const currentEra = (activeEra as { unwrap?: () => { index: { toNumber(): number } } })
           ?.unwrap?.()?.index?.toNumber() ?? 0;
-        const entries = (await api.query.staking?.validators.entries()) ?? [];
+        const entries = (await api.query.staking?.validators?.entries?.()) ?? [];
         const sessionValidators = await api.query.session?.validators();
         const activeSet = new Set(
           (sessionValidators as unknown as { toString(): string }[] | undefined)?.map((v) => v.toString()) ?? [],

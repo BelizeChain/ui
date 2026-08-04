@@ -266,7 +266,7 @@ export async function getMarketplaceListings(limit: number = 100): Promise<Domai
   const api = await initializeApi();
   
   try {
-    const listings: any = await api.query.bns?.marketplaceListings.entries();
+    const listings: any = await api.query.bns?.marketplaceListings?.entries?.() || [];
     
     if (!listings || listings.length === 0) {
       return [];
@@ -392,7 +392,7 @@ export async function getUserDomains(address: string): Promise<Domain[]> {
   const api = await initializeApi();
   
   try {
-    const allDomains: any = await api.query.bns?.domains.entries();
+    const allDomains: any = await api.query.bns?.domains?.entries?.() || [];
     
     if (!allDomains || allDomains.length === 0) {
       return [];

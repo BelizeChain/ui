@@ -69,7 +69,7 @@ export function useStaking() {
         const currentEra = (activeEra as any)?.unwrapOrDefault()?.index?.toNumber() || 0;
         
         // Get all validators
-        const allValidators = await api.query.staking?.validators.entries();
+        const allValidators = await api.query.staking?.validators?.entries?.() || [];
         const sessionValidators = await api.query.session?.validators();
         const activeSet = new Set((sessionValidators as any)?.map((v: any) => v.toString()) || []);
         
@@ -78,9 +78,9 @@ export function useStaking() {
         
         for (const [key, prefs] of allValidators || []) {
           const address = key.args[0].toString();
-          const commission = (prefs as any).commission.toNumber() / 10_000_000;
+          const commission = (prefs as any)?.commission ? (prefs as any).commission.toNumber() / 10_000_000 : 0;
           
-          const exposure: any = await api.query.staking?.erasStakers(currentEra, address);
+          const exposure: any = await api.query.staking?.erasStakers?.(currentEra, address);
           const total = exposure?.total ? BigInt(exposure.total.toString()) : 0n;
           const own = exposure?.own ? BigInt(exposure.own.toString()) : 0n;
           const others = exposure?.others || [];
@@ -88,7 +88,7 @@ export function useStaking() {
           totalStaked += total;
 
           // Attempt to get identity
-          const identityOpt: any = await api.query.identity?.identityOf(address);
+          const identityOpt: any = await api.query.identity?.identityOf?.(address);
           let displayName = `${address.slice(0, 6)}…${address.slice(-4)}`;
           if (identityOpt && identityOpt.isSome) {
              const identity = identityOpt.unwrap();
@@ -124,7 +124,7 @@ export function useStaking() {
         });
 
         // Nominators
-        const nominators = await api.query.staking?.nominators.entries();
+        const nominators = await api.query.staking?.nominators?.entries?.() || [];
         const nominatorsCount = nominators?.length || 0;
 
         const activeCount = validatorList.filter(v => v.status === 'Active').length;
@@ -172,15 +172,15 @@ export function useStaking() {
         const api = await connectionManager.connect();
         const activeEra = await api.query.staking?.activeEra();
         const currentEra = (activeEra as any)?.unwrapOrDefault()?.index?.toNumber() || 0;
-        const allValidators = await api.query.staking?.validators.entries();
+        const allValidators = await api.query.staking?.validators?.entries?.() || [];
         const sessionValidators = await api.query.session?.validators();
         const activeSet = new Set((sessionValidators as any)?.map((v: any) => v.toString()) || []);
         const validatorList: Validator[] = [];
         let totalStaked = 0n;
         for (const [key, prefs] of allValidators || []) {
           const address = key.args[0].toString();
-          const commission = (prefs as any).commission.toNumber() / 10_000_000;
-          const exposure: any = await api.query.staking?.erasStakers(currentEra, address);
+          const commission = (prefs as any)?.commission ? (prefs as any).commission.toNumber() / 10_000_000 : 0;
+          const exposure: any = await api.query.staking?.erasStakers?.(currentEra, address);
           const total = exposure?.total ? BigInt(exposure.total.toString()) : 0n;
           const own = exposure?.own ? BigInt(exposure.own.toString()) : 0n;
           const others = exposure?.others || [];
@@ -198,7 +198,7 @@ export function useStaking() {
           if (a.status !== 'Active' && b.status === 'Active') return 1;
           return a.totalStake > b.totalStake ? -1 : 1;
         });
-        const nominators = await api.query.staking?.nominators.entries();
+        const nominators = await api.query.staking?.nominators?.entries?.() || [];
         const nominatorsCount = nominators?.length || 0;
         const activeCount = validatorList.filter(v => v.status === 'Active').length;
         const waitingCount = validatorList.filter(v => v.status === 'Waiting').length;

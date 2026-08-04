@@ -168,8 +168,8 @@ class BlockchainProofService {
 
     try {
       const broadcasts = district
-        ? await this.api.query.community.districtAlerts(district)
-        : await this.api.query.community.activeAlerts();
+        ? await this.api.query.community?.districtAlerts?.(district)
+        : await this.api.query.community?.activeAlerts?.();
       
       return (broadcasts.toJSON() as any).filter((b: EmergencyBroadcast) => 
         b.expiresAt > Date.now()
@@ -190,6 +190,7 @@ class BlockchainProofService {
     let unsubscribe: (() => void) | undefined;
 
     (async () => {
+      if (!this.api!.query.community?.activeAlerts) return;
       const unsub = await this.api!.query.community.activeAlerts((alerts: any) => {
         const broadcasts = alerts.toJSON() as EmergencyBroadcast[];
         broadcasts
@@ -207,9 +208,9 @@ class BlockchainProofService {
 
     try {
       // Check if address is government account or validator
-      const isValidator = await this.api.query.staking.validators(address);
+      const isValidator = await this.api.query.staking?.validators?.(address);
       const validatorData = isValidator as any;
-      const identity = await this.api.query.identity.identityOf(address);
+      const identity = await this.api.query.identity?.identityOf?.(address);
       const identityData = identity as any;
       
       return validatorData.isSome || 

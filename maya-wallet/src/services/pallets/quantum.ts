@@ -63,7 +63,7 @@ export async function getQuantumBackends(): Promise<QuantumBackend[]> {
   const api = await initializeApi();
   
   try {
-    const backends: any = await api.query.quantum?.backends.entries();
+    const backends: any = await api.query.quantum?.backends?.entries?.() || [];
     
     if (!backends || backends.length === 0) {
       return [];
@@ -200,7 +200,7 @@ export async function getUserQuantumJobs(
   const api = await initializeApi();
   
   try {
-    const allJobs: any = await api.query.quantum?.jobs.entries();
+    const allJobs: any = await api.query.quantum?.jobs?.entries?.() || [];
     
     if (!allJobs || allJobs.length === 0) {
       return [];
@@ -262,7 +262,7 @@ export async function getQuantumWorkProofs(
   const api = await initializeApi();
   
   try {
-    const proofs: any = await api.query.quantum?.workProofs.entries(address);
+    const proofs: any = await api.query.quantum?.workProofs?.entries?.(address) || [];
     
     if (!proofs || proofs.length === 0) {
       return [];

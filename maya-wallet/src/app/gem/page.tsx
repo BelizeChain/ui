@@ -99,6 +99,13 @@ export default function GemPage() {
   const [nftCollection, setNftCollection] = useState<{ name: string; symbol: string; totalSupply: number } | null>(null);
   const [nftBalance, setNftBalance] = useState<number>(0);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
   const refreshDao = useCallback(async () => {
     if (!selectedAccount?.address) return;
     setDaoLoading(true);

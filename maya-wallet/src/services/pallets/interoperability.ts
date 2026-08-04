@@ -55,7 +55,7 @@ export async function getBridges(): Promise<Bridge[]> {
   const api = await initializeApi();
   
   try {
-    const bridges: any = await api.query.interoperability?.bridges.entries();
+    const bridges: any = await api.query.interoperability?.bridges?.entries?.() || [];
     
     if (!bridges || bridges.length === 0) {
       return [];
@@ -151,7 +151,7 @@ export async function getBridgeTransfer(transferId: string): Promise<BridgeTrans
   const api = await initializeApi();
   
   try {
-    const transfer: any = await api.query.interoperability?.transfers(transferId);
+    const transfer: any = await api.query.interoperability?.transfers?.(transferId);
     
     if (!transfer || transfer.isNone) {
       return null;
@@ -192,7 +192,7 @@ export async function getUserBridgeTransfers(
   const api = await initializeApi();
   
   try {
-    const allTransfers: any = await api.query.interoperability?.transfers.entries();
+    const allTransfers: any = await api.query.interoperability?.transfers?.entries?.() || [];
     
     if (!allTransfers || allTransfers.length === 0) {
       return [];
@@ -240,7 +240,7 @@ export async function getCrossChainAssets(): Promise<CrossChainAsset[]> {
   const api = await initializeApi();
   
   try {
-    const assets: any = await api.query.interoperability?.crossChainAssets.entries();
+    const assets: any = await api.query.interoperability?.crossChainAssets?.entries?.() || [];
     
     if (!assets || assets.length === 0) {
       return [];
@@ -277,7 +277,7 @@ export async function estimateBridgeFee(
   const api = await initializeApi();
   
   try {
-    const bridge: any = await api.query.interoperability?.bridges(bridgeId);
+    const bridge: any = await api.query.interoperability?.bridges?.(bridgeId);
     
     if (!bridge || bridge.isNone) {
       throw new Error('Bridge not found');
@@ -347,7 +347,7 @@ export async function getBridgeStats(bridgeId: string): Promise<{
   const api = await initializeApi();
   
   try {
-    const stats: any = await api.query.interoperability?.bridgeStats(bridgeId);
+    const stats: any = await api.query.interoperability?.bridgeStats?.(bridgeId);
     
     if (!stats || stats.isNone) {
       return {

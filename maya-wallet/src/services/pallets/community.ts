@@ -144,7 +144,7 @@ export async function getCommunityGroups(
   const api = await initializeApi();
   
   try {
-    const groups: any = await api.query.community?.groups.entries();
+    const groups: any = await api.query.community?.groups?.entries?.() || [];
     
     if (!groups || groups.length === 0) {
       return [];
@@ -244,7 +244,7 @@ export async function getCommunityProposals(
   const api = await initializeApi();
   
   try {
-    const proposals: any = await api.query.community?.proposals.entries();
+    const proposals: any = await api.query.community?.proposals?.entries?.() || [];
     
     if (!proposals || proposals.length === 0) {
       return [];
@@ -414,7 +414,7 @@ export async function getCommunityEvents(
   const api = await initializeApi();
   
   try {
-    const events: any = await api.query.community?.events.entries();
+    const events: any = await api.query.community?.events?.entries?.() || [];
     
     if (!events || events.length === 0) {
       return [];

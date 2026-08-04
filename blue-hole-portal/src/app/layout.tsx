@@ -7,6 +7,7 @@ import './globals.css';
 import { Sidebar } from '@/components/navigation/Sidebar';
 import { Header } from '@/components/navigation/Header';
 import { CommandPalette } from '@/components/navigation/CommandPalette';
+import { WalletConnectGuide } from '@/components/WalletConnectGuide';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -53,6 +54,9 @@ export default function RootLayout({
 
             {/* Command Palette (Cmd+K) */}
             <CommandPalette />
+
+            {/* Wallet Connect Prompt overlay */}
+            <WalletConnectGuide />
           </div>
         </Providers>
       </body>

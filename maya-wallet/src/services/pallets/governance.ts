@@ -186,7 +186,7 @@ export async function getActiveProposals(): Promise<Proposal[]> {
   const api = await initializeApi();
   try {
     if (!api.query.governance?.proposals) return [];
-    const entries: any[] = await api.query.governance.proposals.entries();
+    const entries: any[] = await api.query.governance?.proposals?.entries?.() || [];
     if (!entries || entries.length === 0) return [];
 
     const results: Proposal[] = [];
@@ -305,7 +305,7 @@ export async function getActiveReferenda(): Promise<Referendum[]> {
   const api = await initializeApi();
   
   try {
-    const referenda: any = await api.query.governance?.referendumInfoOf.entries();
+    const referenda: any = await api.query.governance?.referendumInfoOf?.entries?.() || [];
     
     if (!referenda || referenda.length === 0) {
       return [];

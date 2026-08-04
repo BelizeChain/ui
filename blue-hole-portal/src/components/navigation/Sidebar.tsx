@@ -16,6 +16,7 @@ import {
   X,
   CaretLeft,
   CaretRight,
+  BookOpen,
 } from 'phosphor-react';
 import { cn } from '@/lib/utils';
 import { useGovernance } from '@/hooks/useGovernance';
@@ -122,6 +123,12 @@ export function Sidebar({ className }: SidebarProps) {
           href: '/developer',
           icon: Code,
           description: 'Chain state & extrinsics',
+        },
+        {
+          name: 'Guide',
+          href: '/guide',
+          icon: BookOpen,
+          description: 'User Guide & Help',
         },
         {
           name: 'Settings',
@@ -330,6 +337,12 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
           href: '/developer',
           icon: Code,
           description: 'Chain state & extrinsics',
+        },
+        {
+          name: 'Guide',
+          href: '/guide',
+          icon: BookOpen,
+          description: 'User Guide & Help',
         },
         {
           name: 'Settings',
