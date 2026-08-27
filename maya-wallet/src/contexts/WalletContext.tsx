@@ -83,16 +83,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Auto-connect on mount if previously connected
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
-    const savedAddress = localStorage.getItem('selectedWalletAddress');
-    if (savedAddress) {
-      connect().then(() => {
-        const account = accounts.find(acc => acc.address === savedAddress);
-        if (account) {
-          setSelectedAccount(account);
-        }
-      });
-    }
+    void connect();
   }, []);
 
   const connect = async () => {
@@ -130,12 +121,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }));
 
       setAccounts(walletAccounts);
-      setSelectedAccount(walletAccounts[0]); // Auto-select first account
+      const savedAddress = typeof window !== 'undefined' ? localStorage.getItem('selectedWalletAddress') : null;
+      const targetAccount = walletAccounts.find(acc => acc.address === savedAddress) || walletAccounts[0];
+      setSelectedAccount(targetAccount);
       setIsConnected(true);
       
       // Save to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('selectedWalletAddress', walletAccounts[0].address);
+      if (typeof window !== 'undefined' && targetAccount) {
+        localStorage.setItem('selectedWalletAddress', targetAccount.address);
       }
     } catch (err) {
       console.error('Wallet connection error:', err);

@@ -96,14 +96,23 @@ export default function HomeNew() {
   }, [selectedAccount?.address]);
 
   // Real balances
-  const dallaBal = parseFloat(balance?.dalla || '0');
-  const bbzdBal = parseFloat(balance?.bBZD || '0');
-  const stakedBal = parseFloat(stakingInfo?.totalStaked || '0');
+  const parseAmount = (val?: string) => {
+    if (!val) return 0;
+    return parseFloat(val.replace(/,/g, '')) || 0;
+  };
+  const dallaBal = parseAmount(balance?.dalla);
+  const bbzdBal = parseAmount(balance?.bBZD);
+  const stakedBal = parseAmount(stakingInfo?.totalStaked);
+
+  const effectiveDallaRate = rates.dalla > 0 ? rates.dalla : 1.0;
+  const effectiveBbzdRate = rates.bbzd > 0 ? rates.bbzd : 1.0;
+
+  const totalUsdValue = dallaBal * effectiveDallaRate + bbzdBal * effectiveBbzdRate + stakedBal * effectiveDallaRate;
 
   const displayBalance = {
     dalla: balance?.dalla || '0.00',
     bbzd: balance?.bBZD || '0.00',
-    total: (dallaBal * rates.dalla + bbzdBal * rates.bbzd + stakedBal * rates.dalla).toFixed(2),
+    total: totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
   };
 
   // Real assets (DALLA + bBZD always; Staked only when there is an active stake)
@@ -113,8 +122,8 @@ export default function HomeNew() {
         id: 'dalla',
         name: 'DALLA',
         symbol: 'Ɗ',
-        balance: dallaBal.toFixed(2),
-        value: (dallaBal * rates.dalla).toFixed(2),
+        balance: dallaBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        value: (dallaBal * effectiveDallaRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         color: 'from-emerald-500 to-teal-600',
         icon: Coins,
       },
@@ -122,8 +131,8 @@ export default function HomeNew() {
         id: 'bbzd',
         name: 'bBZD',
         symbol: '$',
-        balance: bbzdBal.toFixed(2),
-        value: (bbzdBal * rates.bbzd).toFixed(2),
+        balance: bbzdBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        value: (bbzdBal * effectiveBbzdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         color: 'from-blue-500 to-cyan-600',
         icon: Coins,
       },
@@ -133,14 +142,14 @@ export default function HomeNew() {
         id: 'staked',
         name: 'Staked',
         symbol: 'Ɗ',
-        balance: stakedBal.toFixed(2),
-        value: (stakedBal * rates.dalla).toFixed(2),
+        balance: stakedBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        value: (stakedBal * effectiveDallaRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         color: 'from-purple-500 to-violet-600',
         icon: Lightning,
       });
     }
     return list;
-  }, [dallaBal, bbzdBal, stakedBal, rates.dalla, rates.bbzd]);
+  }, [dallaBal, bbzdBal, stakedBal, effectiveDallaRate, effectiveBbzdRate]);
 
   // Real rewards/trends derived from on-chain data
   const trends = useMemo(() => {
