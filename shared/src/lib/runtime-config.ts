@@ -63,14 +63,14 @@ export interface RuntimeConfig {
  * pairs on demand via `create_pair`), so there is no fixed pair address.
  */
 const CEIBA_GEM_DEPLOYMENT = {
-  id: '1778612718117',
-  dalla: 'r1Vkg9k4vy7YcgSES8HMPrbtAsr6QWZcCixDQ19saBYfQv9me',
-  beliNft: 'r1V67KtGB3i2mL4421WSd5WVfWPRuwwUVu6VMwDYfzobjVKHE',
-  dao: 'r1WcVzmmX6bXvX4wpoR1W8ffA3Chr8UU7PtxXE8JQG4RZkzSK',
-  faucet: 'r1WXkqkVdPb4ap9SYPi7zdKa2PXjYUGzve5HsPn6FaezKRJvX',
-  psp37: 'r1U6k8Unb1gbnhQ8KHmqxKQvmWEQ5nxqeSHPL7VBkiUGKRYwM',
-  dexFactory: 'r1UZZBGTX6cRLSYSvL2i6cCGXvRF9JY9TtM4rmaXtgAr73DGQ',
-  dexRouter: 'r1XKmdL9wopmVJedPepW76oPYTV1tFdTaPsHT73CqfZruPww1',
+  id: '1787784936039',
+  dalla: 'r1Sjjv7dTvjvzfQpuKyFXwaifCYrNwHKreUQdLTqxy19JnibD',
+  beliNft: 'r1WRTKphtZrPVh3zBb4n4Y8jNsdzDQmQkRJ6isxkkRitcD2FU',
+  dao: 'r1Tkof3LipWF4sZzLapMhPysMLwqhBqfXd7RY5q7G8QfCjDgG',
+  faucet: 'r1VqwZQ59x2BTY9fKzF72hwuSQR4ASJX9uzSqoRokBjMJtueQ',
+  psp37: 'r1WGBGLDc7RokxEB4dzNvWqipby5W6mLwDSgi6YKs1b2rNFnR',
+  dexFactory: 'r1VqTUG1rW2HTMEKHDKsariYHf2V8oKefCrNC75KXcbMQgkkx',
+  dexRouter: 'r1TmEDDYFu7hDaBs75CSVE5MS1ZTRbQLqP9C68QNejVpqhsoY',
   dexPairCodeHash: '0x96de81afced1e99600f0f54e513fcdb95d167c01a8a7c644c9f849f43f8a5c69',
 } as const;
 
@@ -205,7 +205,7 @@ export function getRuntimeConfig(): RuntimeConfig {
       (browserOrigin ? toHttpUrl(browserOrigin, '/api/nawal') : 'http://localhost:8080'),
     networkName:
       networkNameOverride ||
-      (browserOrigin ? 'BelizeChain Testnet' : 'Local Development'),
+      (browserOrigin ? 'BelizeChain Mainnet' : 'Local Development'),
     pakitApiUrl:
       pakitOverride ||
       (browserOrigin ? toHttpUrl(browserOrigin, '/api/pakit') : 'http://localhost:8001'),

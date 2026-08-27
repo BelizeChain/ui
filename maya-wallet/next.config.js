@@ -11,6 +11,8 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 
 const nextConfig = {
   reactStrictMode: true,
+  basePath: '/wallet',
+  assetPrefix: '/wallet',
   output: 'standalone',
   transpilePackages: ['@belizechain/shared'],
   typescript: {

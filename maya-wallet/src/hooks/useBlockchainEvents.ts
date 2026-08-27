@@ -249,12 +249,32 @@ export function useBalanceSubscription(address: string | null) {
     let cancelled = false;
     const fetchBalance = async () => {
       try {
-        const raw = await getDallaBalance(address, address);
+        const api = await initializeApi();
+
+        // 1. Fetch Substrate Native Balance (Planck: 10^12)
+        let nativePlanck = 0n;
+        try {
+          const accountInfo: any = await api.query.system.account(address);
+          const rawFree = accountInfo?.data?.free?.toString() || '0';
+          nativePlanck = BigInt(rawFree.replace(/,/g, ''));
+        } catch (e) {
+          console.warn('Failed to query system.account native balance:', e);
+        }
+
+        // 2. Fetch PSP22 Smart Contract Balance
+        let contractPlanck = 0n;
+        try {
+          const rawContract = await getDallaBalance(address, address);
+          contractPlanck = BigInt((rawContract || '0').replace(/,/g, ''));
+        } catch (e) {
+          console.warn('Failed to query DALLA contract balance:', e);
+        }
+
+        // Total DALLA balance
+        const totalPlanck = nativePlanck + contractPlanck;
         if (cancelled) return;
-        const dalla = formatPlanck(raw);
-        // bBZD does not yet have a top-level balance store on-chain (used only
-        // inside the BelizeX AMM as an AssetId variant). Show 0 until a
-        // pallet/contract balance binding is published.
+
+        const dalla = formatPlanck(totalPlanck.toString());
         setBalance({ dalla, bBZD: '0.00', total: dalla });
         setError(null);
         setIsLoading(false);
