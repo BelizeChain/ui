@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { GlassCard } from '@/components/ui';
-import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Palette,
@@ -25,7 +25,6 @@ type AppearanceSettings = {
 };
 
 export default function AppearancePage() {
-  const router = useRouter();
   const [theme, setTheme] = useState<'light' | 'dark' | 'auto'>('light');
   const [accentColor, setAccentColor] = useState('forest');
   const [glassEffect, setGlassEffect] = useState(true);
@@ -109,9 +108,11 @@ export default function AppearancePage() {
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+            <Link href="/settings">
+              <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+                <ArrowLeft size={24} className="text-gray-300" weight="bold" />
+              </button>
+            </Link>
             <div>
               <h1 className="text-xl font-bold text-white">Appearance</h1>
               <p className="text-xs text-gray-400">Theme & Display</p>

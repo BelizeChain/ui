@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ArrowLeft, Bell, BellSlash, CheckCircle } from 'phosphor-react';
 import {
   getNotificationPreferences,
@@ -22,7 +22,6 @@ const TOGGLES: { key: ToggleKey; label: string; description: string }[] = [
 ];
 
 export default function SettingsNotificationsPage() {
-  const router = useRouter();
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -30,37 +29,44 @@ export default function SettingsNotificationsPage() {
     setPrefs(getNotificationPreferences());
   }, []);
 
-  if (!prefs) return null;
-
-  const update = (key: ToggleKey, value: boolean) => {
-    const next = { ...prefs, [key]: value };
-    setPrefs(next);
-    saveNotificationPreferences(next);
+  const handleToggle = (key: ToggleKey) => {
+    if (!prefs) return;
+    const updated = { ...prefs, [key]: !prefs[key] };
+    setPrefs(updated);
+    saveNotificationPreferences(updated);
   };
 
   const handlePushToggle = async () => {
+    if (!prefs) return;
     if (!prefs.pushEnabled) {
       const granted = await enablePushNotifications();
-      setPrefs(getNotificationPreferences());
-      if (!granted) return;
+      const updated = { ...prefs, pushEnabled: granted };
+      setPrefs(updated);
+      saveNotificationPreferences(updated);
     } else {
-      update('pushEnabled', false);
+      const updated = { ...prefs, pushEnabled: false };
+      setPrefs(updated);
+      saveNotificationPreferences(updated);
     }
   };
 
   const handleSave = () => {
-    saveNotificationPreferences(prefs);
+    if (prefs) saveNotificationPreferences(prefs);
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
   };
+
+  if (!prefs) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-            <ArrowLeft size={24} weight="bold" className="text-gray-300" />
-          </button>
+          <Link href="/settings">
+            <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+              <ArrowLeft size={24} weight="bold" className="text-gray-300" />
+            </button>
+          </Link>
           <div>
             <h1 className="text-xl font-bold text-white">Notification Settings</h1>
             <p className="text-xs text-gray-400">Choose what you want to be alerted about</p>
@@ -119,7 +125,7 @@ export default function SettingsNotificationsPage() {
                 </div>
                 <button
                   disabled={disabled}
-                  onClick={() => update(toggle.key, !value)}
+                  onClick={() => handleToggle(toggle.key)}
                   className={`relative w-14 h-8 rounded-full transition-colors disabled:cursor-not-allowed ${
                     value ? 'bg-emerald-500' : 'bg-gray-600'
                   }`}

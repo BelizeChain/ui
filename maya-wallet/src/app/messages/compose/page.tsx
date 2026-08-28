@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -25,10 +26,8 @@ export default function ComposeMessagePage() {
     
     setSending(true);
     try {
-      const success = await sendMessage(recipient, message);
-      if (success) {
-        router.push('/messages');
-      }
+      await sendMessage(recipient, message);
+      router.push('/messages');
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
@@ -42,12 +41,13 @@ export default function ComposeMessagePage() {
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-6 py-4 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => router.back()}
-              className="p-2 hover:bg-gray-800 rounded-full transition-colors"
-            >
-              <ArrowLeft size={24} className="text-white" />
-            </button>
+            <Link href="/messages">
+              <button 
+                className="p-2 hover:bg-gray-800 rounded-full transition-colors"
+              >
+                <ArrowLeft size={24} className="text-white" />
+              </button>
+            </Link>
             <h1 className="text-white text-2xl font-bold">New Message</h1>
           </div>
           <button

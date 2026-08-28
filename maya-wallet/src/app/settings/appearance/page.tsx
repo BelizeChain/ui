@@ -1,11 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, Moon, Sun } from 'phosphor-react';
 import { useState, useEffect } from 'react';
 
 export default function SettingsAppearancePage() {
-  const router = useRouter();
   const [theme, setThemeState] = useState<'light' | 'dark'>('light');
   const [mounted, setMounted] = useState(false);
 
@@ -37,9 +36,11 @@ export default function SettingsAppearancePage() {
     <div className="min-h-screen bg-gradient-to-br from-caribbean-50 to-blue-50 pb-20">
       <div className="bg-gradient-to-r from-caribbean-600 to-caribbean-500 text-white p-6 shadow-lg">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="p-2 hover:bg-gray-700/20 rounded-lg transition-colors">
-            <ArrowLeft size={24} weight="bold" />
-          </button>
+          <Link href="/settings">
+            <button className="p-2 hover:bg-gray-700/20 rounded-lg transition-colors">
+              <ArrowLeft size={24} weight="bold" />
+            </button>
+          </Link>
           <h1 className="text-2xl font-bold">Appearance</h1>
         </div>
       </div>

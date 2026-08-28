@@ -67,7 +67,7 @@ export default function CustodyPage() {
       status: 'PENDING_APPROVAL',
     },
     {
-      id: 'tx-v2',
+      id: 'tx-02',
       vaultName: 'SSB Statutory Reserve Fund (10-of-15)',
       recipient: 'ssb-pension-tranche-sep2026.bz',
       amount: '1,200,000.00',
