@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, Badge, useWallet, useI18n } from '@belizechain/shared';
+import { Card, Badge, useI18n } from '@belizechain/shared';
+import { useWallet } from '@/contexts/WalletContext';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
   ArrowLeft,
@@ -31,7 +32,7 @@ export default function HistoryPage() {
   const router = useRouter();
   const { selectedAccount } = useWallet();
   const { t } = useI18n();
-  const account = selectedAccount as InjectedAccountWithMeta;
+  const account = selectedAccount as any;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'sent' | 'received'>('all');
   const [transactions, setTransactions] = useState<Transaction[]>([]);

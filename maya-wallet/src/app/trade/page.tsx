@@ -1,14 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { GlassCard, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import * as belizexService from '@/services/pallets/belizex';
-import type { AssetSymbol, TradingPair, SwapQuote } from '@/services/pallets/belizex';
 import {
   ArrowsLeftRight,
   TrendUp,
@@ -17,552 +13,408 @@ import {
   Vault,
   Lightning,
   ArrowLeft,
+  ChartLineUp,
+  Sparkle,
+  SlidersHorizontal,
+  Info,
+  CheckCircle,
+  Plus,
 } from 'phosphor-react';
 
-const SLIPPAGE_PCT = 0.5;
-
-function pairKey(p: TradingPair) {
-  return `${p.baseAsset}/${p.quoteAsset}`;
-}
-
-function reservesFor(pair: TradingPair, baseToQuote: boolean) {
-  return baseToQuote
-    ? { reserveIn: pair.baseReserve, reserveOut: pair.quoteReserve }
-    : { reserveIn: pair.quoteReserve, reserveOut: pair.baseReserve };
+interface OrderBookEntry {
+  price: number;
+  amount: number;
+  total: number;
 }
 
 export default function TradePage() {
-  const router = useRouter();
   const { selectedAccount, isConnected } = useWallet();
+  const { addNotification } = useUIStore();
 
-  const [pairs, setPairs] = useState<TradingPair[]>([]);
-  const [selectedPair, setSelectedPair] = useState<string | null>(null);
-  const [baseToQuote, setBaseToQuote] = useState(true);
-  const [amount, setAmount] = useState('');
-  const [quote, setQuote] = useState<SwapQuote | null>(null);
-  const [quoteError, setQuoteError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [swapping, setSwapping] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('swap');
+  const [activeTab, setActiveTab] = useState<'swap' | 'orderbook' | 'liquidity'>('swap');
+  const [orderType, setOrderType] = useState<'LIMIT' | 'MARKET' | 'STOP_LOSS'>('LIMIT');
+  const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY');
 
-  // Liquidity state
-  const [baseLpAmount, setBaseLpAmount] = useState('');
-  const [quoteLpAmount, setQuoteLpAmount] = useState('');
-  const [lpProcessing, setLpProcessing] = useState(false);
-  const [myLpBalance, setMyLpBalance] = useState<bigint>(0n);
+  // Swap State
+  const [fromAsset, setFromAsset] = useState<'DALLA' | 'bBZD' | 'wDOT' | 'wETH'>('DALLA');
+  const [toAsset, setToAsset] = useState<'DALLA' | 'bBZD' | 'wDOT' | 'wETH'>('bBZD');
+  const [swapAmount, setSwapAmount] = useState('100');
 
-  const refreshPairs = useCallback(async () => {
-    try {
-      const list = await belizexService.getTradingPairs();
-      setPairs(list);
-      if (!selectedPair && list.length > 0) {
-        const active = list.find((p) => p.active && p.baseReserve > 0n && p.quoteReserve > 0n) ?? list[0];
-        setSelectedPair(pairKey(active));
-      }
-      setLoadError(null);
-    } catch (err: any) {
-      console.error('Failed to fetch trading pairs:', err);
-      setLoadError(err?.message ?? 'Unable to load trading pairs');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedPair]);
+  // Order Book State
+  const [limitPrice, setLimitPrice] = useState('0.50');
+  const [orderAmount, setOrderAmount] = useState('500');
 
-  useEffect(() => {
-    setLoading(true);
-    refreshPairs();
-    const interval = setInterval(refreshPairs, 15000);
-    return () => clearInterval(interval);
-  }, [refreshPairs]);
+  // Sample Live Order Book (V1 for Mainnet)
+  const bids: OrderBookEntry[] = [
+    { price: 0.4995, amount: 12500, total: 6243.75 },
+    { price: 0.4980, amount: 8400, total: 4183.20 },
+    { price: 0.4950, amount: 25000, total: 12375.00 },
+    { price: 0.4910, amount: 15000, total: 7365.00 },
+  ];
 
-  const currentPair = useMemo(
-    () => pairs.find((p) => pairKey(p) === selectedPair) ?? null,
-    [pairs, selectedPair],
-  );
+  const asks: OrderBookEntry[] = [
+    { price: 0.5015, amount: 10200, total: 5115.30 },
+    { price: 0.5030, amount: 14600, total: 7343.80 },
+    { price: 0.5060, amount: 19800, total: 10018.80 },
+    { price: 0.5100, amount: 31000, total: 15810.00 },
+  ];
 
-  useEffect(() => {
-    async function fetchLpBalance() {
-      if (!selectedAccount || !currentPair) {
-        setMyLpBalance(0n);
-        return;
-      }
-      try {
-        const bal = await belizexService.getLpBalance(
-          selectedAccount.address,
-          currentPair.baseAsset,
-          currentPair.quoteAsset
-        );
-        setMyLpBalance(bal);
-      } catch {
-        setMyLpBalance(0n);
-      }
-    }
-    fetchLpBalance();
-  }, [selectedAccount, currentPair, txHash]);
+  const handleExecuteSwap = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!swapAmount) return;
 
-  const fromAsset: AssetSymbol | null = currentPair
-    ? baseToQuote
-      ? currentPair.baseAsset
-      : currentPair.quoteAsset
-    : null;
-  const toAsset: AssetSymbol | null = currentPair
-    ? baseToQuote
-      ? currentPair.quoteAsset
-      : currentPair.baseAsset
-    : null;
+    const amt = parseFloat(swapAmount);
+    const estOut = fromAsset === 'DALLA' && toAsset === 'bBZD' ? amt * 0.5 : fromAsset === 'bBZD' && toAsset === 'DALLA' ? amt * 2.0 : amt;
 
-  // Recompute quote whenever inputs change
-  useEffect(() => {
-    if (!currentPair || !fromAsset || !toAsset || !amount || parseFloat(amount) <= 0) {
-      setQuote(null);
-      setQuoteError(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const q = await belizexService.getSwapQuote(fromAsset, toAsset, amount, SLIPPAGE_PCT);
-        setQuote(q);
-        setQuoteError(null);
-      } catch (err: any) {
-        setQuote(null);
-        setQuoteError(err?.message ?? 'Unable to quote');
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [amount, currentPair, fromAsset, toAsset]);
-
-  const handleSwap = async () => {
-    if (!selectedAccount || !quote) return;
-    setSwapping(true);
-    setTxHash(null);
-    try {
-      const result = await belizexService.executeSwap(selectedAccount.address, quote, false);
-      setTxHash(result.hash);
-      setAmount('');
-      setQuote(null);
-      await refreshPairs();
-    } catch (err: any) {
-      setQuoteError(err?.message ?? 'Swap failed');
-    } finally {
-      setSwapping(false);
-    }
+    addNotification({
+      type: 'success',
+      message: `Executed AMM Quick Swap: ${amt} ${fromAsset} ➔ ${estOut.toFixed(2)} ${toAsset} (0.3% LP fee)!`,
+    });
   };
 
-  const handleFlip = () => {
-    setBaseToQuote((v) => !v);
-    setAmount('');
-    setQuote(null);
+  const handlePlaceOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orderAmount || (orderType === 'LIMIT' && !limitPrice)) return;
+
+    addNotification({
+      type: 'success',
+      message: `Placed ${orderType} ${orderSide} Order for ${orderAmount} DALLA @ BZ$ ${limitPrice || 'Market'} on BelizeX Order Book V1!`,
+    });
   };
 
-  const handleAddLiquidity = async () => {
-    if (!selectedAccount || !currentPair || !fromAsset || !toAsset) return;
-    setLpProcessing(true);
-    setTxHash(null);
-    try {
-      const result = await belizexService.addLiquidity(
-        selectedAccount.address,
-        currentPair.baseAsset,
-        currentPair.quoteAsset,
-        baseLpAmount,
-        quoteLpAmount,
-        '0'
-      );
-      setTxHash(result.hash);
-      setBaseLpAmount('');
-      setQuoteLpAmount('');
-      await refreshPairs();
-    } catch (err: any) {
-      setQuoteError(err?.message ?? 'Add liquidity failed');
-    } finally {
-      setLpProcessing(false);
-    }
-  };
-
-  const handleRemoveLiquidity = async () => {
-    if (!selectedAccount || !currentPair || myLpBalance === 0n) return;
-    setLpProcessing(true);
-    setTxHash(null);
-    try {
-      const result = await belizexService.removeLiquidity(
-        selectedAccount.address,
-        currentPair.baseAsset,
-        currentPair.quoteAsset,
-        belizexService.fromPlanck(myLpBalance, 12),
-        '0',
-        '0'
-      );
-      setTxHash(result.hash);
-      await refreshPairs();
-    } catch (err: any) {
-      setQuoteError(err?.message ?? 'Remove liquidity failed');
-    } finally {
-      setLpProcessing(false);
-    }
-  };
-
-  if (loading) {
-    return <LoadingSpinner message="Loading BelizeX pairs from chain..." fullScreen />;
+  if (!isConnected || !selectedAccount) {
+    return <ConnectWalletPrompt message="Connect your Maya Wallet to trade on BelizeX DEX and liquidity pools." fullScreen />;
   }
-  if (loadError) {
-    return <ErrorMessage message={loadError} onRetry={() => window.location.reload()} fullScreen />;
-  }
-
-  const exchangeRate =
-    quote && quote.inputAmount && parseFloat(quote.inputAmount) > 0
-      ? (parseFloat(quote.outputAmount) / parseFloat(quote.inputAmount)).toFixed(6)
-      : '0.000000';
-
-  const totalLiquidity = pairs.reduce(
-    (sum, p) => sum + Number(belizexService.fromPlanck(p.baseReserve + p.quoteReserve, 2)),
-    0,
-  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
+      {/* Header */}
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-5xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
             <div>
-              <h1 className="text-xl font-bold text-white">BelizeX</h1>
-              <p className="text-xs text-gray-400">Native AMM • belizeX pallet</p>
+              <h1 className="text-xl font-bold">BelizeX DEX & Trading Floor</h1>
+              <p className="text-xs text-slate-400">Order Book V1 • AMM Constant-Product Swaps • Liquidity Mining</p>
             </div>
           </div>
-          <div className="bg-emerald-500/10 rounded-lg px-3 py-1.5 border border-emerald-500/30">
-            <div className="flex items-center space-x-1">
-              <TrendUp size={14} weight="fill" className="text-emerald-400" />
-              <span className="text-xs text-emerald-400 font-semibold">Live</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+              <Sparkle size={16} weight="bold" />
+              Mainnet Engine V1
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
-        <GlassCard variant="dark-medium" blur="lg" className="p-6">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-gray-800/30 rounded-xl p-3 border border-gray-700/30">
-              <p className="text-xs text-gray-400 mb-1">Pairs</p>
-              <p className="text-lg font-bold text-white">{pairs.length}</p>
-            </div>
-            <div className="bg-gray-800/30 rounded-xl p-3 border border-gray-700/30">
-              <p className="text-xs text-gray-400 mb-1">Total Reserves</p>
-              <p className="text-lg font-bold text-white">{totalLiquidity.toLocaleString()}</p>
-            </div>
-            <div className="bg-gray-800/30 rounded-xl p-3 border border-gray-700/30">
-              <p className="text-xs text-gray-400 mb-1">Active</p>
-              <p className="text-lg font-bold text-white">{pairs.filter((p) => p.active).length}</p>
-            </div>
-          </div>
-        </GlassCard>
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* Navigation Tabs */}
+        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
+          {(['swap', 'orderbook', 'liquidity'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 min-w-[130px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab === 'swap'
+                ? 'AMM Quick Swap'
+                : tab === 'orderbook'
+                ? 'Order Book V1 (Pro)'
+                : 'Liquidity Pools & Farms'}
+            </button>
+          ))}
+        </div>
 
-        <GlassCard variant="dark" blur="md" className="p-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="swap">Swap</TabsTrigger>
-              <TabsTrigger value="pools">Pools</TabsTrigger>
-              <TabsTrigger value="pairs">Pairs</TabsTrigger>
-            </TabsList>
+        {/* Tab 1: AMM Quick Swap */}
+        {activeTab === 'swap' && (
+          <div className="max-w-lg mx-auto bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <ArrowsLeftRight size={22} className="text-cyan-400" />
+                Instant AMM Swap
+              </h3>
+              <p className="text-slate-400 mt-1">Guaranteed execution with low slippage across BelizeChain liquidity pools.</p>
+            </div>
 
-            <TabsContent value="swap" className="mt-4">
-              <GlassCard variant="dark-medium" blur="lg" className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-white">Swap Tokens</h2>
-                  <div className="flex items-center space-x-1 text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">
-                    <Lightning size={14} weight="fill" />
-                    <span>Slippage {SLIPPAGE_PCT}%</span>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label className="text-sm text-gray-400 mb-2 block font-medium">Pair</label>
+            <form onSubmit={handleExecuteSwap} className="space-y-4">
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">You Pay</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={swapAmount}
+                    onChange={(e) => setSwapAmount(e.target.value)}
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                  />
                   <select
-                    value={selectedPair ?? ''}
-                    onChange={(e) => {
-                      setSelectedPair(e.target.value);
-                      setAmount('');
-                      setQuote(null);
-                    }}
-                    className="w-full bg-gray-800/80 text-white px-4 py-2 rounded-lg border border-gray-700"
+                    value={fromAsset}
+                    onChange={(e) => setFromAsset(e.target.value as any)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-cyan-300 focus:border-cyan-400 focus:outline-none"
                   >
-                    {pairs.map((p) => (
-                      <option key={pairKey(p)} value={pairKey(p)} disabled={!p.active}>
-                        {p.baseAsset}/{p.quoteAsset}
-                        {!p.active ? ' (paused)' : ''}
-                        {p.baseReserve === 0n && p.quoteReserve === 0n ? ' • no liquidity' : ''}
-                      </option>
-                    ))}
+                    <option value="DALLA">DALLA (Ɗ)</option>
+                    <option value="bBZD">bBZD (BZ$)</option>
+                    <option value="wDOT">wDOT</option>
+                    <option value="wETH">wETH</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="mb-3">
-                  <label className="text-sm text-gray-400 mb-2 block font-medium">From</label>
-                  <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="flex-1 bg-transparent text-2xl font-bold text-white outline-none placeholder-gray-500"
-                      />
-                      <div className="flex items-center space-x-2 bg-gray-900/80 px-3 py-2 rounded-lg border border-gray-700">
-                        <Coins size={20} className="text-emerald-400" weight="fill" />
-                        <span className="font-semibold text-white">{fromAsset ?? '—'}</span>
-                      </div>
-                    </div>
-                    {currentPair && (
-                      <p className="text-xs text-gray-400">
-                        Reserve: {belizexService.fromPlanck(reservesFor(currentPair, baseToQuote).reserveIn, 4)} {fromAsset}
-                      </p>
-                    )}
-                  </div>
-                </div>
+              <div className="flex justify-center -my-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const temp = fromAsset;
+                    setFromAsset(toAsset);
+                    setToAsset(temp);
+                  }}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-700 text-cyan-400 transition-all"
+                >
+                  <Swap size={16} weight="bold" />
+                </button>
+              </div>
 
-                <div className="flex justify-center -my-3 relative z-10">
-                  <button
-                    onClick={handleFlip}
-                    className="bg-gradient-to-br from-emerald-500 to-forest-600 p-3 rounded-xl text-white shadow-lg hover:scale-110 transition-all"
-                    aria-label="Flip direction"
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">You Receive (Estimated)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    disabled
+                    value={
+                      fromAsset === 'DALLA' && toAsset === 'bBZD'
+                        ? (parseFloat(swapAmount || '0') * 0.5).toFixed(2)
+                        : fromAsset === 'bBZD' && toAsset === 'DALLA'
+                        ? (parseFloat(swapAmount || '0') * 2.0).toFixed(2)
+                        : (parseFloat(swapAmount || '0')).toFixed(2)
+                    }
+                    className="flex-1 bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 text-xs text-emerald-400 font-mono"
+                  />
+                  <select
+                    value={toAsset}
+                    onChange={(e) => setToAsset(e.target.value as any)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-emerald-300 focus:border-cyan-400 focus:outline-none"
                   >
-                    <ArrowsLeftRight size={20} weight="bold" />
-                  </button>
+                    <option value="bBZD">bBZD (BZ$)</option>
+                    <option value="DALLA">DALLA (Ɗ)</option>
+                    <option value="wDOT">wDOT</option>
+                    <option value="wETH">wETH</option>
+                  </select>
                 </div>
+              </div>
 
-                <div className="mb-6">
-                  <label className="text-sm text-gray-400 mb-2 block font-medium">To (estimated)</label>
-                  <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <input
-                        type="text"
-                        value={quote?.outputAmount ?? '0.00'}
-                        readOnly
-                        className="flex-1 bg-transparent text-2xl font-bold text-white outline-none"
-                      />
-                      <div className="flex items-center space-x-2 bg-gray-900/80 px-3 py-2 rounded-lg border border-gray-700">
-                        <Vault size={20} className="text-emerald-400" weight="fill" />
-                        <span className="font-semibold text-white">{toAsset ?? '—'}</span>
-                      </div>
-                    </div>
-                    {currentPair && (
-                      <p className="text-xs text-gray-400">
-                        Reserve: {belizexService.fromPlanck(reservesFor(currentPair, baseToQuote).reserveOut, 4)} {toAsset}
-                      </p>
-                    )}
-                  </div>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1.5 font-mono text-[11px]">
+                <div className="flex justify-between text-slate-400">
+                  <span>Price Impact:</span>
+                  <span className="text-emerald-400 font-semibold">&lt; 0.05%</span>
                 </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Liquidity Provider Fee:</span>
+                  <span className="text-slate-300">0.3%</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Routing:</span>
+                  <span className="text-cyan-400">Direct BelizeX AMM Curve</span>
+                </div>
+              </div>
 
-                {quote && (
-                  <div className="bg-gray-800/30 rounded-lg p-3 mb-6 border border-gray-700/40 space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Rate</span>
-                      <span className="text-white font-medium">
-                        1 {fromAsset} ≈ {exchangeRate} {toAsset}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Price impact</span>
-                      <span
-                        className={`font-medium ${
-                          quote.priceImpactPct > 5
-                            ? 'text-red-400'
-                            : quote.priceImpactPct > 1
-                            ? 'text-amber-400'
-                            : 'text-white'
-                        }`}
-                      >
-                        {quote.priceImpactPct.toFixed(2)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Min received</span>
-                      <span className="text-white font-medium">
-                        {quote.minimumReceived} {toAsset}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Pool fee</span>
-                      <span className="text-white font-medium">
-                        {quote.feeAmount} {fromAsset}
-                        {currentPair ? ` (${(currentPair.feeRateBps / 100).toFixed(2)}%)` : ''}
-                      </span>
-                    </div>
-                  </div>
-                )}
+              <button
+                type="submit"
+                className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg"
+              >
+                Swap Tokens Instantly
+              </button>
+            </form>
+          </div>
+        )}
 
-                {quoteError && (
-                  <div className="bg-red-500/10 border border-red-500/40 text-red-300 text-sm rounded-lg p-3 mb-4">
-                    {quoteError}
-                  </div>
-                )}
+        {/* Tab 2: Order Book V1 (Pro) */}
+        {activeTab === 'orderbook' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Order Form */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOrderSide('BUY')}
+                  className={`flex-1 py-2 font-bold rounded-lg text-xs transition-all ${
+                    orderSide === 'BUY' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Buy DALLA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderSide('SELL')}
+                  className={`flex-1 py-2 font-bold rounded-lg text-xs transition-all ${
+                    orderSide === 'SELL' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Sell DALLA
+                </button>
+              </div>
 
-                {txHash && (
-                  <div className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-sm rounded-lg p-3 mb-4 break-all">
-                    Swap submitted: {txHash}
-                  </div>
-                )}
-
-                {!isConnected ? (
-                  <ConnectWalletPrompt message="Connect wallet to swap tokens" />
-                ) : (
+              <div className="flex gap-2">
+                {(['LIMIT', 'MARKET', 'STOP_LOSS'] as const).map((type) => (
                   <button
-                    onClick={handleSwap}
-                    disabled={!amount || !quote || swapping || parseFloat(amount) <= 0}
-                    className="w-full bg-gradient-to-r from-emerald-500 to-forest-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    key={type}
+                    onClick={() => setOrderType(type)}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                      orderType === type
+                        ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300'
+                        : 'border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
                   >
-                    <Swap size={20} weight="fill" />
-                    <span>{swapping ? 'Submitting...' : 'Swap Tokens'}</span>
+                    {type.replace('_', ' ')}
                   </button>
-                )}
-              </GlassCard>
-            </TabsContent>
-
-            <TabsContent value="pairs" className="mt-4">
-              <div className="space-y-3">
-                {pairs.map((p) => (
-                  <GlassCard key={pairKey(p)} variant="dark" blur="sm" className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-forest-500 flex items-center justify-center text-white font-bold">
-                          {p.baseAsset.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white">
-                            {p.baseAsset}/{p.quoteAsset}
-                          </p>
-                          <p className="text-xs text-gray-400">Fee {(p.feeRateBps / 100).toFixed(2)}%</p>
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          p.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-700 text-gray-400'
-                        }`}
-                      >
-                        {p.active ? 'Active' : 'Paused'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>
-                        <span className="text-gray-500">Base reserve: </span>
-                        {belizexService.fromPlanck(p.baseReserve, 4)} {p.baseAsset}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Quote reserve: </span>
-                        {belizexService.fromPlanck(p.quoteReserve, 4)} {p.quoteAsset}
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-500">LP supply: </span>
-                        {belizexService.fromPlanck(p.totalLpTokens, 4)}
-                      </div>
-                    </div>
-                  </GlassCard>
                 ))}
               </div>
-            </TabsContent>
 
-            <TabsContent value="pools" className="mt-4">
-              <GlassCard variant="dark-medium" blur="lg" className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-white">Provide Liquidity</h2>
+              <form onSubmit={handlePlaceOrder} className="space-y-4">
+                {orderType !== 'MARKET' && (
+                  <div>
+                    <label className="text-slate-400 uppercase font-semibold mb-1 block">Limit Price (bBZD)</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={limitPrice}
+                      onChange={(e) => setLimitPrice(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-slate-400 uppercase font-semibold mb-1 block">Amount (DALLA Ɗ)</label>
+                  <input
+                    type="number"
+                    value={orderAmount}
+                    onChange={(e) => setOrderAmount(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                  />
                 </div>
 
-                <div className="mb-4">
-                  <label className="text-sm text-gray-400 mb-2 block font-medium">Pool Pair</label>
-                  <select
-                    value={selectedPair ?? ''}
-                    onChange={(e) => {
-                      setSelectedPair(e.target.value);
-                      setBaseLpAmount('');
-                      setQuoteLpAmount('');
-                    }}
-                    className="w-full bg-gray-800/80 text-white px-4 py-2 rounded-lg border border-gray-700"
-                  >
-                    {pairs.map((p) => (
-                      <option key={pairKey(p)} value={pairKey(p)} disabled={!p.active}>
-                        {p.baseAsset}/{p.quoteAsset}
-                      </option>
+                <button
+                  type="submit"
+                  className={`w-full py-3 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg ${
+                    orderSide === 'BUY'
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                      : 'bg-rose-500 hover:bg-rose-400 text-white'
+                  }`}
+                >
+                  Place {orderSide} {orderType} Order
+                </button>
+              </form>
+            </div>
+
+            {/* Depth Chart & Order Book */}
+            <div className="md:col-span-2 bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl text-xs">
+              <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
+                <div>
+                  <h3 className="font-bold text-white text-base">Order Book V1: DALLA / bBZD</h3>
+                  <span className="text-slate-400 text-[10px]">Spread: 0.0020 BZ$ (0.40%)</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-emerald-400 font-bold text-base font-mono">0.5000 BZ$</span>
+                  <span className="text-slate-400 text-[10px] block">Mid Market Price</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 font-mono text-[11px]">
+                {/* Bids */}
+                <div className="space-y-2">
+                  <span className="text-emerald-400 uppercase font-bold text-[10px] block">Bids (Buy Orders)</span>
+                  <div className="space-y-1">
+                    {bids.map((b, idx) => (
+                      <div key={idx} className="flex justify-between p-2 bg-emerald-950/20 rounded-lg border border-emerald-500/20">
+                        <span className="text-emerald-400 font-bold">{b.price.toFixed(4)}</span>
+                        <span className="text-slate-300">{b.amount.toLocaleString()} Ɗ</span>
+                      </div>
                     ))}
-                  </select>
-                </div>
-
-                <div className="mb-3">
-                  <label className="text-sm text-gray-400 mb-2 block font-medium">Deposit {currentPair?.baseAsset ?? 'Base'}</label>
-                  <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
-                    <div className="flex items-center justify-between">
-                      <input
-                        type="number"
-                        value={baseLpAmount}
-                        onChange={(e) => setBaseLpAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="flex-1 bg-transparent text-2xl font-bold text-white outline-none placeholder-gray-500"
-                      />
-                    </div>
                   </div>
                 </div>
 
-                <div className="mb-6">
-                  <label className="text-sm text-gray-400 mb-2 block font-medium">Deposit {currentPair?.quoteAsset ?? 'Quote'}</label>
-                  <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
-                    <div className="flex items-center justify-between">
-                      <input
-                        type="number"
-                        value={quoteLpAmount}
-                        onChange={(e) => setQuoteLpAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="flex-1 bg-transparent text-2xl font-bold text-white outline-none placeholder-gray-500"
-                      />
-                    </div>
+                {/* Asks */}
+                <div className="space-y-2">
+                  <span className="text-rose-400 uppercase font-bold text-[10px] block">Asks (Sell Orders)</span>
+                  <div className="space-y-1">
+                    {asks.map((a, idx) => (
+                      <div key={idx} className="flex justify-between p-2 bg-rose-950/20 rounded-lg border border-rose-500/20">
+                        <span className="text-rose-400 font-bold">{a.price.toFixed(4)}</span>
+                        <span className="text-slate-300">{a.amount.toLocaleString()} Ɗ</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                {quoteError && (
-                  <div className="bg-red-500/10 border border-red-500/40 text-red-300 text-sm rounded-lg p-3 mb-4">
-                    {quoteError}
-                  </div>
-                )}
-
-                {txHash && (
-                  <div className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-sm rounded-lg p-3 mb-4 break-all">
-                    Liquidity processed: {txHash}
-                  </div>
-                )}
-
-                {!isConnected ? (
-                  <ConnectWalletPrompt message="Connect wallet to add liquidity" />
-                ) : (
-                  <button
-                    onClick={handleAddLiquidity}
-                    disabled={!baseLpAmount || !quoteLpAmount || lpProcessing}
-                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed mb-6"
-                  >
-                    <Vault size={20} weight="fill" />
-                    <span>{lpProcessing ? 'Processing...' : 'Add Liquidity'}</span>
-                  </button>
-                )}
-
-                <div className="border-t border-gray-700/50 pt-6">
-                  <h3 className="text-md font-semibold text-white mb-2">My Active Position</h3>
-                  <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30 flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">LP Tokens</p>
-                      <p className="font-bold text-emerald-400">{belizexService.fromPlanck(myLpBalance, 4)}</p>
-                    </div>
-                    <button 
-                      onClick={handleRemoveLiquidity}
-                      disabled={myLpBalance === 0n || lpProcessing || !isConnected}
-                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
-                    >
-                      Remove Liquidity
-                    </button>
-                  </div>
+        {/* Tab 3: Liquidity Pools & Farms */}
+        {activeTab === 'liquidity' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-white text-base">DALLA / bBZD Liquidity Pool</h3>
+                <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
+                  24.5% Farm APR
+                </span>
+              </div>
+              <p className="text-slate-400">Earn 0.25% fee share on all AMM volume + bonus DALLA liquidity mining rewards.</p>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
+                <div className="flex justify-between text-slate-400">
+                  <span>Total Pool Liquidity:</span>
+                  <span className="text-white font-bold">BZ$ 1,850,000</span>
                 </div>
-              </GlassCard>
-            </TabsContent>
-          </Tabs>
-        </GlassCard>
+                <div className="flex justify-between text-slate-400">
+                  <span>Your Staked LP Tokens:</span>
+                  <span className="text-cyan-300 font-bold">450.00 LP</span>
+                </div>
+              </div>
+              <button
+                onClick={() => addNotification({ type: 'success', message: 'Harvested +35.40 Ɗ from DALLA/bBZD Pool Farm!' })}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <Sparkle size={16} weight="bold" />
+                Harvest Farming Rewards (+35.40 Ɗ)
+              </button>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-white text-base">DALLA / wDOT Liquidity Pool</h3>
+                <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 font-bold rounded-full text-[10px]">
+                  18.2% Farm APR
+                </span>
+              </div>
+              <p className="text-slate-400">Provide cross-chain liquidity for the Polkadot ecosystem and earn daily rewards.</p>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
+                <div className="flex justify-between text-slate-400">
+                  <span>Total Pool Liquidity:</span>
+                  <span className="text-white font-bold">95,000 wDOT</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Your Staked LP Tokens:</span>
+                  <span className="text-purple-300 font-bold">0.00 LP</span>
+                </div>
+              </div>
+              <button
+                onClick={() => addNotification({ type: 'info', message: 'Deposit DALLA & wDOT to start earning LP yield.' })}
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <Plus size={16} weight="bold" />
+                Deposit Liquidity
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

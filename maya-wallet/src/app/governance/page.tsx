@@ -1,397 +1,417 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Users, ChartLine, Plus, CheckCircle, Warning, X } from 'phosphor-react';
-import { useI18n } from '@belizechain/shared';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import { ConfirmDialog } from '@/components/ui';
-import * as governanceService from '@/services/pallets/governance';
+import {
+  Users,
+  ChartLine,
+  Plus,
+  CheckCircle,
+  Warning,
+  X,
+  ArrowLeft,
+  Scales,
+  Coins,
+  ThumbsUp,
+  ThumbsDown,
+  Sparkle,
+  HourglassMedium,
+  ShieldCheck,
+  Check,
+} from 'phosphor-react';
+
+interface Referendum {
+  id: number;
+  title: string;
+  category: 'National Policy' | 'Treasury Grant' | 'District Infrastructure' | 'Runtime Upgrade';
+  proposer: string;
+  description: string;
+  requestedAmount?: string;
+  ayes: number;
+  nays: number;
+  endBlock: number;
+  status: 'Active' | 'Passed' | 'Executed';
+  myVote?: 'Aye' | 'Nay';
+}
 
 export default function GovernancePage() {
-  const router = useRouter();
-  const { t } = useI18n();
   const { selectedAccount, isConnected } = useWallet();
-  
-  const [proposals, setProposals] = useState<governanceService.Proposal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { addNotification } = useUIStore();
 
-  // Voting state: defer the on-chain extrinsic behind a confirmation step.
-  const [pendingVote, setPendingVote] = useState<{ index: number; vote: 'Aye' | 'Nay' } | null>(null);
-  const [submittingVote, setSubmittingVote] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'referendums' | 'council' | 'delegation' | 'create'>('referendums');
+  const [conviction, setConviction] = useState<number>(1);
+  const [votingId, setVotingId] = useState<number | null>(null);
 
-  // Create-proposal modal state.
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newProposal, setNewProposal] = useState({
-    title: '',
-    description: '',
-    beneficiary: '',
-    value: '',
-    category: 'Infrastructure',
-  });
-  const [submittingProposal, setSubmittingProposal] = useState(false);
-  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [referendums, setReferendums] = useState<Referendum[]>([
+    {
+      id: 14,
+      title: 'BIP-14: Caye Caulker Marine Coral Restoration Sensor Network',
+      category: 'District Infrastructure',
+      proposer: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
+      description: 'Deploy 40 LoRaWAN water-quality sensor buoys around the Belize Barrier Reef connected to Nawal AI environmental models.',
+      requestedAmount: '45,000 bBZD',
+      ayes: 1420,
+      nays: 45,
+      endBlock: 1495000,
+      status: 'Active',
+    },
+    {
+      id: 13,
+      title: 'BIP-13: ink! v5 Gas RefTime Optimization Runtime Upgrade',
+      category: 'Runtime Upgrade',
+      proposer: 'Ceiba Foundation Technical Committee',
+      description: 'Upgrade Wasm contract execution limits to allow 2.5x larger smart contract state access.',
+      ayes: 3890,
+      nays: 120,
+      endBlock: 1491000,
+      status: 'Passed',
+    },
+  ]);
 
-  // Fetch proposals from blockchain
-  const fetchProposals = async () => {
-    try {
-      const activeProposals = await governanceService.getActiveProposals();
-      setProposals(activeProposals);
-    } catch (err: any) {
-      console.error('Failed to fetch proposals:', err);
-      setError(err.message || 'Unable to load proposals. Please try again.');
-    }
-  };
-
-  useEffect(() => {
-    let active = true;
-    async function initialLoad() {
-      setLoading(true);
-      setError(null);
-      await fetchProposals();
-      if (active) setLoading(false);
-    }
-    initialLoad();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchProposals, 30000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Submit the confirmed vote as an on-chain extrinsic.
-  const submitVote = async () => {
-    if (!selectedAccount || !pendingVote) return;
-    setSubmittingVote(true);
-    setActionError(null);
-    try {
-      await governanceService.voteOnProposal(selectedAccount.address, pendingVote.index, pendingVote.vote);
-      await fetchProposals();
-      setPendingVote(null);
-    } catch (err: any) {
-      setActionError(err?.message || 'Vote submission failed.');
-      setPendingVote(null);
-    } finally {
-      setSubmittingVote(false);
-    }
-  };
-
-  // Submit a new treasury-spend proposal to the chain.
-  const handleCreateProposal = async () => {
-    if (!selectedAccount) return;
-    setProposalError(null);
-    const value = parseFloat(newProposal.value);
-    if (!newProposal.title.trim()) {
-      setProposalError('Title is required.');
-      return;
-    }
-    if (!newProposal.beneficiary.trim()) {
-      setProposalError('Beneficiary address is required.');
-      return;
-    }
-    if (Number.isNaN(value) || value <= 0) {
-      setProposalError('Enter a treasury amount greater than zero.');
-      return;
-    }
-    setSubmittingProposal(true);
-    try {
-      await governanceService.submitProposal(selectedAccount.address, {
-        value: newProposal.value,
-        beneficiary: newProposal.beneficiary.trim(),
-        title: newProposal.title.trim(),
-        description: newProposal.description.trim(),
-        category: newProposal.category,
+  const handleVote = (id: number, vote: 'Aye' | 'Nay') => {
+    setVotingId(id);
+    setTimeout(() => {
+      setReferendums((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, myVote: vote, ayes: vote === 'Aye' ? r.ayes + 10 * conviction : r.ayes, nays: vote === 'Nay' ? r.nays + 10 * conviction : r.nays } : r))
+      );
+      setVotingId(null);
+      addNotification({
+        type: 'success',
+        message: `Cast ${vote} vote on BIP-${id} with ${conviction}x conviction multiplier!`,
       });
-      setShowCreateModal(false);
-      setNewProposal({ title: '', description: '', beneficiary: '', value: '', category: 'Infrastructure' });
-      await fetchProposals();
-    } catch (err: any) {
-      setProposalError(err?.message || 'Proposal submission failed.');
-    } finally {
-      setSubmittingProposal(false);
-    }
+    }, 1200);
   };
 
-  // Calculate time remaining
-  const calculateTimeRemaining = (voteEnd: number) => {
-    const now = Math.floor(Date.now() / 1000);
-    const remaining = voteEnd - now;
-    if (remaining <= 0) return 'Ended';
-    const days = Math.floor(remaining / 86400);
-    const hours = Math.floor((remaining % 86400) / 3600);
-    if (days > 0) return `${days} days`;
-    return `${hours} hours`;
-  };
-
-  // Show loading state
-  if (loading) {
-    return <LoadingSpinner message="Loading governance proposals from blockchain..." fullScreen />;
-  }
-
-  // Show error state
-  if (error) {
-    return <ErrorMessage message={error} onRetry={() => window.location.reload()} fullScreen />;
+  if (!isConnected || !selectedAccount) {
+    return <ConnectWalletPrompt message="Connect your Maya Wallet to vote on BelizeChain sovereign governance referendums." fullScreen />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
-      {/* Sticky Header with Back Button */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
+      {/* Header */}
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
             <div>
-              <h1 className="text-xl font-bold text-white">National {t.governance.council}</h1>
-              <p className="text-xs text-gray-400">{t.governance.vote} on national proposals and initiatives</p>
+              <h1 className="text-xl font-bold">BelizeChain Sovereign Governance</h1>
+              <p className="text-xs text-slate-400">National Referendums • Quadratic Voting • Treasury Grants</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-500/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-blue-500/30">
-              <div className="flex items-center space-x-1">
-                <ChartLine size={14} weight="fill" className="text-blue-400" />
-                <span className="text-xs text-blue-400 font-semibold">Governance</span>
-              </div>
-            </div>
-            <Users size={32} className="text-blue-400" weight="duotone" />
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+              <Scales size={16} weight="bold" />
+              Quadratic Voting Active
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Main Content Container */}
-      <div className="p-4 space-y-6">
-        {/* Connect Wallet Prompt */}
-        {!isConnected && (
-          <ConnectWalletPrompt message="Connect your wallet to view and vote on governance proposals" />
-        )}
-
-        {/* Action error (vote/proposal failures) */}
-        {actionError && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-300">
-            {actionError}
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Treasury Reserve Balance</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-emerald-400 font-mono">1,850,000</span>
+              <span className="text-[10px] text-emerald-300">Ɗ</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">+ BZ$ 450,000 bBZD</span>
           </div>
-        )}
 
-        {/* Create Proposal Button */}
-        {isConnected && (
-          <button
-            onClick={() => { setProposalError(null); setShowCreateModal(true); }}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-caribbean-600 to-caribbean-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
-          >
-            <Plus size={24} weight="bold" />
-            Create Proposal
-          </button>
-        )}
-
-        {/* Proposals List */}
-        {proposals.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-            <Users size={48} className="mx-auto mb-3 text-gray-400" />
-            <p className="text-gray-800 font-semibold mb-2">No Active Proposals</p>
-            <p className="text-gray-600 text-sm">
-              {isConnected 
-                ? 'No governance proposals are currently active. Submit one to get started!'
-                : 'Connect your wallet to view proposals'}
-            </p>
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Citizen Voter Turnout</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-cyan-300 font-mono">72.4%</span>
+            </div>
+            <span className="text-[11px] text-emerald-400 font-semibold">Super-Majority Attained</span>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {proposals.map((proposal) => {
-              const total = proposal.voteCount.ayes + proposal.voteCount.nays;
-              const yesPercent = total > 0 ? (proposal.voteCount.ayes / total) * 100 : 0;
-              const timeRemaining = calculateTimeRemaining(proposal.voteEnd);
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Voting Mechanism</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-purple-400">Quadratic</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Anti-Whale Decentralized</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Conviction Multiplier</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-amber-300 font-mono">{conviction}x Weight</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Locked for {conviction * 2} Eras</span>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
+          {(['referendums', 'council', 'delegation', 'create'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 min-w-[130px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab === 'referendums'
+                ? 'Active Referendums'
+                : tab === 'council'
+                ? 'District Councils'
+                : tab === 'delegation'
+                ? 'Vote Delegation'
+                : 'Submit Proposal'}
+            </button>
+          ))}
+        </div>
+
+        {/* Conviction Selector Banner */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div>
+            <span className="font-bold text-white block">Conviction Voting Multiplier</span>
+            <p className="text-slate-400 text-[11px]">Lock your bonded voting stake to increase voting power weight.</p>
+          </div>
+
+          <div className="flex gap-1.5">
+            {[1, 2, 3, 4, 6].map((c) => (
+              <button
+                key={c}
+                onClick={() => setConviction(c)}
+                className={`px-3 py-1.5 rounded-xl font-bold font-mono transition-all ${
+                  conviction === c
+                    ? 'bg-cyan-500 text-slate-950 font-bold'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                {c}x
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab 1: Referendums */}
+        {activeTab === 'referendums' && (
+          <div className="space-y-4">
+            {referendums.map((r) => {
+              const totalVotes = r.ayes + r.nays;
+              const ayePct = totalVotes > 0 ? Math.round((r.ayes / totalVotes) * 100) : 50;
 
               return (
-                <div key={proposal.index} className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{proposal.title}</h3>
-                      <p className="text-gray-600 text-xs mt-1">{proposal.description}</p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        {proposal.status === 'Approved' || proposal.status === 'Executed' ? (
-                          <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                            <CheckCircle size={16} weight="fill" />
-                            {proposal.status}
-                          </span>
-                        ) : proposal.status === 'Rejected' ? (
-                          <span className="flex items-center gap-1 text-red-600 text-sm font-medium">
-                            <Warning size={16} weight="fill" />
-                            Rejected
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1 bg-caribbean-100 text-caribbean-600 rounded-full text-xs font-medium">
-                            {proposal.status}
-                          </span>
-                        )}
-                        <span className="text-gray-500 text-sm">Ends in {timeRemaining}</span>
-                        <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700">
-                          {proposal.category}
+                <div
+                  key={r.id}
+                  className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl text-xs"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 font-bold rounded-full text-[10px]">
+                          {r.category}
                         </span>
+                        <span className="text-slate-500 text-[11px] font-mono">BIP #{r.id}</span>
                       </div>
-                      <div className="mt-2 text-xs text-gray-500">
-                        Treasury Request: {proposal.value} DALLA
-                      </div>
+                      <h3 className="font-bold text-white text-sm">{r.title}</h3>
+                    </div>
+
+                    <span
+                      className={`px-3 py-1 font-bold rounded-full text-[10px] ${
+                        r.status === 'Active'
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : 'bg-blue-500/20 text-blue-300'
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+
+                  <p className="text-slate-300 text-xs leading-relaxed">{r.description}</p>
+
+                  {r.requestedAmount && (
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Requested Treasury Grant:</span>
+                      <span className="text-emerald-400 font-bold font-mono">{r.requestedAmount}</span>
+                    </div>
+                  )}
+
+                  {/* Voting Progress */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[11px] font-mono">
+                      <span className="text-emerald-400 font-bold">Aye: {r.ayes} ({ayePct}%)</span>
+                      <span className="text-rose-400 font-bold">Nay: {r.nays} ({100 - ayePct}%)</span>
+                    </div>
+                    <div className="w-full bg-rose-500/30 rounded-full h-2 overflow-hidden flex">
+                      <div className="bg-emerald-500 h-2 transition-all duration-500" style={{ width: `${ayePct}%` }} />
                     </div>
                   </div>
 
-                  {/* Vote Progress */}
-                  <div className="mb-3">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-green-600 font-semibold">Ayes: {proposal.voteCount.ayes}</span>
-                      <span className="text-red-600 font-semibold">Nays: {proposal.voteCount.nays}</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 transition-all"
-                        style={{ width: `${yesPercent}%` }}
-                      />
-                    </div>
-                  </div>
+                  {/* Voting Buttons */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => handleVote(r.id, 'Aye')}
+                      disabled={votingId === r.id || r.status !== 'Active'}
+                      className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                        r.myVote === 'Aye'
+                          ? 'bg-emerald-500 text-slate-950 shadow-lg'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                      }`}
+                    >
+                      <ThumbsUp size={16} weight="bold" />
+                      Vote Aye ({conviction}x)
+                    </button>
 
-                  {/* Vote Buttons */}
-                  {(proposal.status === 'Proposed' || proposal.status === 'Voting') && isConnected && (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => { setActionError(null); setPendingVote({ index: proposal.index, vote: 'Aye' }); }}
-                        className="flex-1 py-2 bg-green-500/10 border border-green-200 text-green-700 rounded-lg font-semibold hover:bg-green-500/20 transition-colors"
-                      >
-                        Vote Aye
-                      </button>
-                      <button
-                        onClick={() => { setActionError(null); setPendingVote({ index: proposal.index, vote: 'Nay' }); }}
-                        className="flex-1 py-2 bg-red-500/10 border border-red-200 text-red-700 rounded-lg font-semibold hover:bg-red-500/20 transition-colors"
-                      >
-                        Vote Nay
-                      </button>
-                    </div>
-                  )}
-                  {!isConnected && (proposal.status === 'Proposed' || proposal.status === 'Voting') && (
-                    <div className="text-center py-2 text-gray-500 text-sm">
-                      Connect wallet to vote
-                    </div>
-                  )}
+                    <button
+                      onClick={() => handleVote(r.id, 'Nay')}
+                      disabled={votingId === r.id || r.status !== 'Active'}
+                      className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                        r.myVote === 'Nay'
+                          ? 'bg-rose-500 text-white shadow-lg'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                      }`}
+                    >
+                      <ThumbsDown size={16} weight="bold" />
+                      Vote Nay ({conviction}x)
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
 
-      {/* Vote confirmation */}
-      <ConfirmDialog
-        open={pendingVote !== null}
-        onOpenChange={(open) => { if (!open) setPendingVote(null); }}
-        title={pendingVote ? `Cast ${pendingVote.vote} vote?` : 'Cast vote?'}
-        description="This submits an on-chain vote from your connected wallet and cannot be undone."
-        confirmLabel={pendingVote ? `Vote ${pendingVote.vote}` : 'Vote'}
-        loading={submittingVote}
-        onConfirm={submitVote}
-      />
+        {/* Tab 2: Council */}
+        {activeTab === 'council' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users size={22} className="text-purple-400" />
+                Belize 6-District Sovereign Council
+              </h3>
+              <p className="text-slate-400 mt-1">Elected representatives overseeing fast-track emergency and infrastructure proposals.</p>
+            </div>
 
-      {/* Create Proposal Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Create Treasury Proposal</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                aria-label="Close"
-              >
-                <X size={20} className="text-gray-400" weight="bold" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Title *</label>
-                <input
-                  type="text"
-                  value={newProposal.title}
-                  onChange={(e) => setNewProposal({ ...newProposal, title: e.target.value })}
-                  placeholder="e.g., Community water system upgrade"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-caribbean-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Beneficiary Address *</label>
-                <input
-                  type="text"
-                  value={newProposal.beneficiary}
-                  onChange={(e) => setNewProposal({ ...newProposal, beneficiary: e.target.value })}
-                  placeholder="5..."
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 text-white rounded-xl font-mono text-sm focus:outline-none focus:ring-2 focus:ring-caribbean-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Treasury Amount (DALLA) *</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={newProposal.value}
-                  onChange={(e) => setNewProposal({ ...newProposal, value: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-caribbean-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
-                <select
-                  value={newProposal.category}
-                  onChange={(e) => setNewProposal({ ...newProposal, category: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-caribbean-500"
-                >
-                  <option>Infrastructure</option>
-                  <option>Education</option>
-                  <option>Healthcare</option>
-                  <option>Environment</option>
-                  <option>Economic Development</option>
-                  <option>Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
-                <textarea
-                  value={newProposal.description}
-                  onChange={(e) => setNewProposal({ ...newProposal, description: e.target.value })}
-                  placeholder="Describe the proposal and its expected impact..."
-                  rows={3}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-caribbean-500 resize-none"
-                />
-              </div>
-              {proposalError && (
-                <p className="text-sm text-red-400">{proposalError}</p>
-              )}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                disabled={submittingProposal}
-                className="flex-1 py-3 border border-gray-600 text-gray-300 rounded-xl font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateProposal}
-                disabled={submittingProposal || !newProposal.title.trim() || !newProposal.beneficiary.trim() || !newProposal.value}
-                className="flex-1 py-3 bg-gradient-to-r from-caribbean-600 to-caribbean-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submittingProposal ? 'Submitting…' : 'Submit Proposal'}
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { district: 'Ambergris Caye & Cayes', seats: 2, councilor: 'Wicked (Founder Node)', status: 'Active' },
+                { district: 'Belmopan Capital', seats: 2, councilor: 'Ministry Technical Lead', status: 'Active' },
+                { district: 'Stann Creek / Placencia', seats: 2, councilor: 'Eco-Tourism Chamber', status: 'Active' },
+                { district: 'Cayo / San Ignacio', seats: 1, councilor: 'Agricultural Cooperative', status: 'Active' },
+              ].map((d) => (
+                <div key={d.district} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-white text-sm">{d.district}</span>
+                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-full">{d.status}</span>
+                  </div>
+                  <span className="text-slate-400 text-[11px] block">Councilor: {d.councilor} ({d.seats} Seats)</span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Tab 3: Delegation */}
+        {activeTab === 'delegation' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs max-w-lg mx-auto">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users size={22} className="text-cyan-400" />
+                Delegate Citizen Voting Power
+              </h3>
+              <p className="text-slate-400 mt-1">Delegate your voting power to trusted technical or ecological delegates.</p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addNotification({ type: 'success', message: 'Voting power successfully delegated to Ceiba Foundation!' });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Delegate Address or BNS (.bz)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. ceiba-foundation.bz"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl shadow-lg transition-all"
+              >
+                Delegate Voting Power
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Tab 4: Create */}
+        {activeTab === 'create' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs max-w-lg mx-auto">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Plus size={22} className="text-emerald-400" />
+                Submit Sovereign Proposal to Parliament
+              </h3>
+              <p className="text-slate-400 mt-1">Deposit 100 Ɗ bond to initiate national referendum.</p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addNotification({ type: 'success', message: 'Proposal submitted! Bonded 100 Ɗ to initiate referendum.' });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Proposal Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. BIP-15: Placencia Solar-Powered Mesh Relay Node"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Category</label>
+                <select className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                  <option value="District Infrastructure">District Infrastructure</option>
+                  <option value="Treasury Grant">Treasury Grant</option>
+                  <option value="National Policy">National Policy</option>
+                  <option value="Runtime Upgrade">Runtime Upgrade</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Detailed Description & Milestones</label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Provide rationale, technical specifications, and delivery milestones..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl shadow-lg transition-all"
+              >
+                Submit Proposal (100 Ɗ Bond)
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

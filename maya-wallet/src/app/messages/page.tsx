@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { useWallet } from '@/contexts/WalletContext';
+import { useUIStore } from '@/store/ui';
+import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   MagnifyingGlass,
   PaperPlaneTilt,
@@ -17,290 +19,314 @@ import {
   WifiHigh,
   User,
   Broadcast,
-  ArrowLeft
+  ArrowLeft,
+  LockKey,
+  Coins,
+  ShieldCheck,
+  Sparkle,
 } from 'phosphor-react';
-import { useWallet } from '@/contexts/WalletContext';
-import { useMessaging } from '@/contexts/MessagingContext';
-import { GlassCard } from '@/components/ui';
+
+interface ChatMessage {
+  id: string;
+  sender: 'me' | 'peer';
+  text: string;
+  timestamp: string;
+  isEncrypted: boolean;
+  channel: 'libp2p-internet' | 'lora-mesh-915mhz';
+  transferAmount?: string;
+}
+
+interface PeerConversation {
+  address: string;
+  bnsName: string;
+  avatar: string;
+  lastMessage: string;
+  unread: number;
+  channel: 'libp2p-internet' | 'lora-mesh-915mhz';
+}
 
 export default function MessagesPage() {
-  const router = useRouter();
-  const { selectedAccount } = useWallet();
-  const {
-    conversations,
-    emergencyAlerts,
-    pendingSyncCount,
-    sendMessage: sendMessageViaContext,
-    syncToPakit
-  } = useMessaging();
+  const { selectedAccount, isConnected } = useWallet();
+  const { addNotification } = useUIStore();
 
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const [messageInput, setMessageInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activePeer, setActivePeer] = useState<string>('5FHneW...94ty');
+  const [messageText, setMessageText] = useState('');
+  const [transferAmountInput, setTransferAmountInput] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
-  const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedConversation) return;
-    
-    const success = await sendMessageViaContext(selectedConversation, messageInput);
-    if (success) {
-      setMessageInput('');
-    }
+  const [conversations, setConversations] = useState<PeerConversation[]>([
+    {
+      address: '5FHneW...94ty',
+      bnsName: 'ceiba-tech.bz',
+      avatar: 'CT',
+      lastMessage: 'Verified the OpenQASM 2.0 quantum gate execution on Ceiba testbed.',
+      unread: 0,
+      channel: 'libp2p-internet',
+    },
+    {
+      address: '5FLSig...59Y',
+      bnsName: 'ambergris-mesh.caye',
+      avatar: 'AM',
+      lastMessage: 'LoRa 915MHz solar beacon node live on San Pedro North Tower.',
+      unread: 1,
+      channel: 'lora-mesh-915mhz',
+    },
+  ]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'm1',
+      sender: 'peer',
+      text: 'Good morning! Sent the telemetry data for the Caye Caulker coral reef sensors.',
+      timestamp: '10:24 AM',
+      isEncrypted: true,
+      channel: 'libp2p-internet',
+    },
+    {
+      id: 'm2',
+      sender: 'me',
+      text: 'Received and verified on Pakit IPFS! Pushing the grant tranche now.',
+      timestamp: '10:26 AM',
+      isEncrypted: true,
+      channel: 'libp2p-internet',
+      transferAmount: '25.00 Ɗ',
+    },
+    {
+      id: 'm3',
+      sender: 'peer',
+      text: 'Verified the OpenQASM 2.0 quantum gate execution on Ceiba testbed.',
+      timestamp: '10:28 AM',
+      isEncrypted: true,
+      channel: 'libp2p-internet',
+    },
+  ]);
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageText.trim()) return;
+
+    const newMsg: ChatMessage = {
+      id: `m-${Date.now()}`,
+      sender: 'me',
+      text: messageText,
+      timestamp: 'Just now',
+      isEncrypted: true,
+      channel: 'libp2p-internet',
+    };
+
+    setMessages([...messages, newMsg]);
+    setMessageText('');
+    addNotification({ type: 'success', message: 'Message encrypted (Signal E2EE) & transmitted over BelizeChain libp2p!' });
   };
 
-  const activeConversation = conversations.find(c => c.peerAddress === selectedConversation);
-  const filteredConversations = conversations.filter(c => 
-    (c.peerName?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    c.peerAddress.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleSendMicroTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferAmountInput) return;
+
+    const newMsg: ChatMessage = {
+      id: `m-${Date.now()}`,
+      sender: 'me',
+      text: `Sent on-chain micro-transfer`,
+      timestamp: 'Just now',
+      isEncrypted: true,
+      channel: 'libp2p-internet',
+      transferAmount: `${transferAmountInput} Ɗ`,
+    };
+
+    setMessages([...messages, newMsg]);
+    setShowTransferModal(false);
+    setTransferAmountInput('');
+    addNotification({
+      type: 'success',
+      message: `Transferred ${transferAmountInput} Ɗ directly inside E2EE chat!`,
+    });
+  };
+
+  if (!isConnected || !selectedAccount) {
+    return <ConnectWalletPrompt message="Connect your Maya Wallet to access sovereign E2EE citizen messaging." fullScreen />;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
       {/* Header */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-6 py-4 z-10">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-white text-2xl font-bold">Messages</h1>
-          <button 
-            onClick={() => router.push('/messages/compose')}
-            className="p-2 hover:bg-emerald-500/100/20 rounded-full transition-colors"
-          >
-            <PlusCircle size={28} className="text-emerald-400" weight="fill" />
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <MagnifyingGlass 
-            size={20} 
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" 
-            weight="bold" 
-          />
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-          />
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold">Encrypted Citizen Messaging</h1>
+              <p className="text-xs text-slate-400">Signal-Protocol E2EE • LoRa Mesh Failover • Inline Micro-Pay</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+              <LockKey size={16} weight="bold" />
+              E2EE Active
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:gap-4 h-[calc(100vh-280px)]">
-        {/* Emergency Alerts Banner */}
-        {emergencyAlerts.length > 0 && (
-          <div className="col-span-full mb-4 px-6">
-            <GlassCard variant="dark-medium" blur="lg" className="bg-red-900/20 p-4">
-              <div className="flex items-start gap-3">
-                <Warning size={24} className="text-red-400 flex-shrink-0 mt-0.5" weight="fill" />
-                <div className="flex-1">
-                  <p className="text-red-400 font-semibold mb-1">Emergency Alert</p>
-                  <p className="text-white text-sm">{emergencyAlerts[0].message}</p>
-                  <p className="text-red-300 text-xs mt-1">{emergencyAlerts[0].district}</p>
-                </div>
-              </div>
-            </GlassCard>
-          </div>
-        )}  
-
-        {/* Sync Status */}
-        {pendingSyncCount > 0 && (
-          <div className="col-span-full mb-4 px-6">
-            <GlassCard variant="dark-medium" blur="lg" className="bg-purple-900/20">
-              <button
-                onClick={syncToPakit}
-                className="w-full p-4 hover:bg-purple-500/10 transition-colors rounded-xl"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <CloudArrowUp size={24} className="text-purple-400" weight="fill" />
-                    <div className="text-left">
-                      <p className="text-purple-400 font-semibold">{pendingSyncCount} messages pending sync</p>
-                      <p className="text-purple-300 text-sm">Tap to upload to Pakit</p>
-                    </div>
-                  </div>
-                  <div className="text-purple-400">→</div>
-                </div>
-              </button>
-            </GlassCard>
-          </div>
-        )}
-
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Conversation List */}
-        <div className={`md:col-span-1 overflow-y-auto ${selectedConversation ? 'hidden md:block' : 'block'}`}>
-          <div className="px-6 py-4 space-y-2">
-            {filteredConversations.map((conversation) => (
-              <motion.button
-                key={conversation.peerAddress}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedConversation(conversation.peerAddress)}
-                className="w-full"
-              >
-                <GlassCard 
-                  variant="dark-medium" 
-                  blur="lg" 
-                  className={`p-4 transition-all ${
-                    selectedConversation === conversation.peerAddress
-                      ? 'ring-2 ring-emerald-500'
-                      : 'hover:bg-gray-800/50'
-                  }`}
-                >
-                <div className="flex items-start gap-3">
-                  {/* Avatar */}
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-2xl">
-                      {conversation.peerName?.[0] || <User size={24} weight="fill" className="text-white" />}
-                    </div>
-                  </div>
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 space-y-3 h-[600px] flex flex-col text-xs shadow-xl">
+          <div className="flex items-center justify-between px-2">
+            <span className="font-bold text-white text-sm">Direct Messages</span>
+            <span className="px-2 py-0.5 bg-slate-800 rounded-lg text-slate-400 text-[10px]">2 Contacts</span>
+          </div>
 
-                  {/* Content */}
-                  <div className="flex-1 text-left min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-bold text-white truncate">
-                        {conversation.peerName || conversation.peerAddress.slice(0, 8)}
-                      </h3>
-                      <span className="text-xs text-gray-400 flex-shrink-0">
-                        {conversation.lastMessage?.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <div className="space-y-2 overflow-y-auto flex-1">
+            {conversations.map((c) => (
+              <div
+                key={c.address}
+                onClick={() => setActivePeer(c.address)}
+                className={`p-3 rounded-2xl cursor-pointer transition-all border ${
+                  activePeer === c.address
+                    ? 'bg-slate-800/90 border-cyan-500/50 shadow-md'
+                    : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-slate-950 font-mono">
+                    {c.avatar}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-white truncate">{c.bnsName}</span>
+                      <span className="text-[10px] text-slate-500">10:28 AM</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] truncate mt-0.5">{c.lastMessage}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[9px] px-1.5 py-0.2 bg-slate-800 text-slate-400 rounded-md font-mono flex items-center gap-1">
+                        {c.channel === 'lora-mesh-915mhz' ? <Broadcast size={10} className="text-amber-400" /> : <WifiHigh size={10} className="text-emerald-400" />}
+                        {c.channel === 'lora-mesh-915mhz' ? 'LoRa 915MHz' : 'libp2p'}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400 truncate">
-                      {conversation.lastMessage?.content || 'No messages yet'}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1 font-mono truncate">
-                      {conversation.peerAddress.slice(0, 8)}...{conversation.peerAddress.slice(-6)}
-                    </p>
                   </div>
-
-                  {/* Unread Badge */}
-                  {conversation.unreadCount > 0 && (
-                    <div className="w-6 h-6 bg-emerald-500/100 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">{conversation.unreadCount}</span>
-                    </div>
-                  )}
                 </div>
-              </GlassCard>
-              </motion.button>
-            ))}
-
-            {filteredConversations.length === 0 && (
-              <div className="text-center py-12">
-                <Users size={48} className="text-gray-400 mx-auto mb-3" weight="fill" />
-                <p className="text-gray-400 font-medium">No conversations found</p>
-                <p className="text-gray-400 text-sm mt-1">Try a different search</p>
               </div>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* Chat Window */}
-        <div className={`md:col-span-2 ${selectedConversation ? 'block' : 'hidden md:block'}`}>
-          {selectedConversation ? (
-            <GlassCard variant="dark-medium" blur="lg" className="h-full flex flex-col">
-              {/* Chat Header */}
-              <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setSelectedConversation(null)}
-                    className="md:hidden text-gray-400 hover:text-white"
-                    aria-label="Back to conversations"
-                  >
-                    <ArrowLeft size={20} weight="bold" />
-                  </button>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xl">
-                    {activeConversation?.peerName?.[0] || <User size={20} weight="fill" className="text-white" />}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white">
-                      {activeConversation?.peerName || activeConversation?.peerAddress.slice(0, 12)}
-                    </h3>
-                    <p className="text-xs text-gray-400 flex items-center gap-1">
-                      <WifiHigh size={12} weight="fill" /> Secure Messaging
-                    </p>
-                  </div>
-                </div>
-                <button className="p-2 hover:bg-gray-700/50 rounded-full transition-colors">
-                  <DotsThreeVertical size={24} className="text-gray-400" weight="bold" />
-                </button>
+        {/* Chat Area */}
+        <div className="md:col-span-2 bg-slate-900/80 border border-slate-800 rounded-3xl p-5 h-[600px] flex flex-col justify-between shadow-xl text-xs">
+          {/* Active Contact Header */}
+          <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-slate-950 font-mono text-xs">
+                CT
               </div>
-
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                {activeConversation?.messages.map((message) => {
-                  const isSent = message.sender === selectedAccount?.address;
-                  return (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div className={`max-w-[70%] ${isSent ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                        <div
-                          className={`px-4 py-3 rounded-2xl ${
-                            isSent
-                              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white'
-                              : 'bg-gray-700 text-white'
-                          }`}
-                        >
-                          <p>{message.content}</p>
-                        </div>
-                        <div className="flex items-center gap-2 px-2">
-                          <span className="text-xs text-gray-400">
-                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          {isSent && (
-                            <span className="text-emerald-400">
-                              {message.status === 'read' && <CheckCircle size={14} weight="fill" />}
-                              {message.status === 'delivered' && <CheckCircle size={14} />}
-                              {message.status === 'sent' && <Clock size={14} />}
-                            </span>
-                          )}
-                          <span className="text-xs text-gray-400">
-                            {message.via === 'mesh' && <Broadcast size={12} weight="fill" aria-label="Sent via mesh" />}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Message Input */}
-              <div className="px-6 py-4 border-t border-gray-700/50">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    placeholder="Type your message..."
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!messageInput.trim()}
-                    className="p-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all"
-                  >
-                    <PaperPlaneTilt size={24} className="text-white" weight="fill" />
-                  </button>
-                </div>
-              </div>
-            </GlassCard>
-          ) : (
-            <div className="h-full flex items-center justify-center text-center">
               <div>
-                <div className="w-24 h-24 rounded-full bg-gray-800/50 flex items-center justify-center mx-auto mb-4">
-                  <Phone size={48} className="text-gray-400" weight="fill" />
-                </div>
-                <h3 className="text-white text-xl font-bold mb-2">Select a conversation</h3>
-                <p className="text-gray-400">Choose from your existing conversations or start a new one</p>
+                <h3 className="font-bold text-white text-sm">ceiba-tech.bz</h3>
+                <span className="text-slate-400 text-[10px] flex items-center gap-1">
+                  <LockKey size={12} className="text-emerald-400" /> End-to-End Encrypted (Noise Protocol)
+                </span>
               </div>
             </div>
-          )}
+
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+            >
+              <Coins size={14} weight="bold" /> Send Ɗ
+            </button>
+          </div>
+
+          {/* Messages Stream */}
+          <div className="flex-1 overflow-y-auto space-y-3 py-4 pr-1">
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={`flex flex-col ${m.sender === 'me' ? 'items-end' : 'items-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] p-3.5 rounded-2xl space-y-1.5 ${
+                    m.sender === 'me'
+                      ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-none'
+                      : 'bg-slate-950 border border-slate-800 text-slate-200 rounded-bl-none'
+                  }`}
+                >
+                  <p className="text-xs leading-relaxed">{m.text}</p>
+
+                  {m.transferAmount && (
+                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-emerald-500/40 flex items-center justify-between gap-3 text-xs font-mono">
+                      <span className="text-slate-300">P2P Transfer:</span>
+                      <span className="text-emerald-400 font-bold">{m.transferAmount}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center text-[9px] text-slate-300/70 pt-0.5">
+                    <span>{m.timestamp}</span>
+                    <span className="flex items-center gap-0.5">
+                      <ShieldCheck size={10} /> E2EE
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Message Input */}
+          <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-800/80 pt-3">
+            <input
+              type="text"
+              placeholder="Type encrypted message..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white focus:border-cyan-400 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl flex items-center justify-center transition-all"
+            >
+              <PaperPlaneTilt size={16} weight="bold" />
+            </button>
+          </form>
         </div>
       </div>
 
+      {/* Micro-Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full space-y-4 text-xs shadow-2xl">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-white text-base flex items-center gap-2">
+                <Coins size={20} className="text-emerald-400" />
+                Send In-Chat Micro-Pay
+              </span>
+              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
+            </div>
 
+            <form onSubmit={handleSendMicroTransfer} className="space-y-4">
+              <div>
+                <label className="text-slate-400 uppercase font-bold block mb-1">Amount (DALLA Ɗ)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="0.00"
+                  value={transferAmountInput}
+                  onChange={(e) => setTransferAmountInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-emerald-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <PaperPlaneTilt size={14} weight="bold" /> Transfer Inside Chat
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

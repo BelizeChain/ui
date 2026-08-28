@@ -223,9 +223,12 @@ export function useBalance(address: string | null) {
         const unsub = await api.query.system.account(address, (account: any) => {
           if (!mounted) return;
 
-          const free = BigInt(account.data.free.toString());
-          const reserved = BigInt(account.data.reserved.toString());
-          const frozen = BigInt(account.data.frozen?.toString() || '0');
+          const rawFree = account?.data?.free?.toString() || '0';
+          const rawReserved = account?.data?.reserved?.toString() || '0';
+          const rawFrozen = account?.data?.frozen?.toString() || account?.data?.miscFrozen?.toString() || '0';
+          const free = BigInt(rawFree.replace(/,/g, ''));
+          const reserved = BigInt(rawReserved.replace(/,/g, ''));
+          const frozen = BigInt(rawFrozen.replace(/,/g, ''));
           const divisor = BigInt(1e12); // 12 decimals for DALLA
 
           setBalance({

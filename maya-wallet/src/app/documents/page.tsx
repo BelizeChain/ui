@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
-  useWallet, 
   useI18n, 
   Badge,
   getPakitClient,
   type PakitClient,
 } from '@belizechain/shared';
+import { useWallet } from '@/contexts/WalletContext';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 
 // Pakit DocumentMetadata type (from PakitClient)
@@ -56,7 +57,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const { selectedAccount } = useWallet();
   const { t } = useI18n();
-  const account = selectedAccount as InjectedAccountWithMeta | null;
+  const account = selectedAccount as any;
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -298,9 +299,11 @@ export default function DocumentsPage() {
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+            <Link href="/">
+              <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+                <ArrowLeft size={24} className="text-gray-300" weight="bold" />
+              </button>
+            </Link>
             <div>
               <h1 className="text-xl font-bold text-white">My {t.identity.documents}</h1>
               <p className="text-xs text-gray-400">Securely stored on BelizeChain via Pakit</p>

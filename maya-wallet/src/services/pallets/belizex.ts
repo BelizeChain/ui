@@ -75,20 +75,59 @@ export function fromPlanck(planck: bigint | string, fractionDigits = 4): string 
 }
 
 export async function getTradingPairs(api?: ApiPromise): Promise<TradingPair[]> {
-  const a = api ?? (await initializeApi());
-  const entries = await a.query.belizeX.tradingPairs.entries();
-  return entries.map(([, value]) => {
-    const data: any = (value as any).toJSON ? (value as any).toJSON() : value;
-    return {
-      baseAsset: data.baseAsset as AssetSymbol,
-      quoteAsset: data.quoteAsset as AssetSymbol,
-      baseReserve: BigInt(data.baseReserve ?? 0),
-      quoteReserve: BigInt(data.quoteReserve ?? 0),
-      totalLpTokens: BigInt(data.totalLpTokens ?? 0),
-      feeRateBps: Number(data.feeRate ?? 0),
-      active: !!data.active,
-    } as TradingPair;
-  });
+  try {
+    const a = api ?? (await initializeApi());
+    if (a.query.belizeX?.tradingPairs) {
+      const entries = await a.query.belizeX.tradingPairs.entries();
+      if (entries.length > 0) {
+        return entries.map(([, value]) => {
+          const data: any = (value as any).toJSON ? (value as any).toJSON() : value;
+          return {
+            baseAsset: data.baseAsset as AssetSymbol,
+            quoteAsset: data.quoteAsset as AssetSymbol,
+            baseReserve: BigInt(data.baseReserve ?? 0),
+            quoteReserve: BigInt(data.quoteReserve ?? 0),
+            totalLpTokens: BigInt(data.totalLpTokens ?? 0),
+            feeRateBps: Number(data.feeRate ?? 0),
+            active: !!data.active,
+          } as TradingPair;
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Unable to query on-chain belizeX pairs directly, using bootstrap pairs:', err);
+  }
+
+  // Default pairs for bootstrapping liquidity (1 DALLA = $1.00 USD, 1 bBZD = $0.50 USD)
+  return [
+    {
+      baseAsset: 'DALLA',
+      quoteAsset: 'BBZD',
+      baseReserve: 1_000_000n * PLANCK,
+      quoteReserve: 2_000_000n * PLANCK, // 1 DALLA ($1.00) = 2.00 bBZD ($0.50)
+      totalLpTokens: 1_414_213n * PLANCK,
+      feeRateBps: 30, // 0.3%
+      active: true,
+    },
+    {
+      baseAsset: 'DALLA',
+      quoteAsset: 'WUSDC',
+      baseReserve: 1_000_000n * PLANCK,
+      quoteReserve: 1_000_000n * PLANCK, // 1 DALLA ($1.00) = 1.00 WUSDC ($1.00)
+      totalLpTokens: 1_000_000n * PLANCK,
+      feeRateBps: 30,
+      active: true,
+    },
+    {
+      baseAsset: 'BBZD',
+      quoteAsset: 'WUSDC',
+      baseReserve: 2_000_000n * PLANCK,
+      quoteReserve: 1_000_000n * PLANCK, // 1 bBZD = 0.50 WUSDC ($0.50 USD)
+      totalLpTokens: 1_414_213n * PLANCK,
+      feeRateBps: 10, // 0.1% for stable pairs
+      active: true,
+    },
+  ];
 }
 
 export async function findPair(

@@ -235,16 +235,24 @@ function parseOracleRate(oracleData: any): number {
 }
 
 function getFallbackRate(fromCurrency: string, toCurrency: string): number {
-  // Fallback rates (updated manually, should match Oracle)
+  // Fallback rates (bBZD is strictly pegged: 1 bBZD = 1 BZD = $0.50 USD; DALLA is unpegged floating crypto)
   const rates: Record<string, number> = {
-    'bBZD/GBP': 0.40,     // 1 bBZD = 0.40 GBP (pegged)
-    'DALLA/USD': 0.50,    // 1 DALLA = 0.50 USD
-    'DALLA/bBZD': 1.25,   // 1 DALLA = 1.25 bBZD
-    'bBZD/USD': 0.50,     // 1 bBZD = 0.50 USD (via GBP)
-    'GBP/USD': 1.25,      // 1 GBP = 1.25 USD (reference)
+    'bBZD/USD': 0.50,     // 1 bBZD = 0.50 USD (pegged stablecoin)
+    'USD/bBZD': 2.00,     // 1 USD = 2.00 bBZD
+    'bBZD/BZD': 1.00,     // 1 bBZD = 1.00 BZD (1:1 parity)
+    'BZD/bBZD': 1.00,     // 1 BZD = 1.00 bBZD
+    'BZD/USD': 0.50,      // 1 BZD = 0.50 USD (statutory peg)
+    'USD/BZD': 2.00,      // 1 USD = 2.00 BZD
+    'bBZD/GBP': 0.40,     // 1 bBZD = 0.40 GBP
+    'GBP/USD': 1.25,      // 1 GBP = 1.25 USD
     'USD/GBP': 0.80,      // Inverse
-    'bBZD/DALLA': 0.80,   // Inverse
-    'USD/DALLA': 2.0,     // Inverse
+    // DALLA: Unpegged floating native crypto (Initial market price discovery baseline)
+    'DALLA/USD': 1.00,    // 1 DALLA = $1.00 USD (floating)
+    'USD/DALLA': 1.00,    // 1 USD = 1.00 DALLA
+    'DALLA/bBZD': 2.00,   // 1 DALLA ($1.00) = 2.00 bBZD ($0.50)
+    'bBZD/DALLA': 0.50,   // 1 bBZD = 0.50 DALLA
+    'DALLA/BZD': 2.00,    // 1 DALLA = 2.00 BZD
+    'BZD/DALLA': 0.50,    // 1 BZD = 0.50 DALLA
   };
 
   const pair = `${fromCurrency}/${toCurrency}`;

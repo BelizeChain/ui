@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, Switch, Select, Button, Badge, Alert, useWallet, useI18n } from '@belizechain/shared';
+import { Card, Switch, Select, Button, Badge, Alert, useI18n } from '@belizechain/shared';
+import { useWallet } from '@/contexts/WalletContext';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
   ArrowLeft,
@@ -32,7 +33,7 @@ import {
 export default function SettingsPage() {
   const { selectedAccount, disconnect } = useWallet();
   const { t, locale, setLocale } = useI18n();
-  const account = selectedAccount as InjectedAccountWithMeta & { isVerified?: boolean };
+  const account = selectedAccount as any;
   const [notifications, setNotifications] = useState(true);
   const [biometric, setBiometric] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -45,10 +46,11 @@ export default function SettingsPage() {
     const notifPrefs = getNotificationPreferences();
     const securitySettings = getSecuritySettings();
     const walletPrefs = getWalletPreferences();
+    const savedCurrencyPref = typeof window !== 'undefined' ? localStorage.getItem('maya-currency-pref') : null;
     setNotifications(notifPrefs.pushEnabled);
     setBiometric(securitySettings.biometric);
     setAnalytics(securitySettings.analytics);
-    setCurrency(walletPrefs.currency);
+    setCurrency(savedCurrencyPref || walletPrefs.currency || 'USD');
   }, []);
 
   const handleSaveSettings = () => {
@@ -57,6 +59,9 @@ export default function SettingsPage() {
     const securitySettings = getSecuritySettings();
     saveSecuritySettings({ ...securitySettings, biometric, analytics });
     saveWalletPreferences({ currency, pushNotifications: notifications });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('maya-currency-pref', currency);
+    }
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };

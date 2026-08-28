@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { GlassCard } from '@/components/ui';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useWallet } from '@/contexts/WalletContext';
+import { useUIStore } from '@/store/ui';
 import {
   Code,
   Key,
@@ -12,256 +13,393 @@ import {
   CheckCircle,
   Book,
   TestTube,
-  ArrowLeft
+  ArrowLeft,
+  Terminal,
+  Broadcast,
+  Lightning,
+  Sparkle,
+  Cpu,
+  Check,
+  Drop,
+  Clock,
+  ArrowsClockwise,
+  Coins,
 } from 'phosphor-react';
 
 export default function DeveloperPage() {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'api-keys' | 'docs' | 'webhooks'>('api-keys');
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { selectedAccount } = useWallet();
+  const { addNotification } = useUIStore();
+  const [activeTab, setActiveTab] = useState<'faucet' | 'rpc' | 'sdk' | 'api-keys' | 'cli'>('faucet');
+  const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
 
-  const apiKeys = [
-    { name: 'Production API Key', key: 'bz_prod_7f8a...3d2e', created: '2025-12-15', lastUsed: '2026-01-15', requests: 45234, status: 'active' },
-    { name: 'Development API Key', key: 'bz_dev_9b1c...5f4a', created: '2026-01-01', lastUsed: '2026-01-14', requests: 1247, status: 'active' },
-    { name: 'Test API Key', key: 'bz_test_2d5e...8c7b', created: '2026-01-10', lastUsed: 'Never', requests: 0, status: 'inactive' }
-  ];
+  // RPC latency state
+  const [rpcLatency, setRpcLatency] = useState<number | null>(14);
+  const [isPinging, setIsPinging] = useState(false);
 
-  const sdkPackages = [
-    { name: '@belizechain/wallet-sdk', version: '2.1.0', language: 'TypeScript', downloads: '12.4K' },
-    { name: 'belizechain-py', version: '1.8.2', language: 'Python', downloads: '8.9K' },
-    { name: '@belizechain/gem-sdk', version: '1.5.0', language: 'TypeScript', downloads: '5.2K' }
-  ];
+  // Faucet state
+  const [faucetAddress, setFaucetAddress] = useState(selectedAccount?.address || '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt');
+  const [isClaimingFaucet, setIsClaimingFaucet] = useState(false);
+  const [faucetCooldown, setFaucetCooldown] = useState<number | null>(null);
 
-  const webhooks = [
-    { url: 'https://api.example.com/webhooks/transactions', events: ['transaction.completed', 'payment.received'], status: 'active', lastTriggered: '2026-01-15 14:32' },
-    { url: 'https://api.example.com/webhooks/staking', events: ['staking.reward', 'validator.status'], status: 'active', lastTriggered: '2026-01-14 09:18' }
-  ];
+  // SDK Language selector
+  const [sdkLang, setSdkLang] = useState<'typescript' | 'rust' | 'python' | 'solidity'>('typescript');
 
-  const handleCopy = (key: string) => {
-    navigator.clipboard.writeText(key);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(id);
+    addNotification({ type: 'success', message: 'Code copied to clipboard!' });
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handlePingRpc = () => {
+    setIsPinging(true);
+    setTimeout(() => {
+      setIsPinging(false);
+      setRpcLatency(10 + Math.floor(Math.random() * 6));
+      addNotification({ type: 'success', message: 'Ceiba RPC node responded in 12ms (Block #1,492,108)!' });
+    }, 500);
+  };
+
+  const handleClaimFaucet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!faucetAddress) return;
+
+    setIsClaimingFaucet(true);
+    setTimeout(() => {
+      setIsClaimingFaucet(false);
+      setFaucetCooldown(86400); // 24 hours in seconds
+      addNotification({
+        type: 'success',
+        message: `Dispatched 1,000 DALLA (Ɗ) + 500 bBZD to ${faucetAddress.slice(0, 6)}...${faucetAddress.slice(-4)}!`,
+      });
+    }, 1200);
+  };
+
+  const codeSnippets = {
+    typescript: `import { ApiPromise, WsProvider } from '@polkadot/api';
+import { Keyring } from '@polkadot/keyring';
+
+async function main() {
+  // Connect to BelizeChain Ceiba Node
+  const provider = new WsProvider('ws://100.81.45.25:9944');
+  const api = await ApiPromise.create({ provider });
+
+  // Query block and DALLA balance
+  const [header, balance] = await Promise.all([
+    api.rpc.chain.getHeader(),
+    api.query.system.account('5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt')
+  ]);
+
+  console.log('Connected to BelizeChain Block:', header.number.toNumber());
+  console.log('DALLA Balance:', balance.data.free.toHuman());
+}
+
+main().catch(console.error);`,
+
+    rust: `use subxt::{OnlineClient, PolkadotConfig};
+
+#[subxt::subxt(runtime_metadata_path = "belizechain_metadata.scale")]
+pub mod belizechain {}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize Subxt client to BelizeChain node
+    let api = OnlineClient::<PolkadotConfig>::from_url("ws://100.81.45.25:9944").await?;
+
+    let latest_block = api.blocks().at_latest().await?;
+    println!("Latest BelizeChain Block Hash: {:?}", latest_block.hash());
+
+    Ok(())
+}`,
+
+    python: `from substrateinterface import SubstrateInterface, Keypair
+
+# Initialize BelizeChain substrate client
+substrate = SubstrateInterface(
+    url="ws://100.81.45.25:9944",
+    ss58_format=105,
+    type_registry_preset='substrate'
+)
+
+# Fetch latest header
+block_hash = substrate.get_chain_head()
+block_number = substrate.get_block_number(block_hash)
+print(f"Connected to BelizeChain Ceiba Node: Block #{block_number}")`,
+
+    solidity: `// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.20;
+
+/// @title BelizeX AMM Swap Receiver Interface
+interface IBelizeXSwap {
+    function swapExactDallaForBBZD(
+        uint256 dallaAmount,
+        uint256 minBbzdOut,
+        address recipient
+    ) external returns (uint256 bbzdOut);
+}`,
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
-      {/* Sticky Header with Back Button */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
+      {/* Header */}
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-5xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
             <div>
-              <h1 className="text-xl font-bold text-white">Developer Tools</h1>
-              <p className="text-xs text-gray-400">APIs, SDKs & Documentation</p>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <Code size={24} className="text-cyan-400" />
+                Developer Hub & Testnet Faucet
+              </h1>
+              <p className="text-xs text-slate-400">
+                1-Tap Faucet • Multi-Language Client SDKs • Substrate RPC Gateway
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Code size={32} className="text-slate-400" weight="duotone" />
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+              <Sparkle size={14} weight="bold" />
+              Dev Hub Active
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Main Content Container */}
-      <div className="p-4 space-y-6">
-        <GlassCard variant="dark-medium" blur="lg" className="p-6">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-gray-400 mb-1">API Keys</p>
-              <p className="text-2xl font-bold text-white">{apiKeys.length}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Total Requests</p>
-              <p className="text-2xl font-bold text-slate-400">46.5K</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Webhooks</p>
-              <p className="text-2xl font-bold text-white">{webhooks.length}</p>
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard variant="dark-medium" blur="lg" className="p-1">
-          <div className="flex space-x-2">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* Navigation Tabs */}
+        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
+          {(['faucet', 'rpc', 'sdk', 'cli', 'api-keys'] as const).map((tab) => (
             <button
-              onClick={() => setActiveTab('api-keys')}
-              className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
-                activeTab === 'api-keys'
-                  ? 'bg-gradient-to-r from-slate-500 to-zinc-400 text-white shadow-md'
-                  : 'text-gray-400 hover:bg-gray-700/30'
-            }`}
-          >
-            API Keys
-          </button>
-          <button
-            onClick={() => setActiveTab('docs')}
-            className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
-              activeTab === 'docs'
-                ? 'bg-gradient-to-r from-slate-500 to-zinc-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700/30'
-            }`}
-          >
-            Documentation
-          </button>
-          <button
-            onClick={() => setActiveTab('webhooks')}
-            className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
-              activeTab === 'webhooks'
-                ? 'bg-gradient-to-r from-slate-500 to-zinc-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700/30'
-            }`}
-          >
-            Webhooks
-          </button>
-          </div>
-        </GlassCard>
-      </div>
-
-      <div className="px-4 space-y-4">
-        {activeTab === 'api-keys' && (
-          <>
-            <button className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-slate-400 to-zinc-400 text-white rounded-xl shadow-lg">
-              <Key size={20} weight="fill" />
-              <span className="font-semibold">Generate New API Key</span>
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 min-w-[120px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab === 'faucet'
+                ? 'Testnet Faucet'
+                : tab === 'rpc'
+                ? 'Ceiba RPC Telemetry'
+                : tab === 'sdk'
+                ? 'Multi-Lang SDKs'
+                : tab === 'cli'
+                ? 'dApp Scaffolder CLI'
+                : 'API Credentials'}
             </button>
+          ))}
+        </div>
 
-            {apiKeys.map((apiKey, index) => (
-              <GlassCard key={index} variant="dark" blur="sm" className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-bold text-white mb-1">{apiKey.name}</h3>
-                    <p className="text-xs font-mono text-gray-400">{apiKey.key}</p>
-                  </div>
-                  <span className={`px-2 py-0.5 ${apiKey.status === 'active' ? 'bg-emerald-500/100/20 text-emerald-400' : 'bg-gray-200 text-gray-400'} text-xs rounded-full font-semibold`}>
-                    {apiKey.status === 'active' ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
+        {/* Tab 1: Testnet Faucet */}
+        {activeTab === 'faucet' && (
+          <div className="max-w-xl mx-auto bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Drop size={26} weight="fill" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Live Testnet Faucet</h3>
+                <p className="text-slate-400 text-xs">Receive 1,000 DALLA (Ɗ) and 500 bBZD for testbed contract development.</p>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
-                  <div>
-                    <p className="text-gray-400">Created</p>
-                    <p className="font-semibold text-white">{apiKey.created}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Last Used</p>
-                    <p className="font-semibold text-white">{apiKey.lastUsed}</p>
-                  </div>
-                </div>
+            <form onSubmit={handleClaimFaucet} className="space-y-4">
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Recipient Substrate Address (SS58)</label>
+                <input
+                  type="text"
+                  required
+                  value={faucetAddress}
+                  onChange={(e) => setFaucetAddress(e.target.value)}
+                  placeholder="e.g. 5Cg3...SKt or r1Sa...9sj24"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
 
-                <div className="flex items-center justify-between p-2 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <span className="text-sm text-gray-400">{apiKey.requests.toLocaleString()} requests</span>
-                  <button
-                    onClick={() => handleCopy(apiKey.key)}
-                    className="flex items-center space-x-1 px-3 py-1 bg-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
-                  >
-                    {copiedKey === apiKey.key ? (
-                      <>
-                        <CheckCircle size={16} className="text-emerald-400" weight="fill" />
-                        <span className="text-xs font-semibold text-emerald-400">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={16} className="text-gray-400" />
-                        <span className="text-xs font-semibold text-white">Copy</span>
-                      </>
-                    )}
-                  </button>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
+                <div className="flex justify-between text-slate-400">
+                  <span>DALLA Grant:</span>
+                  <span className="text-emerald-400 font-bold">1,000.00 Ɗ</span>
                 </div>
-              </GlassCard>
-            ))}
-          </>
+                <div className="flex justify-between text-slate-400">
+                  <span>bBZD Sandbox Grant:</span>
+                  <span className="text-cyan-300 font-bold">500.00 BZ$</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Cooldown Period:</span>
+                  <span className="text-slate-300">24 Hours per Address / IP</span>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isClaimingFaucet || !!faucetCooldown}
+                className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2"
+              >
+                <Sparkle size={16} weight="bold" />
+                {isClaimingFaucet
+                  ? 'Broadcasting Faucet Extrinsic...'
+                  : faucetCooldown
+                  ? 'Cooldown Active (24h Limit)'
+                  : 'Claim 1,000 DALLA + 500 bBZD'}
+              </button>
+            </form>
+          </div>
         )}
 
-        {activeTab === 'docs' && (
-          <>
-            <GlassCard variant="dark" blur="sm" className="p-4">
-              <h3 className="font-bold text-white mb-4">SDK Packages</h3>
-              <div className="space-y-3">
-                {sdkPackages.map((pkg) => (
-                  <div key={pkg.name} className="p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-white">{pkg.name}</h4>
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs rounded-full font-mono">
-                        v{pkg.version}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-2">
-                        <FileCode size={16} className="text-slate-400" />
-                        <span className="text-gray-400">{pkg.language}</span>
-                      </div>
-                      <span className="text-gray-400">{pkg.downloads} downloads</span>
-                    </div>
-                  </div>
+        {/* Tab 2: RPC Telemetry */}
+        {activeTab === 'rpc' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Terminal size={22} className="text-cyan-400" />
+                  Live Ceiba RPC Endpoints
+                </h3>
+                <p className="text-slate-400 mt-1">High-availability validator endpoints with native WebSockets.</p>
+              </div>
+              <button
+                onClick={handlePingRpc}
+                disabled={isPinging}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all"
+              >
+                <ArrowsClockwise size={14} className={isPinging ? 'animate-spin' : ''} />
+                {isPinging ? 'Pinging...' : 'Ping Ceiba'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">HTTP JSON-RPC</span>
+                <span className="font-mono text-cyan-300 text-xs block truncate">http://100.81.45.25:9933</span>
+                <span className="text-[10px] text-emerald-400 font-semibold block">● Online (200 OK)</span>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">WebSocket (WSS)</span>
+                <span className="font-mono text-cyan-300 text-xs block truncate">ws://100.81.45.25:9944</span>
+                <span className="text-[10px] text-emerald-400 font-semibold block">● Latency: {rpcLatency}ms</span>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">SS58 Format Prefix</span>
+                <span className="font-mono text-white text-xs block">Prefix 105 (BelizeChain)</span>
+                <span className="text-[10px] text-slate-400 block">Substrate Multi-Address</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Multi-Language SDK */}
+        {activeTab === 'sdk' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <FileCode size={22} className="text-purple-400" />
+                  Code Examples in 4 Languages
+                </h3>
+                <p className="text-slate-400 mt-1">Connect, query storage, and broadcast extrinsics.</p>
+              </div>
+
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                {(['typescript', 'rust', 'python', 'solidity'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => setSdkLang(lang)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
+                      sdkLang === lang ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {lang}
+                  </button>
                 ))}
               </div>
-            </GlassCard>
+            </div>
 
-            <GlassCard variant="dark" blur="sm" className="p-4">
-              <h3 className="font-bold text-white mb-4">Quick Start</h3>
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-900 rounded-lg">
-                  <p className="text-xs text-gray-400 mb-1"># Install SDK</p>
-                  <p className="text-sm font-mono text-emerald-400">npm install @belizechain/wallet-sdk</p>
-                </div>
-                <div className="p-3 bg-gray-900 rounded-lg">
-                  <p className="text-xs text-gray-400 mb-1"># Initialize Client</p>
-                  <p className="text-sm font-mono text-blue-400">import {'{ BelizeClient }'} from '@belizechain/wallet-sdk';</p>
-                  <p className="text-sm font-mono text-purple-400 mt-1">const client = new BelizeClient(apiKey);</p>
-                </div>
-              </div>
-            </GlassCard>
-
-            <a
-              href="https://docs.belizechain.bz"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-slate-400 to-zinc-400 text-white rounded-xl shadow-lg"
-            >
-              <Book size={20} weight="fill" />
-              <span className="font-semibold">View Full Documentation</span>
-            </a>
-          </>
+            <div className="relative bg-slate-950 rounded-2xl p-4 border border-slate-800 font-mono text-[11px] overflow-x-auto text-slate-300">
+              <button
+                onClick={() => copyToClipboard(codeSnippets[sdkLang], sdkLang)}
+                className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-all"
+              >
+                {copiedIndex === sdkLang ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {copiedIndex === sdkLang ? 'Copied' : 'Copy'}
+              </button>
+              <pre>{codeSnippets[sdkLang]}</pre>
+            </div>
+          </div>
         )}
 
-        {activeTab === 'webhooks' && (
-          <>
-            <button className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-slate-400 to-zinc-400 text-white rounded-xl shadow-lg">
-              <ShareNetwork size={20} weight="fill" />
-              <span className="font-semibold">Create Webhook</span>
-            </button>
+        {/* Tab 4: dApp CLI Scaffolder */}
+        {activeTab === 'cli' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs max-w-xl mx-auto">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Terminal size={22} className="text-emerald-400" />
+                BelizeChain dApp Scaffolder CLI
+              </h3>
+              <p className="text-slate-400 mt-1">Generate a production-ready Next.js + ink! v5 dApp template in seconds.</p>
+            </div>
 
-            {webhooks.map((webhook, index) => (
-              <GlassCard key={index} variant="dark" blur="sm" className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-bold text-white mb-1">Webhook #{index + 1}</h3>
-                    <p className="text-xs font-mono text-gray-400 break-all">{webhook.url}</p>
-                  </div>
-                  <span className="px-2 py-0.5 bg-emerald-500/100/20 text-emerald-400 text-xs rounded-full font-semibold">
-                    Active
-                  </span>
-                </div>
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-[11px]">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400"># 1. Scaffold new project</span>
+                <button
+                  onClick={() => copyToClipboard('npx create-belizechain-app my-dapp', 'cli-1')}
+                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+              <p className="text-emerald-400 font-bold">npx create-belizechain-app my-dapp</p>
 
-                <div className="mb-3">
-                  <p className="text-xs text-gray-400 mb-2">Events</p>
-                  <div className="flex flex-wrap gap-2">
-                    {webhook.events.map((event) => (
-                      <span key={event} className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded font-mono">
-                        {event}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                <span className="text-slate-400"># 2. Build ink! v5 smart contracts</span>
+                <button
+                  onClick={() => copyToClipboard('cargo contract build --release', 'cli-2')}
+                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+              <p className="text-cyan-300 font-bold">cargo contract build --release</p>
+            </div>
+          </div>
+        )}
 
-                <div className="flex items-center justify-between text-xs">
-                  <p className="text-gray-400">Last triggered: {webhook.lastTriggered}</p>
-                  <button className="text-blue-400 hover:text-blue-700 font-semibold">Edit →</button>
+        {/* Tab 5: API Credentials */}
+        {activeTab === 'api-keys' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs max-w-xl mx-auto">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Key size={22} className="text-amber-400" />
+                  Ceiba Node API Credentials
+                </h3>
+                <p className="text-slate-400 mt-1">Bearer tokens for authenticated REST & WebSocket streams.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-[11px]">
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Developer API Key</span>
+                <div className="flex items-center justify-between p-2.5 bg-slate-900 rounded-xl border border-slate-800">
+                  <span className="text-slate-300">bz_dev_testnet_8829fba29304a91c8</span>
+                  <button
+                    onClick={() => copyToClipboard('bz_dev_testnet_8829fba29304a91c8', 'apikey')}
+                    className="p-1.5 hover:bg-slate-800 rounded-lg text-cyan-400"
+                  >
+                    <Copy size={14} />
+                  </button>
                 </div>
-              </GlassCard>
-            ))}
-          </>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

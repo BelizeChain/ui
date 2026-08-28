@@ -6,6 +6,9 @@
 // Identity & Compliance
 export * from './identity';
 
+// Meshtastic LoRa Mesh & Disaster Resilient Networking
+export * from './mesh';
+
 // Economy & Finance — aligned with belizeX pallet (AssetId enum: DALLA|BBZD|TourismDALLA|WUSDC)
 export {
   getTradingPairs,
@@ -44,13 +47,40 @@ export { getPayrollRecord, getSalaryPayments, getSalarySlip, getPayrollStats, ge
 export { getBridges, initiateBridgeTransfer, getBridgeTransfer, getUserBridgeTransfers, estimateBridgeFee, cancelBridgeTransfer, claimBridgeRefund, validateCrossChainAddress } from './interoperability';
 
 // Quantum Computing
-export { getQuantumBackends, submitQuantumJob, getQuantumJob, getUserQuantumJobs, cancelQuantumJob, getQuantumWorkProofs, claimQuantumReward, estimateQuantumCost, getQuantumStats, validateQASM, generateCircuitTemplate } from './quantum';
+export {
+  getQuantumBackends,
+  submitQuantumJob,
+  getQuantumJob,
+  getUserQuantumJobs,
+  cancelQuantumJob,
+  getQuantumWorkProofs,
+  claimQuantumReward,
+  estimateQuantumCost,
+  getQuantumStats,
+  validateQASM,
+  generateCircuitTemplate,
+  rotatePqcKey,
+  getPqcKeyStatus,
+  executeSimulatedQuantumCircuit,
+  executeKinichCompression,
+} from './quantum';
+export type { PqcKeyStatus, QuantumCompressionResult } from './quantum';
 
 // Community Governance
 export { getCommunityGroups, createCommunityGroup, joinCommunityGroup, getCommunityProposals, submitCommunityProposal, voteOnCommunityProposal, contributeToCommunityFund, getCommunityEvents, rsvpToEvent, getUserCommunityGroups } from './community';
 
 // Nawal AI
-export { getParticipantStats, getSystemMetrics, getRoundStatus, getActiveRounds, getRecentRounds } from './nawal';
+export {
+  getParticipantStats,
+  getSystemMetrics,
+  getRoundStatus,
+  getActiveRounds,
+  submitLocalGradient,
+  claimAiPoUwRewards,
+  FALLBACK_GENOMES,
+  FALLBACK_ACTIVE_ROUNDS,
+} from './nawal';
+export type { ModelGenome } from './nawal';
 
 // Smart Contracts (GEM Platform) — see src/services/gem.ts for the
 // ContractPromise-based implementation. The legacy ./contracts module

@@ -20,16 +20,21 @@ export interface ConversionResult {
 const EXCHANGE_RATES_KEY = 'maya-exchange-rates';
 const CONVERSION_HISTORY_KEY = 'maya-conversion-history';
 
-// Default exchange rates (fallback values)
+// Default exchange rates (bBZD is strictly pegged: 1 bBZD = 1 BZD = $0.50 USD; DALLA is unpegged floating crypto)
 const DEFAULT_RATES: Record<string, number> = {
-  'DALLA/bBZD': 0.5, // 1 DALLA = 0.5 bBZD (example - pegged to BZD)
-  'bBZD/DALLA': 2.0, // 1 bBZD = 2 DALLA
-  'DALLA/USD': 0.25, // 1 DALLA ≈ 0.25 USD
-  'USD/DALLA': 4.0, // 1 USD ≈ 4 DALLA
-  'bBZD/USD': 0.50, // 1 bBZD ≈ 0.50 USD (BZD is 2:1 USD)
-  'USD/bBZD': 2.0, // Inverse
-  'bBZD/BZD': 1.0, // 1 bBZD = 1 BZD (pegged)
-  'BZD/bBZD': 1.0, // 1 BZD = 1 bBZD
+  'bBZD/USD': 0.50, // 1 bBZD = 0.50 USD (pegged stablecoin)
+  'USD/bBZD': 2.00, // 1 USD = 2.00 bBZD
+  'bBZD/BZD': 1.00, // 1 bBZD = 1 BZD (pegged 1:1)
+  'BZD/bBZD': 1.00, // 1 BZD = 1 bBZD
+  'BZD/USD': 0.50,  // 1 BZD = 0.50 USD (statutory peg)
+  'USD/BZD': 2.00,  // 1 USD = 2.00 BZD
+  // DALLA: Unpegged floating native crypto (Initial market price discovery baseline)
+  'DALLA/USD': 1.00, // 1 DALLA = $1.00 USD (floating)
+  'USD/DALLA': 1.00, // 1 USD = 1.00 DALLA
+  'DALLA/bBZD': 2.00, // 1 DALLA ($1.00) = 2.00 bBZD ($0.50)
+  'bBZD/DALLA': 0.50, // 1 bBZD = 0.50 DALLA
+  'DALLA/BZD': 2.00,  // 1 DALLA = 2.00 BZD
+  'BZD/DALLA': 0.50,  // 1 BZD = 0.50 DALLA
 };
 
 // Get current exchange rates from Oracle pallet

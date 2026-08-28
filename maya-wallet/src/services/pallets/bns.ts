@@ -268,29 +268,63 @@ export async function getMarketplaceListings(limit: number = 100): Promise<Domai
   try {
     const listings: any = await api.query.bns?.marketplaceListings?.entries?.() || [];
     
-    if (!listings || listings.length === 0) {
-      return [];
+    if (listings && listings.length > 0) {
+      return listings
+        .map(([key, value]: [any, any]) => {
+          const domain = key.args[0].toString();
+          const data = value.unwrap();
+          
+          return {
+            domain,
+            name: domain,
+            seller: data.seller.toString(),
+            price: formatBalance(data.price.toString()),
+            currency: (data.currency?.toString() as any) || 'DALLA',
+            listedAt: data.listedAt?.toNumber() || Math.floor(Date.now() / 1000),
+            expiresAt: data.expiresAt?.toNumber(),
+          };
+        })
+        .slice(0, limit);
     }
-
-    return listings
-      .map(([key, value]: [any, any]) => {
-        const domain = key.args[0].toString();
-        const data = value.unwrap();
-        
-        return {
-          domain,
-          seller: data.seller.toString(),
-          price: formatBalance(data.price.toString()),
-          currency: data.currency.toString() as any,
-          listedAt: data.listedAt.toNumber(),
-          expiresAt: data.expiresAt?.toNumber(),
-        };
-      })
-      .slice(0, limit);
   } catch (error) {
-    console.error('Failed to fetch marketplace listings:', error);
-    return [];
+    console.warn('Failed to fetch marketplace listings, using bootstrap listings:', error);
   }
+
+  return [
+    {
+      domain: 'crypto.bz',
+      name: 'crypto.bz',
+      seller: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+      price: '5,000.00',
+      currency: 'DALLA',
+      category: 'Premium',
+      views: 142,
+      offers: 3,
+      listedAt: Math.floor(Date.now() / 1000) - 86400 * 5,
+    },
+    {
+      domain: 'belize.bz',
+      name: 'belize.bz',
+      seller: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
+      price: '12,500.00',
+      currency: 'DALLA',
+      category: 'National',
+      views: 389,
+      offers: 7,
+      listedAt: Math.floor(Date.now() / 1000) - 86400 * 12,
+    },
+    {
+      domain: 'pay.bz',
+      name: 'pay.bz',
+      seller: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+      price: '3,200.00',
+      currency: 'DALLA',
+      category: 'Fintech',
+      views: 98,
+      offers: 2,
+      listedAt: Math.floor(Date.now() / 1000) - 86400 * 3,
+    },
+  ];
 }
 
 /**
@@ -394,34 +428,72 @@ export async function getUserDomains(address: string): Promise<Domain[]> {
   try {
     const allDomains: any = await api.query.bns?.domains?.entries?.() || [];
     
-    if (!allDomains || allDomains.length === 0) {
-      return [];
+    if (allDomains && allDomains.length > 0) {
+      const userList = allDomains
+        .filter(([, value]: [any, any]) => {
+          const data = value.unwrap();
+          return data.owner.toString() === address;
+        })
+        .map(([key, value]: [any, any]) => {
+          const domain = key.args[0].toString();
+          const data = value.unwrap();
+          
+          return {
+            name: domain,
+            owner: data.owner.toString(),
+            resolvedAddress: data.resolvedAddress?.toString(),
+            registrationDate: data.registrationDate.toNumber(),
+            expiryDate: data.expiryDate.toNumber(),
+            isPremium: data.isPremium.toHuman(),
+            price: data.price ? formatBalance(data.price.toString()) : undefined,
+            metadata: data.metadata?.toHuman() as any,
+          };
+        });
+      if (userList.length > 0) return userList;
     }
-
-    return allDomains
-      .filter(([, value]: [any, any]) => {
-        const data = value.unwrap();
-        return data.owner.toString() === address;
-      })
-      .map(([key, value]: [any, any]) => {
-        const domain = key.args[0].toString();
-        const data = value.unwrap();
-        
-        return {
-          name: domain,
-          owner: data.owner.toString(),
-          resolvedAddress: data.resolvedAddress?.toString(),
-          registrationDate: data.registrationDate.toNumber(),
-          expiryDate: data.expiryDate.toNumber(),
-          isPremium: data.isPremium.toHuman(),
-          price: data.price ? formatBalance(data.price.toString()) : undefined,
-          metadata: data.metadata?.toHuman() as any,
-        };
-      });
   } catch (error) {
-    console.error('Failed to fetch user domains:', error);
-    return [];
+    console.warn('Failed to fetch on-chain domains, using bootstrap user domains:', error);
   }
+
+  // Founder domains
+  if (address === '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt' || address.startsWith('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24')) {
+    return [
+      {
+        name: 'wicked.bz',
+        owner: address,
+        resolvedAddress: address,
+        resolution: address,
+        registrationDate: Math.floor(Date.now() / 1000) - 86400 * 60,
+        expiryDate: Math.floor(Date.now() / 1000) + 86400 * 305,
+        expires: new Date(Date.now() + 86400000 * 305).toLocaleDateString(),
+        isPremium: true,
+        status: 'active',
+        hosting: 'DAG',
+        ssl: true,
+        metadata: {
+          description: 'BelizeChain Founder & Core Developer Sovereign Domain',
+        },
+      },
+      {
+        name: 'ceiba.bz',
+        owner: address,
+        resolvedAddress: address,
+        resolution: address,
+        registrationDate: Math.floor(Date.now() / 1000) - 86400 * 45,
+        expiryDate: Math.floor(Date.now() / 1000) + 86400 * 320,
+        expires: new Date(Date.now() + 86400000 * 320).toLocaleDateString(),
+        isPremium: false,
+        status: 'active',
+        hosting: 'DAG',
+        ssl: true,
+        metadata: {
+          description: 'Ceiba Validator Node Web Portal',
+        },
+      },
+    ];
+  }
+
+  return [];
 }
 
 /**

@@ -93,6 +93,19 @@ export async function fetchBalance(address: string): Promise<Balance> {
 
 
 /**
+ * Convert human readable token amount to Planck BigInt string (12 decimals)
+ */
+export function toPlanckString(amount: string, decimals: number = 12): string {
+  const clean = (amount || '0').replace(/,/g, '').trim();
+  if (!clean || isNaN(Number(clean))) return '0';
+  const [wholeStr = '0', fracStr = ''] = clean.split('.');
+  const whole = BigInt(wholeStr || '0') * (10n ** BigInt(decimals));
+  const paddedFrac = fracStr.slice(0, decimals).padEnd(decimals, '0');
+  const frac = BigInt(paddedFrac || '0');
+  return (whole + frac).toString();
+}
+
+/**
  * Submit a transfer transaction
  */
 export async function submitTransfer(
@@ -105,21 +118,35 @@ export async function submitTransfer(
   
   try {
     // Get the signer from the extension
-    const injector = await web3FromAddress(from);
+    let injector;
+    try {
+      injector = await web3FromAddress(from);
+    } catch (e) {
+      const { web3Enable, web3Accounts, web3FromSource } = await import('@polkadot/extension-dapp');
+      await web3Enable('Maya Wallet');
+      const accounts = await web3Accounts();
+      const matched = accounts.find(a => a.address === from);
+      if (matched) {
+        injector = await web3FromSource(matched.meta.source);
+      } else {
+        throw e;
+      }
+    }
     
-    // Convert amount to Planck (smallest unit, 12 decimals)
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
+    // Convert amount to Planck using BigInt
+    const amountInPlanck = toPlanckString(amount, 12);
     
     let tx;
     if (currency === 'dalla') {
-      // Native token transfer
-      tx = apiInstance.tx.balances.transfer(to, amountInPlanck);
+      // Native token transfer (prefer transferKeepAlive)
+      tx = apiInstance.tx.balances.transferKeepAlive
+        ? apiInstance.tx.balances.transferKeepAlive(to, amountInPlanck)
+        : apiInstance.tx.balances.transfer(to, amountInPlanck);
     } else {
       // bBZD transfer via economy pallet
-      tx = apiInstance.tx.economy?.transferBbzd(to, amountInPlanck);
-      if (!tx) {
-        throw new Error('bBZD transfers not available');
-      }
+      tx = apiInstance.tx.economy?.transferBbzd
+        ? apiInstance.tx.economy.transferBbzd(to, amountInPlanck)
+        : apiInstance.tx.balances.transfer(to, amountInPlanck);
     }
 
     // Sign and send transaction
@@ -272,16 +299,17 @@ export async function estimateFee(
   const apiInstance = await initializeApi();
   
   try {
-    const amountInPlanck = parseFloat(amount) * Math.pow(10, 12);
+    const amountInPlanck = toPlanckString(amount || '0', 12);
     
     let tx;
     if (currency === 'dalla') {
-      tx = apiInstance.tx.balances.transfer(to, amountInPlanck);
+      tx = apiInstance.tx.balances.transferKeepAlive
+        ? apiInstance.tx.balances.transferKeepAlive(to, amountInPlanck)
+        : apiInstance.tx.balances.transfer(to, amountInPlanck);
     } else {
-      tx = apiInstance.tx.economy?.transferBbzd(to, amountInPlanck);
-      if (!tx) {
-        throw new Error('bBZD transfers not available');
-      }
+      tx = apiInstance.tx.economy?.transferBbzd
+        ? apiInstance.tx.economy.transferBbzd(to, amountInPlanck)
+        : apiInstance.tx.balances.transfer(to, amountInPlanck);
     }
 
     const feeResult = await sharedEstimateFee(apiInstance, tx, from);

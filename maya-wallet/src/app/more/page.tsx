@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { GlassCard } from '@/components/ui';
 import Link from 'next/link';
 import {
   User,
@@ -30,352 +29,274 @@ import {
   Code,
   LockKey,
   CurrencyDollar,
-  ChartLineUp
+  ChartLineUp,
+  Coins,
+  TrendUp,
+  Buildings,
+  QrCode,
+  Broadcast,
+  GraduationCap,
+  Calculator,
+  ArrowsClockwise,
+  Wallet,
 } from 'phosphor-react';
 
 export default function MorePage() {
   const menuSections = [
     {
-      title: 'BelizeChain Platforms',
-      description: 'Core infrastructure services',
+      title: 'DeFi & Asset Management',
+      description: 'Trading floor, lending, vaults & tokenized real estate',
       items: [
-        { 
-          icon: <IdentificationCard size={20} weight="fill" />, 
-          label: 'BelizeID', 
-          description: 'Digital identity & KYC',
-          href: '/belizeid', 
-          color: 'from-blue-500 to-cyan-600',
-          badge: 'L2 Verified'
-        },
-        { 
-          icon: <Database size={20} weight="fill" />, 
-          label: 'Pakit Storage', 
-          description: 'Quantum compression & IPFS',
-          href: '/pakit', 
+        {
+          icon: <ChartLineUp size={20} weight="fill" />,
+          label: 'BelizeX DEX Pro',
+          description: 'Order Book V1 & AMM swaps',
+          href: '/trade',
           color: 'from-cyan-500 to-blue-600',
-          badge: '856 GB'
+          badge: 'Mainnet V1',
         },
-        { 
-          icon: <Atom size={20} weight="fill" />, 
-          label: 'Kinich Quantum', 
-          description: 'Quantum computing jobs',
-          href: '/kinich', 
-          color: 'from-purple-500 to-pink-600',
-          badge: 'Azure Q'
-        },
-        { 
-          icon: <Brain size={20} weight="fill" />, 
-          label: 'Nawal AI', 
-          description: 'Federated learning & rewards',
-          href: '/nawal', 
-          color: 'from-indigo-500 to-purple-600',
-          badge: 'Training'
-        },
-        { 
-          icon: <FileCode size={20} weight="fill" />, 
-          label: 'The Gem', 
-          description: 'Smart contracts (ink!)',
-          href: '/gem', 
-          color: 'from-pink-500 to-red-600',
-          badge: 'PSP22/34'
-        }
-      ]
-    },
-    {
-      title: 'Financial Services',
-      description: 'Business & treasury management',
-      items: [
-        { 
-          icon: <Briefcase size={20} weight="fill" />, 
-          label: 'Payroll', 
-          description: 'Employee & contractor payments',
-          href: '/payroll', 
+        {
+          icon: <Coins size={20} weight="fill" />,
+          label: 'Collateral Lending',
+          description: '50-80% LTV micro-loans',
+          href: '/lending',
           color: 'from-emerald-500 to-teal-600',
-          badge: 'Auto'
+          badge: 'Health Factor',
         },
-        { 
-          icon: <CurrencyDollar size={20} weight="fill" />, 
-          label: 'Treasury', 
-          description: 'Multi-sig & governance',
-          href: '/treasury', 
+        {
+          icon: <TrendUp size={20} weight="fill" />,
+          label: 'Yield Aggregator',
+          description: 'Multi-strategy auto-compounder',
+          href: '/yield',
+          color: 'from-purple-500 to-indigo-600',
+          badge: '18.4% APY',
+        },
+        {
+          icon: <Buildings size={20} weight="fill" />,
+          label: 'Tokenized RWA Studio',
+          description: 'LandLedger deeds & green bonds',
+          href: '/rwa',
           color: 'from-amber-500 to-orange-600',
-          badge: '4-of-7'
+          badge: 'FSC Compliant',
         },
-        { 
-          icon: <ChartLineUp size={20} weight="fill" />, 
-          label: 'Analytics', 
-          description: 'Wallet insights & patterns',
-          href: '/analytics', 
-          color: 'from-forest-500 to-emerald-600',
-          badge: 'Pro'
-        }
-      ]
-    },
-    {
-      title: 'Asset Management',
-      description: 'Property & domain registry',
-      items: [
-        { 
-          icon: <House size={20} weight="fill" />, 
-          label: 'LandLedger', 
-          description: 'Property titles & transfers',
-          href: '/landledger', 
-          color: 'from-orange-500 to-red-600',
-          badge: '3 Properties'
-        },
-        { 
-          icon: <GlobeHemisphereWest size={20} weight="fill" />, 
-          label: 'BNS Domains', 
-          description: '.bz domains & hosting',
-          href: '/bns', 
-          color: 'from-blue-500 to-indigo-600',
-          badge: '5 Domains'
-        }
-      ]
-    },
-    {
-      title: 'Advanced Features',
-      description: 'Developer & security tools',
-      items: [
-        { 
-          icon: <GitBranch size={20} weight="fill" />, 
-          label: 'Interoperability', 
-          description: 'Cross-chain bridges',
-          href: '/bridges', 
-          color: 'from-violet-500 to-purple-600',
-          badge: 'ETH/DOT'
-        },
-        { 
-          icon: <Code size={20} weight="fill" />, 
-          label: 'Developer Tools', 
-          description: 'API & SDK access',
-          href: '/developer', 
-          color: 'from-slate-500 to-gray-600',
-          badge: 'API Key'
-        },
-        { 
-          icon: <LockKey size={20} weight="fill" />, 
-          label: 'Security Center', 
-          description: 'Recovery & multi-sig',
-          href: '/security', 
+        {
+          icon: <LockKey size={20} weight="fill" />,
+          label: 'Institutional Custody',
+          description: 'M-of-N multi-sig vaults (48h delay)',
+          href: '/custody',
           color: 'from-red-500 to-pink-600',
-          badge: 'Protected'
-        }
-      ]
+          badge: 'Enterprise',
+        },
+      ],
     },
     {
-      title: 'Account',
-      description: 'Personal settings',
+      title: 'BelizeChain Core Platforms',
+      description: 'National sovereign infrastructure services',
       items: [
-        { 
-          icon: <User size={20} weight="fill" />, 
-          label: 'Profile Settings', 
-          description: 'Edit account details',
-          href: '/profile', 
-          color: 'from-blue-500 to-cyan-600' 
+        {
+          icon: <IdentificationCard size={20} weight="fill" />,
+          label: 'BelizeID',
+          description: 'Digital identity & KYC credentials',
+          href: '/belizeid',
+          color: 'from-blue-500 to-cyan-600',
+          badge: 'L2 Verified',
         },
-        { 
-          icon: <Shield size={20} weight="fill" />, 
-          label: 'Security & Privacy', 
-          description: 'Passwords & 2FA',
-          href: '/security', 
-          color: 'from-red-500 to-pink-600' 
+        {
+          icon: <Database size={20} weight="fill" />,
+          label: 'Pakit Storage',
+          description: 'Quantum compression & IPFS',
+          href: '/pakit',
+          color: 'from-cyan-500 to-blue-600',
+          badge: 'Hot/Cold',
         },
-        { 
-          icon: <Bell size={20} weight="fill" />, 
-          label: 'Notifications', 
-          description: 'Alerts & preferences',
-          href: '/notifications', 
-          color: 'from-amber-500 to-orange-600' 
-        }
-      ]
+        {
+          icon: <Atom size={20} weight="fill" />,
+          label: 'Kinich Quantum Hub',
+          description: '10x compression & Xanadu photonic',
+          href: '/kinich',
+          color: 'from-purple-500 to-pink-600',
+          badge: 'Photonic GKP',
+        },
+        {
+          icon: <Brain size={20} weight="fill" />,
+          label: 'Nawal AI',
+          description: 'Federated learning & rewards',
+          href: '/nawal',
+          color: 'from-indigo-500 to-purple-600',
+          badge: 'PoUW',
+        },
+        {
+          icon: <FileCode size={20} weight="fill" />,
+          label: 'The Gem',
+          description: 'Smart contracts marketplace',
+          href: '/gem',
+          color: 'from-pink-500 to-red-600',
+          badge: 'ink! v5',
+        },
+        {
+          icon: <House size={20} weight="fill" />,
+          label: 'LandLedger',
+          description: 'Cadastral property titles',
+          href: '/landledger',
+          color: 'from-orange-500 to-red-600',
+          badge: 'GIS Sealed',
+        },
+        {
+          icon: <GlobeHemisphereWest size={20} weight="fill" />,
+          label: 'BNS Domains',
+          description: '.bz, .caye sovereign domains',
+          href: '/bns',
+          color: 'from-blue-500 to-indigo-600',
+          badge: 'IPFS Ready',
+        },
+      ],
     },
     {
-      title: 'Preferences',
-      description: 'Customize your experience',
+      title: 'Citizen Utilities & Education',
+      description: 'Budgeting, off-grid mesh, and academy',
       items: [
-        { 
-          icon: <Palette size={20} weight="fill" />, 
-          label: 'Appearance', 
-          description: 'Theme & display',
-          href: '/appearance', 
-          color: 'from-purple-500 to-pink-600' 
+        {
+          icon: <GraduationCap size={20} weight="fill" />,
+          label: 'Maya Academy',
+          description: 'Learn-to-Earn Web3 curriculum',
+          href: '/community/education',
+          color: 'from-purple-500 to-indigo-600',
+          badge: 'Grants',
         },
-        { 
-          icon: <Globe size={20} weight="fill" />, 
-          label: 'Language & Region', 
-          description: 'English, Spanish, Kriol',
-          href: '/language', 
+        {
+          icon: <Broadcast size={20} weight="fill" />,
+          label: 'LoRa 915MHz Mesh',
+          description: 'Off-grid Meshtastic payments',
+          href: '/mesh',
           color: 'from-emerald-500 to-teal-600',
-          badge: 'EN'
+          badge: 'NEMO Alert',
         },
-        { 
-          icon: <GearSix size={20} weight="fill" />, 
-          label: 'Advanced Settings', 
-          description: 'Network & RPC',
-          href: '/advanced', 
-          color: 'from-gray-500 to-gray-700' 
-        }
-      ]
+        {
+          icon: <QrCode size={20} weight="fill" />,
+          label: 'Offline Signing Studio',
+          description: 'Air-gapped QR & LoRa frames',
+          href: '/offline',
+          color: 'from-cyan-500 to-blue-600',
+          badge: 'Air-Gap',
+        },
+        {
+          icon: <Wallet size={20} weight="fill" />,
+          label: 'Citizen Budget Envelopes',
+          description: 'bBZD spending allocation',
+          href: '/wallet/budget',
+          color: 'from-emerald-500 to-cyan-600',
+        },
+        {
+          icon: <ArrowsClockwise size={20} weight="fill" />,
+          label: 'Utility Auto-Pay',
+          description: 'BEL, BWS & DigiNet subscriptions',
+          href: '/wallet/recurring',
+          color: 'from-amber-500 to-orange-600',
+        },
+        {
+          icon: <Calculator size={20} weight="fill" />,
+          label: 'Tax & FX Calculators',
+          description: 'SSB 9% & staking compounding',
+          href: '/wallet/calculator',
+          color: 'from-blue-500 to-purple-600',
+        },
+      ],
     },
     {
-      title: 'Social',
-      description: 'Community features',
+      title: 'Developer & Bridges',
+      description: 'SDKs, live faucet and cross-chain relayers',
       items: [
-        { 
-          icon: <UserList size={20} weight="fill" />, 
-          label: 'Friends & Contacts', 
-          description: 'Manage connections',
-          href: '/contacts', 
-          color: 'from-indigo-500 to-blue-600',
-          badge: '24'
+        {
+          icon: <Code size={20} weight="fill" />,
+          label: 'Developer Hub & Faucet',
+          description: '1,000 DALLA faucet & multi-lang SDKs',
+          href: '/developer',
+          color: 'from-cyan-500 to-blue-600',
+          badge: 'Live Faucet',
         },
-        { 
-          icon: <ChartBar size={20} weight="fill" />, 
-          label: 'Activity History', 
-          description: 'Transactions & posts',
-          href: '/activity', 
-          color: 'from-forest-500 to-emerald-600' 
-        }
-      ]
+        {
+          icon: <GitBranch size={20} weight="fill" />,
+          label: 'Snowbridge Hub',
+          description: 'Ethereum & Polkadot XCM v3',
+          href: '/bridge',
+          color: 'from-purple-500 to-indigo-600',
+          badge: '5-of-7 Relayers',
+        },
+        {
+          icon: <Briefcase size={20} weight="fill" />,
+          label: 'Ministry Payroll',
+          description: 'Statutory batch disbursements',
+          href: '/payroll',
+          color: 'from-emerald-500 to-teal-600',
+        },
+        {
+          icon: <Shield size={20} weight="fill" />,
+          label: 'Security & Recovery',
+          description: 'Biometrics & hardware signers',
+          href: '/security',
+          color: 'from-red-500 to-pink-600',
+        },
+      ],
     },
-    {
-      title: 'Help & Info',
-      description: 'Support & documentation',
-      items: [
-        { 
-          icon: <Question size={20} weight="fill" />, 
-          label: 'Help Center', 
-          description: 'FAQs & guides',
-          href: '/help', 
-          color: 'from-orange-500 to-red-600' 
-        },
-        { 
-          icon: <FileText size={20} weight="fill" />, 
-          label: 'Terms & Policies', 
-          description: 'Legal & compliance',
-          href: '/terms', 
-          color: 'from-slate-500 to-gray-600' 
-        },
-        { 
-          icon: <Info size={20} weight="fill" />, 
-          label: 'About BelizeChain', 
-          description: 'Mission & roadmap',
-          href: '/about', 
-          color: 'from-cyan-500 to-blue-600' 
-        }
-      ]
-    }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
-      {/* Simple Header */}
-      <div className="bg-gray-900/50 backdrop-blur-sm px-6 py-4 border-b border-gray-700/50">
-        <div className="p-4">
-          <h1 className="text-2xl font-bold text-white mb-1">More</h1>
-          <p className="text-sm text-gray-400">Explore BelizeChain Features</p>
+    <div className="min-h-screen bg-slate-950 text-white pb-28">
+      {/* Header */}
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-5xl mx-auto">
+          <div>
+            <h1 className="text-xl font-bold">Ecosystem Explorer</h1>
+            <p className="text-xs text-slate-400">All Sovereign BelizeChain Apps, Services & Financial Protocols</p>
+          </div>
+          <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold">
+            26 Live Modules
+          </span>
         </div>
       </div>
 
-      {/* User Profile Card */}
-      <div className="px-4 mt-4 mb-6">
-        <GlassCard variant="dark" blur="md" className="p-6">
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-forest-500 to-emerald-600 flex items-center justify-center text-white text-2xl font-bold">
-              JD
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-8">
+        {menuSections.map((section, sIdx) => (
+          <div key={sIdx} className="space-y-3">
+            <div>
+              <h2 className="text-base font-bold text-white">{section.title}</h2>
+              <p className="text-xs text-slate-400">{section.description}</p>
             </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-white">John Doe</h2>
-              <p className="text-sm text-gray-400">john.doe@belizechain.bz</p>
-              <div className="flex items-center space-x-2 mt-1">
-                <div className="px-2 py-0.5 bg-emerald-500/20 rounded-full text-xs text-emerald-400 font-semibold">
-                  Level 28
-                </div>
-                <div className="px-2 py-0.5 bg-amber-500/20 rounded-full text-xs text-amber-400 font-semibold">
-                  L2 Verified
-                </div>
-              </div>
-            </div>
-            <Link href="/profile">
-              <CaretRight size={20} className="text-gray-400" weight="bold" />
-            </Link>
-          </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-700/30">
-            <div className="text-center">
-              <p className="text-lg font-bold text-emerald-400">5,234</p>
-              <p className="text-xs text-gray-400">DALLA</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-purple-400">12</p>
-              <p className="text-xs text-gray-400">Badges</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-blue-400">#4</p>
-              <p className="text-xs text-gray-400">Rank</p>
-            </div>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Menu Sections */}
-      <div className="px-4 space-y-6">
-        {menuSections.map((section, sectionIndex) => (
-          <div key={sectionIndex}>
-            <div className="mb-3 px-2">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                {section.title}
-              </h3>
-              {section.description && (
-                <p className="text-xs text-gray-400 mt-0.5">{section.description}</p>
-              )}
-            </div>
-            <GlassCard variant="dark" blur="sm" className="divide-y divide-gray-700/30">
-              {section.items.map((item, itemIndex) => (
-                <Link key={itemIndex} href={item.href}>
-                  <div className="flex items-center justify-between p-4 hover:bg-gray-700/50 transition-all cursor-pointer group">
-                    <div className="flex items-center space-x-4 flex-1">
-                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform flex-shrink-0`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {section.items.map((item, iIdx) => (
+                <Link key={iIdx} href={item.href}>
+                  <div className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 transition-all flex items-center justify-between group shadow-md hover:shadow-cyan-500/5">
+                    <div className="flex items-center gap-3.5">
+                      <div
+                        className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-md`}
+                      >
                         {item.icon}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-white">{item.label}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                            {item.label}
+                          </h3>
                           {item.badge && (
-                            <span className="px-1.5 py-0.5 bg-forest-100 text-forest-700 text-xs rounded font-semibold">
+                            <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-semibold rounded-md border border-slate-700">
                               {item.badge}
                             </span>
                           )}
                         </div>
-                        {item.description && (
-                          <p className="text-xs text-gray-400 mt-0.5 truncate">{item.description}</p>
-                        )}
+                        <p className="text-xs text-slate-400">{item.description}</p>
                       </div>
                     </div>
-                    <CaretRight size={18} className="text-gray-400 group-hover:text-forest-600 transition-colors flex-shrink-0 ml-2" weight="bold" />
+                    <CaretRight
+                      size={18}
+                      className="text-slate-500 group-hover:text-white group-hover:translate-x-0.5 transition-all"
+                    />
                   </div>
                 </Link>
               ))}
-            </GlassCard>
+            </div>
           </div>
         ))}
-
-        {/* Sign Out Button */}
-        <GlassCard variant="dark" blur="sm" className="p-4">
-          <button className="w-full flex items-center justify-center space-x-2 text-red-600 font-semibold hover:text-red-700 transition-colors">
-            <SignOut size={20} weight="fill" />
-            <span>Sign Out</span>
-          </button>
-        </GlassCard>
-
-        {/* App Version */}
-        <div className="text-center py-6">
-          <p className="text-xs text-gray-400">BelizeChain Maya Wallet</p>
-          <p className="text-xs text-gray-400">Version 1.0.0 (Beta)</p>
-          <p className="text-xs text-gray-400 mt-2">Powered by Substrate • Polkadot SDK stable2512</p>
-        </div>
       </div>
     </div>
   );

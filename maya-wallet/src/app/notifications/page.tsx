@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useI18n } from '@belizechain/shared';
 import { 
   ArrowLeft, 
@@ -80,9 +81,11 @@ export default function NotificationsPage() {
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-6 py-4 z-10">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-700/20 rounded-lg transition-colors">
-              <ArrowLeft size={24} weight="bold" className="text-white" />
-            </button>
+            <Link href="/">
+              <button className="p-2 hover:bg-gray-700/20 rounded-lg transition-colors">
+                <ArrowLeft size={24} weight="bold" className="text-white" />
+              </button>
+            </Link>
             <h1 className="text-2xl font-bold text-white">Notifications</h1>
           </div>
           {unreadCount > 0 && (

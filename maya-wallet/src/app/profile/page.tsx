@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card, Input, Button, Badge, Alert, useWallet, useI18n } from '@belizechain/shared';
+import { Card, Input, Button, Badge, Alert, useI18n } from '@belizechain/shared';
+import { useWallet } from '@/contexts/WalletContext';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
   ArrowLeft,
@@ -19,8 +20,8 @@ import Link from 'next/link';
 export default function ProfilePage() {
   const { selectedAccount } = useWallet();
   const { t } = useI18n();
-  const account = selectedAccount as InjectedAccountWithMeta & { isVerified?: boolean };
-  const [name, setName] = useState(account?.meta.name || '');
+  const account = selectedAccount as any;
+  const [name, setName] = useState(account?.name || '');
   const [email, setEmail] = useState('user@example.com');
   const [phone, setPhone] = useState('+501 123-4567');
   const [copied, setCopied] = useState(false);

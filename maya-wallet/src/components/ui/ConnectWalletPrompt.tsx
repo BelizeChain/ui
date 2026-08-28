@@ -46,36 +46,54 @@ export function ConnectWalletPrompt({
         {message}
       </motion.p>
       
-      <motion.button
+      <motion.div
         initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={connect}
-        disabled={isConnecting}
-        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex flex-col sm:flex-row items-center gap-3"
       >
-        <Wallet size={20} weight="bold" />
-        {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-      </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => connect(true)}
+          disabled={isConnecting}
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
+        >
+          <Wallet size={20} weight="bold" />
+          {isConnecting ? 'Connecting...' : 'Connect Sovereign Session'}
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => connect(false)}
+          disabled={isConnecting}
+          className="flex items-center gap-2 px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-medium transition-all"
+        >
+          Browser Extension
+        </motion.button>
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="mt-8 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50 max-w-md"
+        className="mt-8 p-4 bg-slate-900/80 rounded-xl border border-slate-800 max-w-md text-center"
       >
-        <p className="text-sm text-gray-400 mb-3">Don't have a wallet?</p>
-        <a
-          href="https://polkadot.js.org/extension/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm"
-        >
-          <Download size={16} weight="bold" />
-          Install Polkadot.js Extension
-        </a>
+        <p className="text-xs text-slate-400 mb-2">Connecting to BelizeChain Ceiba Node</p>
+        <div className="flex items-center justify-center gap-4 text-xs">
+          <a
+            href="https://polkadot.js.org/extension/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            <Download size={14} weight="bold" />
+            Polkadot.js Extension
+          </a>
+          <span className="text-slate-600">•</span>
+          <span className="text-slate-400">Ed25519 / NIST PQC Shielded</span>
+        </div>
       </motion.div>
     </div>
   );

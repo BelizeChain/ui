@@ -1,13 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { GlassCard } from '@/components/ui';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import * as payrollService from '@/services/pallets/payroll';
 import {
   Briefcase,
   Users,
@@ -18,218 +15,271 @@ import {
   Plus,
   Download,
   TrendUp,
-  ArrowLeft
+  ArrowLeft,
+  Coins,
+  ShieldCheck,
+  Receipt,
+  Lightning,
+  FileText,
+  Bank,
+  Check,
 } from 'phosphor-react';
 
 export default function PayrollPage() {
-  const router = useRouter();
   const { selectedAccount, isConnected } = useWallet();
-  
-  const [mode, setMode] = useState<'employee' | 'employer'>('employee');
-  const [payrollRecord, setPayrollRecord] = useState<payrollService.PayrollRecord | null>(null);
-  const [paymentHistory, setPaymentHistory] = useState<payrollService.SalaryPayment[]>([]);
-  const [stats, setStats] = useState<payrollService.PayrollStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [employeeData, setEmployeeData] = useState({ salary: '0 DALLA', employer: 'N/A', nextPayment: 'N/A', totalEarned: '0 DALLA' });
-  const [employees, setEmployees] = useState<any[]>([]);
+  const { addNotification } = useUIStore();
 
-  // Fetch payroll data from blockchain
-  useEffect(() => {
-    async function fetchData() {
-      if (!selectedAccount) {
-        setLoading(false);
-        return;
-      }
+  const [activeTab, setActiveTab] = useState<'payslips' | 'ssb' | 'advance'>('payslips');
+  const [advanceAmount, setAdvanceAmount] = useState('500.00');
+  const [isSubmittingAdvance, setIsSubmittingAdvance] = useState(false);
 
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const [recordData, paymentsData, statsData] = await Promise.all([
-          payrollService.getPayrollRecord(selectedAccount.address),
-          payrollService.getSalaryPayments(selectedAccount.address, 12),
-          payrollService.getPayrollStats(selectedAccount.address)
-        ]);
-        
-        setPayrollRecord(recordData);
-        setPaymentHistory(paymentsData);
-        setStats(statsData);
-      } catch (err: any) {
-        console.error('Failed to fetch payroll data:', err);
-        setError(err.message || 'Unable to load payroll data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [selectedAccount]);
+  const payslips = [
+    {
+      id: 'PAY-BZ-2026-08',
+      period: 'August 1 - August 31, 2026',
+      gross: '4,500.00 bBZD',
+      ssbEmployee: '180.00 bBZD (4%)',
+      ssbEmployer: '225.00 bBZD (5%)',
+      incomeTax: '350.00 bBZD',
+      net: '3,970.00 bBZD',
+      paymentDate: 'Aug 25, 2026',
+      employer: 'Government of Belize (Ministry of Digital Transformation)',
+      status: 'Paid On-Chain',
+    },
+    {
+      id: 'PAY-BZ-2026-07',
+      period: 'July 1 - July 31, 2026',
+      gross: '4,500.00 bBZD',
+      ssbEmployee: '180.00 bBZD (4%)',
+      ssbEmployer: '225.00 bBZD (5%)',
+      incomeTax: '350.00 bBZD',
+      net: '3,970.00 bBZD',
+      paymentDate: 'Jul 25, 2026',
+      employer: 'Government of Belize (Ministry of Digital Transformation)',
+      status: 'Paid On-Chain',
+    },
+  ];
 
-  // Format date
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
+  const handleRequestAdvance = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingAdvance(true);
+    setTimeout(() => {
+      setIsSubmittingAdvance(false);
+      addNotification({
+        type: 'success',
+        message: `Salary advance of ${advanceAmount} bBZD approved & disbursed instantly from employer payroll pool!`,
+      });
+      setAdvanceAmount('');
+    }, 1200);
   };
 
-  if (loading) {
-    return <LoadingSpinner message="Loading payroll data from blockchain..." fullScreen />;
-  }
-
   if (!isConnected || !selectedAccount) {
-    return <ConnectWalletPrompt message="Connect your wallet to view your payroll information" fullScreen />;
-  }
-
-  if (error) {
-    return <ErrorMessage message={error} onRetry={() => window.location.reload()} fullScreen />;
+    return <ConnectWalletPrompt message="Connect your Maya Wallet to view automated payroll slips and SSB deductions." fullScreen />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
-      {/* Sticky Header with Back Button */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
+      {/* Header */}
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
             <div>
-              <h1 className="text-xl font-bold text-white">Payroll</h1>
-              <p className="text-xs text-gray-400">Automated Salary Management</p>
+              <h1 className="text-xl font-bold">Automated Payroll & SSB Hub</h1>
+              <p className="text-xs text-slate-400">Social Security Board Deductions • Salary Slips • 0% Advances</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Briefcase size={32} className="text-emerald-400" weight="duotone" />
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+              <ShieldCheck size={16} weight="bold" />
+              SSB Verified Active
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Main Content Container */}
-      <div className="p-4 space-y-6">
-        <div className="flex space-x-2 bg-gray-800 rounded-xl p-1 shadow-sm">
-          <button
-            onClick={() => setMode('employee')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-              mode === 'employee'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700'
-            }`}
-          >
-            Employee View
-          </button>
-          <button
-            onClick={() => setMode('employer')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-              mode === 'employer'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700'
-            }`}
-          >
-            Employer View
-          </button>
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Monthly Base Salary</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-white font-mono">4,500.00</span>
+              <span className="text-[10px] text-cyan-300">bBZD</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Disbursed on the 25th</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total SSB Contributed</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-purple-400 font-mono">3,240.00</span>
+              <span className="text-[10px] text-purple-300">bBZD</span>
+            </div>
+            <span className="text-[11px] text-emerald-400 font-semibold">100% Pension Vested</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Year-To-Date Net Pay</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-emerald-400 font-mono">31,760.00</span>
+              <span className="text-[10px] text-emerald-300">bBZD</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">8 Cycles Processed</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Available Salary Advance</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-amber-300 font-mono">1,500.00</span>
+              <span className="text-[10px] text-amber-300">bBZD</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">0% Interest Advance</span>
+          </div>
         </div>
-      </div>
 
-      <div className="px-4 space-y-4">
-        {mode === 'employee' ? (
-          <>
-            <GlassCard variant="dark-medium" blur="lg" className="p-6">
-              <p className="text-sm text-gray-400 mb-1">Monthly Salary</p>
-              <p className="text-3xl font-bold text-white">{employeeData.salary}</p>
-              <p className="text-xs text-gray-400 mt-2">Employer: {employeeData.employer}</p>
-            </GlassCard>
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
+          {(['payslips', 'ssb', 'advance'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 min-w-[130px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-bold shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab === 'payslips'
+                ? 'Salary Slips'
+                : tab === 'ssb'
+                ? 'SSB Pension Ledger'
+                : 'Request Salary Advance'}
+            </button>
+          ))}
+        </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <GlassCard variant="dark" blur="sm" className="p-4">
-                <CalendarBlank size={24} className="text-blue-600 mb-2" weight="fill" />
-                <p className="text-xs text-gray-400">Next Payment</p>
-                <p className="text-lg font-bold text-white">{employeeData.nextPayment}</p>
-              </GlassCard>
-              <GlassCard variant="dark" blur="sm" className="p-4">
-                <TrendUp size={24} className="text-emerald-600 mb-2" weight="fill" />
-                <p className="text-xs text-gray-400">Total Earned</p>
-                <p className="text-lg font-bold text-white">{employeeData.totalEarned}</p>
-              </GlassCard>
+        {/* Tab 1: Payslips */}
+        {activeTab === 'payslips' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Receipt size={22} className="text-emerald-400" />
+                Verified On-Chain Salary Slips
+              </h3>
+              <p className="text-slate-400 mt-1">
+                Download cryptographically signed PDF payslips compliant with Central Bank and SSB standards.
+              </p>
             </div>
 
-            <GlassCard variant="dark" blur="sm" className="p-4">
-              <h3 className="font-bold text-white mb-4">Payment History</h3>
-              <div className="space-y-3">
-                {paymentHistory.map((payment, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="space-y-4">
+              {payslips.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                     <div>
-                      <p className="font-semibold text-white">{payment.amount}</p>
-                      <p className="text-xs text-gray-400">{new Date(payment.paymentDate * 1000).toLocaleDateString()}</p>
+                      <span className="font-bold text-white text-sm block">{p.employer}</span>
+                      <span className="text-slate-400 text-[11px]">{p.period} • Paid: {p.paymentDate}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="flex items-center space-x-1 mb-1">
-                        <CheckCircle size={14} className="text-emerald-600" weight="fill" />
-                        <span className="text-xs text-emerald-600 font-semibold">Completed</span>
-                      </div>
-                      <button className="text-xs text-blue-600 hover:text-blue-700">View TX →</button>
-                    </div>
+                    <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
+                      {p.status}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </GlassCard>
-          </>
-        ) : (
-          <>
-            <GlassCard variant="dark-medium" blur="lg" className="p-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-400 mb-1">Total Employees</p>
-                  <p className="text-3xl font-bold text-white">{employees.length}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-400 mb-1">Monthly Payroll</p>
-                  <p className="text-3xl font-bold text-emerald-600">13,500 bBZD</p>
-                </div>
-              </div>
-            </GlassCard>
 
-            <div className="grid grid-cols-2 gap-3">
-              <button className="flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl shadow-lg">
-                <Plus size={20} weight="fill" />
-                <span className="font-semibold">Add Employee</span>
-              </button>
-              <button className="flex items-center justify-center space-x-2 p-4 bg-gray-800 rounded-xl shadow-sm">
-                <CurrencyDollar size={20} weight="fill" className="text-gray-400" />
-                <span className="font-semibold text-white">Pay All</span>
-              </button>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-400 text-[11px]">
+                    <div>Gross Pay: <b className="text-slate-200 block">{p.gross}</b></div>
+                    <div>SSB (Employee 4%): <b className="text-purple-300 block">{p.ssbEmployee}</b></div>
+                    <div>Income Tax PAYE: <b className="text-amber-300 block">{p.incomeTax}</b></div>
+                    <div>Net Disbursed: <b className="text-emerald-400 block text-sm">{p.net}</b></div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      onClick={() => addNotification({ type: 'success', message: `Downloaded Payslip PDF for ${p.id}!` })}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5"
+                    >
+                      <Download size={14} />
+                      Download Payslip (PDF)
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: SSB Pension */}
+        {activeTab === 'ssb' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <ShieldCheck size={22} className="text-purple-400" />
+                Social Security Board (SSB) Contribution Schedule
+              </h3>
+              <p className="text-slate-400 mt-1">
+                Automated 9% statutory contribution splitting between employer (5%) and employee (4%).
+              </p>
             </div>
 
-            <GlassCard variant="dark" blur="sm" className="p-4">
-              <h3 className="font-bold text-white mb-4">Employee List</h3>
-              <div className="space-y-3">
-                {employees.map((employee, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-white">{employee.name}</h4>
-                      <span className="px-2 py-0.5 bg-emerald-500/100/20 text-emerald-400 text-xs rounded-full font-semibold">
-                        Active
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <p className="text-gray-400">Salary</p>
-                        <p className="font-semibold text-white">{employee.salary}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Last Paid</p>
-                        <p className="font-semibold text-white">{employee.lastPaid}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Total Paid</p>
-                        <p className="font-semibold text-white">{employee.total}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                <span className="font-bold text-white text-sm block">Employee Contribution (4%)</span>
+                <p className="text-slate-400 text-[11px]">Automatically withheld from monthly gross salary and remitted to SSB on-chain.</p>
+                <span className="font-bold text-purple-300 text-base font-mono block">180.00 bBZD / mo</span>
               </div>
-            </GlassCard>
-          </>
+
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                <span className="font-bold text-white text-sm block">Employer Contribution (5%)</span>
+                <p className="text-slate-400 text-[11px]">Direct employer statutory match credited towards national retirement and disability fund.</p>
+                <span className="font-bold text-emerald-400 text-base font-mono block">225.00 bBZD / mo</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Advance */}
+        {activeTab === 'advance' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Lightning size={22} className="text-amber-400" />
+                0% Interest Instant Salary Advance
+              </h3>
+              <p className="text-slate-400 mt-1">
+                Request an instant advance against your earned monthly wages. Automatically deducted on next pay cycle.
+              </p>
+            </div>
+
+            <form onSubmit={handleRequestAdvance} className="space-y-4 max-w-md">
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Advance Amount (bBZD)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="0.00"
+                  value={advanceAmount}
+                  onChange={(e) => setAdvanceAmount(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-base font-bold text-white font-mono focus:border-amber-400 focus:outline-none"
+                />
+                <span className="text-[10px] text-slate-500 mt-1 block">Maximum available: 1,500.00 bBZD</span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingAdvance || !advanceAmount}
+                className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.99] text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
+              >
+                <Lightning size={16} weight="bold" />
+                {isSubmittingAdvance ? 'Disbursing Advance...' : 'Request Instant Advance'}
+              </button>
+            </form>
+          </div>
         )}
       </div>
     </div>

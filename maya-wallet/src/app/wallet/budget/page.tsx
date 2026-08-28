@@ -1,174 +1,282 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Wallet, TrendDown, Warning, Plus, ChartBar } from 'phosphor-react';
-import { getBudgetCategories, getTotalSpent, getTotalLimits, updateBudgetFromTransactions, type BudgetCategory } from '@/services/budgeting';
-import { useWallet, useI18n } from '@belizechain/shared';
-import { GlassCard } from '@/components/ui';
-import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { useWallet } from '@/contexts/WalletContext';
+import { useUIStore } from '@/store/ui';
+import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import {
+  Wallet,
+  TrendDown,
+  TrendUp,
+  Warning,
+  Plus,
+  ChartBar,
+  ArrowLeft,
+  Coins,
+  CheckCircle,
+  Bank,
+  Receipt,
+  Sparkle,
+  ShieldCheck,
+} from 'phosphor-react';
+
+interface BudgetCategory {
+  id: string;
+  name: string;
+  allocatedBBZD: number;
+  spentBBZD: number;
+  iconColor: string;
+}
 
 export default function BudgetPage() {
-  const router = useRouter();
-  const { selectedAccount } = useWallet();
-  const { t } = useI18n();
-  const account = selectedAccount as InjectedAccountWithMeta;
-  const [categories, setCategories] = useState<BudgetCategory[]>([]);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [totalBudget, setTotalBudget] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const { selectedAccount, isConnected } = useWallet();
+  const { addNotification } = useUIStore();
 
-  useEffect(() => {
-    loadBudget();
-  }, [account?.address]);
+  const [categories, setCategories] = useState<BudgetCategory[]>([
+    {
+      id: 'c1',
+      name: 'Groceries & Household Supplies',
+      allocatedBBZD: 800,
+      spentBBZD: 420,
+      iconColor: 'from-emerald-500 to-teal-600',
+    },
+    {
+      id: 'c2',
+      name: 'Utility Bills (BEL & BWS)',
+      allocatedBBZD: 350,
+      spentBBZD: 310,
+      iconColor: 'from-amber-500 to-amber-600',
+    },
+    {
+      id: 'c3',
+      name: 'Dining & Eco-Tourism POS',
+      allocatedBBZD: 400,
+      spentBBZD: 180,
+      iconColor: 'from-purple-500 to-indigo-600',
+    },
+    {
+      id: 'c4',
+      name: 'DALLA Staking DCA Vault',
+      allocatedBBZD: 500,
+      spentBBZD: 500,
+      iconColor: 'from-cyan-500 to-blue-600',
+    },
+  ]);
 
-  const loadBudget = async () => {
-    setLoading(true);
-    try {
-      // Update budget from blockchain if account connected
-      if (account?.address) {
-        await updateBudgetFromTransactions(account.address);
-      }
-      
-      const cats = getBudgetCategories();
-      const spent = getTotalSpent();
-      const limits = getTotalLimits();
-      
-      setCategories(cats);
-      setTotalSpent(spent.dalla + spent.bbzd);
-      setTotalBudget(limits.dalla + limits.bbzd);
-    } catch (error) {
-      console.error('Failed to load budget:', error);
-    } finally {
-      setLoading(false);
-    }
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatLimit, setNewCatLimit] = useState('');
+
+  const totalAllocated = categories.reduce((sum, c) => sum + c.allocatedBBZD, 0);
+  const totalSpent = categories.reduce((sum, c) => sum + c.spentBBZD, 0);
+  const totalRemaining = totalAllocated - totalSpent;
+  const spendPct = Math.round((totalSpent / totalAllocated) * 100);
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName || !newCatLimit) return;
+
+    const newCategory: BudgetCategory = {
+      id: `c-${Date.now()}`,
+      name: newCatName,
+      allocatedBBZD: parseFloat(newCatLimit),
+      spentBBZD: 0,
+      iconColor: 'from-cyan-500 to-blue-600',
+    };
+
+    setCategories([...categories, newCategory]);
+    setNewCatName('');
+    setNewCatLimit('');
+    setShowAddModal(false);
+    addNotification({
+      type: 'success',
+      message: `Created budget envelope: ${newCatName} (BZ$ ${parseFloat(newCatLimit).toFixed(2)})!`,
+    });
   };
 
-  const getProgressColor = (percentage: number) => {
-    if (percentage >= 100) return 'bg-red-500/100';
-    if (percentage >= 80) return 'bg-yellow-500';
-    return 'bg-green-500/100';
-  };
+  if (!isConnected || !selectedAccount) {
+    return <ConnectWalletPrompt message="Connect your Maya Wallet to access citizen budget envelopes and savings goals." fullScreen />;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
-      {/* Sticky Header with Back Button */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
+      {/* Header */}
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
             <div>
-              <h1 className="text-xl font-bold text-white">Budget Tracker</h1>
-              <p className="text-xs text-gray-400">Monitor spending & set limits</p>
+              <h1 className="text-xl font-bold">Citizen Fiscal Budgeting</h1>
+              <p className="text-xs text-slate-400">Monthly Spending Envelopes • DCA Savings Vaults • bBZD & DALLA</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-teal-500/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-teal-500/30">
-              <div className="flex items-center space-x-1">
-                <ChartBar size={14} weight="fill" className="text-teal-400" />
-                <span className="text-xs text-teal-400 font-semibold">Tracking</span>
-              </div>
-            </div>
-            <Wallet size={32} className="text-teal-400" weight="duotone" />
-          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+          >
+            <Plus size={16} weight="bold" />
+            Add Envelope
+          </button>
         </div>
       </div>
 
-      {/* Main Content Container */}
-      <div className="p-4 space-y-6">
-        {loading ? (
-          /* Loading Skeleton */
-          <>
-            <div className="bg-gray-800 rounded-2xl shadow-md p-6 animate-pulse">
-              <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-              <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded w-full"></div>
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Monthly Budget</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-white font-mono">BZ$ {totalAllocated.toLocaleString()}</span>
             </div>
-            {[1, 2, 3].map(i => (
-              <div key={i} className="bg-gray-800 rounded-2xl shadow-md p-4 animate-pulse">
-                <div className="h-5 bg-gray-200 rounded w-1/2 mb-3"></div>
-                <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-6 bg-gray-200 rounded w-full"></div>
-              </div>
-            ))}
-          </>
-        ) : (
-          <>
-        {/* Overall Budget Card */}
-        <div className="bg-gray-800 rounded-2xl shadow-md p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Monthly Budget</h2>
-            <Wallet size={24} className="text-caribbean-500" weight="bold" />
-          </div>
-          
-          <div className="mb-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-gray-400">Ɗ{totalSpent.toFixed(2)} of Ɗ{totalBudget.toFixed(2)}</span>
-              <span className="font-semibold text-white">
-                {totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0}%
-              </span>
-            </div>
-            <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all ${getProgressColor((totalSpent / totalBudget) * 100)}`}
-                style={{ width: `${Math.min((totalSpent / totalBudget) * 100, 100)}%` }}
-              />
-            </div>
+            <span className="text-[11px] text-slate-400 block">{categories.length} active envelopes</span>
           </div>
 
-          <div className="text-sm text-gray-400">
-            Remaining: <span className="font-bold text-caribbean-400">Ɗ{Math.max(0, totalBudget - totalSpent).toFixed(2)}</span>
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Spent (Mtd)</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-cyan-300 font-mono">BZ$ {totalSpent.toLocaleString()}</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">{spendPct}% of monthly cap</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Remaining Balance</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-emerald-400 font-mono">BZ$ {totalRemaining.toLocaleString()}</span>
+            </div>
+            <span className="text-[11px] text-emerald-400 font-semibold">Healthy Fiscal Buffer</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">DCA Staking Vault</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-purple-400 font-mono">1,250 Ɗ</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Earning 14.8% APR</span>
           </div>
         </div>
 
-        {/* Categories */}
+        {/* Global Progress Bar */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-3 shadow-xl text-xs">
+          <div className="flex justify-between items-center">
+            <span className="font-bold text-white text-sm">Monthly Budget Utilization</span>
+            <span className="font-mono font-bold text-cyan-300">{spendPct}% Spent</span>
+          </div>
+          <div className="w-full bg-slate-950 rounded-full h-3 overflow-hidden border border-slate-800">
+            <div
+              className={`h-3 transition-all duration-500 ${
+                spendPct >= 90
+                  ? 'bg-rose-500'
+                  : spendPct >= 75
+                  ? 'bg-amber-500'
+                  : 'bg-gradient-to-r from-emerald-500 to-cyan-500'
+              }`}
+              style={{ width: `${Math.min(spendPct, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Categories List */}
         <div className="space-y-3">
-          {categories.map((category) => {
-            const spent = category.spent || 0;
-            const percentage = (spent / category.monthlyLimit) * 100;
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider text-slate-400">
+            Budget Envelopes ({categories.length})
+          </h2>
 
-            return (
-              <div key={category.name} className="bg-gray-800 rounded-xl shadow-sm p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-white">{category.name}</h3>
-                  <span className="text-sm text-gray-400">
-                    {Math.round(percentage)}%
-                  </span>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {categories.map((c) => {
+              const pct = Math.round((c.spentBBZD / c.allocatedBBZD) * 100);
+              const isOver = pct >= 90;
 
-                <div className="mb-2">
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+              return (
+                <div
+                  key={c.id}
+                  className="bg-slate-900/80 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 space-y-3 shadow-xl text-xs transition-all"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-white text-sm">{c.name}</span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        isOver ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'
+                      }`}
+                    >
+                      {pct}% Used
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between font-mono text-[11px] text-slate-400">
+                    <span>Spent: <strong className="text-white">BZ$ {c.spentBBZD}</strong></span>
+                    <span>Limit: <strong className="text-slate-200">BZ$ {c.allocatedBBZD}</strong></span>
+                  </div>
+
+                  <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
                     <div
-                      className={`h-full transition-all ${getProgressColor(percentage)}`}
-                      style={{ width: `${Math.min(percentage, 100)}%` }}
+                      className={`h-2 transition-all duration-500 ${
+                        pct >= 90 ? 'bg-rose-500' : pct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${Math.min(pct, 100)}%` }}
                     />
                   </div>
                 </div>
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Ɗ{spent.toFixed(2)} / Ɗ{category.monthlyLimit.toFixed(2)}</span>
-                  {percentage >= 80 && (
-                    <div className="flex items-center gap-1 text-yellow-600">
-                      <Warning size={16} weight="bold" />
-                      <span className="text-xs font-medium">Near limit</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-
-        {/* Add Category Button */}
-        <button className="w-full flex items-center justify-center gap-2 py-4 bg-gray-800 border-2 border-dashed border-caribbean-300 text-caribbean-400 rounded-xl hover:bg-caribbean-50 transition-colors">
-          <Plus size={24} weight="bold" />
-          <span className="font-semibold">Add Custom Category</span>
-        </button>
-        </>
-        )}
       </div>
+
+      {/* Add Category Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full space-y-4 text-xs shadow-2xl">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-white text-base flex items-center gap-2">
+                <Plus size={20} className="text-emerald-400" />
+                Add Budget Envelope
+              </span>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCategory} className="space-y-4">
+              <div>
+                <label className="text-slate-400 uppercase font-bold block mb-1">Envelope Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Healthcare & Pharmacy"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-emerald-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 uppercase font-bold block mb-1">Monthly Limit (bBZD)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="0.00"
+                  value={newCatLimit}
+                  onChange={(e) => setNewCatLimit(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-emerald-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                Create Envelope
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

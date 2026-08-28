@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Badge, useWallet, useBalance, useI18n } from '@belizechain/shared';
+import { Badge, useI18n } from '@belizechain/shared';
+import { useWallet } from '@/contexts/WalletContext';
 import { GlassCard } from '@/components/ui';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import { 
@@ -23,8 +24,7 @@ import {
 import Link from 'next/link';
 
 export function HomeScreen() {
-  const { selectedAccount, disconnect, isConnected } = useWallet();
-  const { balance, isLoading: balanceLoading } = useBalance((selectedAccount as InjectedAccountWithMeta | null)?.address ?? null);
+  const { selectedAccount, balance, disconnect, isConnected } = useWallet();
   const { t } = useI18n();
   const [balanceVisible, setBalanceVisible] = useState(true);
 
@@ -69,7 +69,7 @@ export function HomeScreen() {
             <div>
               <p className="text-gray-300 text-sm">{t.wallet.welcomeBack}</p>
               <p className="text-white font-semibold">
-                {(selectedAccount as InjectedAccountWithMeta)?.meta?.name || t.wallet.unnamedAccount}
+                {selectedAccount?.name || t.wallet.unnamedAccount}
               </p>
             </div>
           </div>

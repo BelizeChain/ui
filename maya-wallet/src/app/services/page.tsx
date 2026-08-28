@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { walletLogger, useI18n } from '@belizechain/shared';
 import { GlassCard } from '@/components/ui';
 import { 
@@ -193,9 +194,11 @@ export default function ServicesPage() {
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-            </button>
+            <Link href="/">
+              <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+                <ArrowLeft size={24} className="text-gray-300" weight="bold" />
+              </button>
+            </Link>
             <div>
               <h1 className="text-xl font-bold text-white">Government {t.nav.services}</h1>
               <p className="text-xs text-gray-400">Pay bills, apply for licenses, and access government services</p>

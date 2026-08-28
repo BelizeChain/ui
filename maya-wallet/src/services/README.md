@@ -133,28 +133,30 @@ const alerts = getBudgetAlerts(); // Check for threshold alerts
 
 **Key Features**:
 - Exchange rate management (oracle-based + cached fallback)
-- 4 supported currencies: DALLA, bBZD, USD, GBP
-- bBZD pegged to GBP (1:1)
+- 4 supported currencies: DALLA, bBZD, USD, BZD
+- bBZD pegged to BZD (1:1 parity, $0.50 USD)
+- DALLA unpegged floating native cryptocurrency
 - Currency conversion with history tracking
-- Cross-rate calculation (e.g., DALLA → USD via bBZD)
+- Cross-rate calculation (e.g., DALLA → USD via Oracle/AMM)
 - Format currency amounts (DALLA: 12 decimals, others: 2)
-- Currency symbols (Ɗ for DALLA, $ for bBZD/USD, £ for GBP)
+- Currency symbols (Ɗ for DALLA, $ for USD, BZ$ for bBZD/BZD)
 
 **Storage**: 
 - Rates: `maya-exchange-rates`
 - History: `maya-conversion-history`
 
 **Default Rates**:
-- DALLA/bBZD: 0.5 (1 DALLA = 0.5 bBZD)
-- bBZD/GBP: 1.0 (pegged)
-- DALLA/USD: 0.6 (1 DALLA ≈ 0.6 USD)
+- bBZD/USD: 0.50 (pegged)
+- bBZD/BZD: 1.00 (pegged 1:1)
+- DALLA/USD: 1.00 (floating market baseline)
+- DALLA/bBZD: 2.00 (floating market baseline)
 
 **Usage Example**:
 ```typescript
 import { convertCurrency, formatCurrency } from './services/currency';
 
-const result = convertCurrency(100, 'DALLA', 'bBZD');
-console.log(formatCurrency(result.toAmount, 'bBZD')); // "50.00 bBZD"
+const result = await convertCurrency(100, 'DALLA', 'bBZD');
+console.log(formatCurrency(result.toAmount, 'bBZD')); // "200.00 bBZD"
 ```
 
 ---

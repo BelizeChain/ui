@@ -27,7 +27,10 @@ import {
   Gift,
   Brain,
   Lightning,
-  CaretRight
+  CaretRight,
+  PaperPlaneTilt,
+  QrCode,
+  ArrowsLeftRight,
 } from 'phosphor-react';
 
 /** Format a unix-seconds timestamp as a short relative-time label. */
@@ -68,6 +71,23 @@ export default function HomeNew() {
   const [pouwContributions, setPouwContributions] = useState<PoUWContribution[]>([]);
   const [tourismRewards, setTourismRewards] = useState<TourismReward[]>([]);
   const [rates, setRates] = useState<{ dalla: number; bbzd: number }>({ dalla: 0, bbzd: 0 });
+  const [currencyPref, setCurrencyPref] = useState<'DALLA' | 'BZD' | 'USD'>('DALLA');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('maya-currency-pref') as 'DALLA' | 'BZD' | 'USD' | null;
+      if (saved && (saved === 'DALLA' || saved === 'BZD' || saved === 'USD')) {
+        setCurrencyPref(saved);
+      }
+    }
+  }, []);
+
+  const handleCurrencyChange = (pref: 'DALLA' | 'BZD' | 'USD') => {
+    setCurrencyPref(pref);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('maya-currency-pref', pref);
+    }
+  };
 
   useEffect(() => {
     const address = selectedAccount?.address;
@@ -103,16 +123,57 @@ export default function HomeNew() {
   const dallaBal = parseAmount(balance?.dalla);
   const bbzdBal = parseAmount(balance?.bBZD);
   const stakedBal = parseAmount(stakingInfo?.totalStaked);
+  const totalDallaHolding = dallaBal + stakedBal;
 
-  const effectiveDallaRate = rates.dalla > 0 ? rates.dalla : 1.0;
-  const effectiveBbzdRate = rates.bbzd > 0 ? rates.bbzd : 1.0;
+  // DALLA is the unpegged native cryptocurrency
+  const dallaOracleRate = rates.dalla > 0 ? rates.dalla : 0;
+  const bbzdRate = 0.50; // Statutory peg: 1 bBZD = 1 BZD = $0.50 USD
 
-  const totalUsdValue = dallaBal * effectiveDallaRate + bbzdBal * effectiveBbzdRate + stakedBal * effectiveDallaRate;
+  const formattedPrimaryTotal = useMemo(() => {
+    if (currencyPref === 'DALLA') {
+      return `${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`;
+    }
+    if (currencyPref === 'BZD') {
+      if (dallaOracleRate > 0) {
+        const totalBzd = totalDallaHolding * (dallaOracleRate * 2.0) + bbzdBal * 1.0;
+        return `BZ$ ${totalBzd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      return `${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`;
+    }
+    // USD
+    if (dallaOracleRate > 0) {
+      const totalUsd = totalDallaHolding * dallaOracleRate + bbzdBal * bbzdRate;
+      return `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return `${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`;
+  }, [currencyPref, totalDallaHolding, bbzdBal, dallaOracleRate, bbzdRate]);
+
+  const secondaryConversionText = useMemo(() => {
+    if (currencyPref === 'DALLA') {
+      if (dallaOracleRate > 0) {
+        const usdVal = totalDallaHolding * dallaOracleRate + bbzdBal * 0.50;
+        const bzdVal = totalDallaHolding * (dallaOracleRate * 2.0) + bbzdBal * 1.0;
+        return `≈ $${usdVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD (BZ$ ${bzdVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) • ${bbzdBal.toFixed(2)} bBZD`;
+      }
+      return `Native Cryptocurrency (Unpegged) • ${bbzdBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} bBZD available`;
+    }
+    if (currencyPref === 'BZD') {
+      if (dallaOracleRate > 0) {
+        return `≈ $${(totalDallaHolding * dallaOracleRate + bbzdBal * 0.5).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD (${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ)`;
+      }
+      return `DALLA is unpegged • Holdings: ${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ + BZ$ ${bbzdBal.toFixed(2)} bBZD`;
+    }
+    // USD
+    if (dallaOracleRate > 0) {
+      return `≈ BZ$ ${(totalDallaHolding * (dallaOracleRate * 2) + bbzdBal * 1.0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ)`;
+    }
+    return `DALLA is unpegged • Holdings: ${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ + $${(bbzdBal * 0.5).toFixed(2)} bBZD`;
+  }, [currencyPref, totalDallaHolding, bbzdBal, dallaOracleRate]);
 
   const displayBalance = {
     dalla: balance?.dalla || '0.00',
     bbzd: balance?.bBZD || '0.00',
-    total: totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    total: totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
   };
 
   // Real assets (DALLA + bBZD always; Staked only when there is an active stake)
@@ -122,17 +183,19 @@ export default function HomeNew() {
         id: 'dalla',
         name: 'DALLA',
         symbol: 'Ɗ',
-        balance: dallaBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        value: (dallaBal * effectiveDallaRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        displayAmount: `${dallaBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`,
+        priceInfo: 'Native • Unpegged',
+        secondaryInfo: dallaOracleRate > 0 ? `≈ $${(dallaBal * dallaOracleRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD` : 'Native Cryptocurrency',
         color: 'from-emerald-500 to-teal-600',
         icon: Coins,
       },
       {
         id: 'bbzd',
         name: 'bBZD',
-        symbol: '$',
-        balance: bbzdBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        value: (bbzdBal * effectiveBbzdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        symbol: 'BZ$',
+        displayAmount: `BZ$ ${bbzdBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        priceInfo: 'Pegged: 1 BZD = $0.50',
+        secondaryInfo: `≈ $${(bbzdBal * 0.50).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD • Stablecoin`,
         color: 'from-blue-500 to-cyan-600',
         icon: Coins,
       },
@@ -140,16 +203,17 @@ export default function HomeNew() {
     if (stakedBal > 0) {
       list.push({
         id: 'staked',
-        name: 'Staked',
+        name: 'Staked DALLA',
         symbol: 'Ɗ',
-        balance: stakedBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        value: (stakedBal * effectiveDallaRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        displayAmount: `${stakedBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`,
+        priceInfo: 'PoUW APY',
+        secondaryInfo: 'Securing BelizeChain Validators',
         color: 'from-purple-500 to-violet-600',
         icon: Lightning,
       });
     }
     return list;
-  }, [dallaBal, bbzdBal, stakedBal, effectiveDallaRate, effectiveBbzdRate]);
+  }, [dallaBal, bbzdBal, stakedBal, dallaOracleRate]);
 
   // Real rewards/trends derived from on-chain data
   const trends = useMemo(() => {
@@ -314,6 +378,37 @@ export default function HomeNew() {
           <div className="relative">
             <div className="flex items-center justify-between mb-4">
               <p className="text-white/80 text-sm font-medium">Total Balance</p>
+
+              <div className="flex items-center gap-2">
+                {/* Currency Switcher Pill */}
+                <div className="flex items-center bg-black/30 backdrop-blur-md rounded-full p-0.5 border border-white/10 text-xs font-semibold">
+                  {(['USD', 'BZD', 'DALLA'] as const).map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => handleCurrencyChange(c)}
+                      className={`px-2.5 py-1 rounded-full transition-all ${
+                        currencyPref === c
+                          ? 'bg-emerald-500 text-white shadow-sm font-bold'
+                          : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {c === 'DALLA' ? 'Ɗ DALLA' : c}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setBalanceVisible(!balanceVisible)}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                  title={balanceVisible ? 'Hide Balance' : 'Show Balance'}
+                >
+                  {balanceVisible ? (
+                    <Eye size={20} className="text-white/80" weight="fill" />
+                  ) : (
+                    <EyeSlash size={20} className="text-white/80" weight="fill" />
+                  )}
+                </button>
+              </div>
             </div>
 
             {balanceVisible ? (
@@ -323,8 +418,11 @@ export default function HomeNew() {
                 className="mb-4"
               >
                 <h2 className="text-white text-5xl font-bold tracking-tight">
-                  ${displayBalance.total}
+                  {formattedPrimaryTotal}
                 </h2>
+                <p className="text-emerald-200/80 text-xs mt-1.5 font-medium">
+                  {secondaryConversionText}
+                </p>
               </motion.div>
             ) : (
               <div className="mb-4">
@@ -332,16 +430,37 @@ export default function HomeNew() {
               </div>
             )}
 
-            <button
-              onClick={() => setBalanceVisible(!balanceVisible)}
-              className="absolute top-2 right-2 p-2 hover:bg-gray-800/10 rounded-full transition-colors"
-            >
-              {balanceVisible ? (
-                <Eye size={20} className="text-white/80" weight="fill" />
-              ) : (
-                <EyeSlash size={20} className="text-white/80" weight="fill" />
-              )}
-            </button>
+            {/* Quick Action Buttons */}
+            <div className="grid grid-cols-4 gap-3 pt-3 mt-2 border-t border-emerald-700/40">
+              <Link
+                href="/send"
+                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+              >
+                <PaperPlaneTilt size={22} weight="fill" className="mb-1 text-emerald-300" />
+                <span>Send</span>
+              </Link>
+              <Link
+                href="/receive"
+                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+              >
+                <QrCode size={22} weight="fill" className="mb-1 text-emerald-300" />
+                <span>Receive</span>
+              </Link>
+              <Link
+                href="/trade"
+                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+              >
+                <ArrowsLeftRight size={22} weight="bold" className="mb-1 text-teal-300" />
+                <span>Swap</span>
+              </Link>
+              <Link
+                href="/staking"
+                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+              >
+                <Coins size={22} weight="fill" className="mb-1 text-teal-300" />
+                <span>Staking</span>
+              </Link>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -369,15 +488,18 @@ export default function HomeNew() {
                 transition={{ delay: 0.3 + index * 0.1 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex-shrink-0 w-44"
+                className="flex-shrink-0 min-w-[210px]"
               >
                 <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-4 border border-gray-700/50">
                   <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${asset.color} flex items-center justify-center mb-3`}>
                     <asset.icon size={24} weight="fill" className="text-white" />
                   </div>
-                  <p className="text-white font-bold text-lg mb-1">{asset.name}</p>
-                  <p className="text-white text-2xl font-bold mb-2">${asset.value}</p>
-                  <p className="text-gray-400 text-sm font-medium">{asset.balance} {asset.symbol}</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-white font-bold text-lg">{asset.name}</p>
+                    <span className="text-[11px] font-medium text-emerald-400/90">{asset.priceInfo}</span>
+                  </div>
+                  <p className="text-white text-2xl font-bold mb-1">{asset.displayAmount}</p>
+                  <p className="text-gray-400 text-xs font-medium">{asset.secondaryInfo}</p>
                 </div>
               </motion.div>
             ))}
@@ -701,12 +823,12 @@ export default function HomeNew() {
                       </div>
                       <div>
                         <p className="text-white font-bold">{asset.name}</p>
-                        <p className="text-gray-400 text-sm">{asset.symbol}</p>
+                        <p className="text-gray-400 text-xs">{asset.priceInfo}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-white text-xl font-bold">{asset.balance}</p>
-                      <p className="text-gray-400 text-sm">${asset.value}</p>
+                      <p className="text-white text-xl font-bold">{asset.displayAmount}</p>
+                      <p className="text-gray-400 text-xs">{asset.secondaryInfo}</p>
                     </div>
                   </div>
                 </div>

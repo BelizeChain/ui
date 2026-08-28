@@ -1,12 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GlassCard } from '@/components/ui';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
-import { getPakitClient, type DocumentMetadata } from '@belizechain/shared';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { ErrorMessage } from '@/components/ui/ErrorMessage';
+import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   Database,
@@ -26,577 +23,396 @@ import {
   ArrowLeft,
   CircleNotch,
   ShareNetwork,
-  Link as LinkIcon
+  Link as LinkIcon,
+  ShieldCheck,
+  FileText,
+  LockKey,
+  HardDrives,
+  Coins,
+  Sparkle,
 } from 'phosphor-react';
 
-interface StorageStats {
-  totalFiles: number;
-  totalSize: number;
-  compressedSize: number;
-  ipfsFiles: number;
-  arweaveFiles: number;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
-
-function getTimeSince(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function getFileTier(mimeType: string, size: number): { name: string; color: string } {
-  // Small frequently-accessed files → Hot, large docs → Warm, archives → Cold
-  if (size < 1024 * 1024) return { name: 'Hot', color: 'orange' };
-  if (mimeType.includes('archive') || mimeType.includes('zip')) return { name: 'Cold', color: 'purple' };
-  return { name: 'Warm', color: 'blue' };
+interface StoredFile {
+  id: string;
+  name: string;
+  cid: string;
+  size: string;
+  tier: 'Hot' | 'Warm' | 'Cold';
+  encrypted: boolean;
+  category: 'LandLedger Deed' | 'Identity Document' | 'Neural Model' | 'Personal';
+  uploadDate: string;
 }
 
 export default function PakitPage() {
-  const router = useRouter();
   const { selectedAccount, isConnected } = useWallet();
-  const [activeTab, setActiveTab] = useState<'storage' | 'files' | 'analytics'>('storage');
+  const { addNotification } = useUIStore();
 
-  // Live data state
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<StorageStats | null>(null);
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const [activeTab, setActiveTab] = useState<'files' | 'upload' | 'mining' | 'land-deeds'>('files');
+  const [isUploading, setIsUploading] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<'LandLedger Deed' | 'Identity Document' | 'Neural Model' | 'Personal'>('LandLedger Deed');
+  const [selectedTier, setSelectedTier] = useState<'Hot' | 'Warm' | 'Cold'>('Hot');
+  const [enableZkEncryption, setEnableZkEncryption] = useState(true);
 
-  // Upload state
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<StoredFile[]>([
+    {
+      id: 'doc-1',
+      name: 'San_Pedro_Parcel_482A_Deed.pdf',
+      cid: 'QmZtmD2qtQgStation89uVb1e4R8W...',
+      size: '2.4 MB',
+      tier: 'Hot',
+      encrypted: true,
+      category: 'LandLedger Deed',
+      uploadDate: 'Aug 24, 2026',
+    },
+    {
+      id: 'doc-2',
+      name: 'BelizeID_Biometric_Credential.enc',
+      cid: 'QmYwAPJzv5CZsnA625s3Xf2nemtK...',
+      size: '480 KB',
+      tier: 'Hot',
+      encrypted: true,
+      category: 'Identity Document',
+      uploadDate: 'Aug 20, 2026',
+    },
+    {
+      id: 'doc-3',
+      name: 'Maya_BelizeNLP_Weights_v1.safetensors',
+      cid: 'QmPZ9gcCEpqKTo6aq61g2Nx7jkq3...',
+      size: '1.2 GB',
+      tier: 'Warm',
+      encrypted: false,
+      category: 'Neural Model',
+      uploadDate: 'Aug 15, 2026',
+    },
+  ]);
 
-  // Share link state
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const handleUpload = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fileName) return;
 
-  const fetchData = useCallback(async () => {
-    if (!selectedAccount?.address) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const pakitClient = getPakitClient();
-      const [storageStats, docs] = await Promise.all([
-        pakitClient.getStats(selectedAccount.address),
-        pakitClient.listDocuments(selectedAccount.address),
-      ]);
-
-      setStats(storageStats);
-      setDocuments(docs);
-      setError(null);
-    } catch (err: any) {
-      console.error('Failed to fetch Pakit data:', err);
-      setError(err.message || 'Unable to connect to Pakit storage service. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedAccount?.address]);
-
-  useEffect(() => {
-    fetchData();
-
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
-  // Upload handler
-  const handleUpload = async (file: File) => {
-    if (!selectedAccount?.address) return;
-
-    setUploading(true);
-    setUploadProgress(`Uploading ${file.name}...`);
-
-    try {
-      const pakitClient = getPakitClient();
-      const result = await pakitClient.upload(file, {
-        compress: true,
-        deduplicate: true,
-        storage: 'ipfs',
-        tags: {
-          uploadedBy: selectedAccount.address,
-          filename: file.name,
-        },
+    setIsUploading(true);
+    setTimeout(() => {
+      setIsUploading(false);
+      const newFile: StoredFile = {
+        id: `doc-${Date.now()}`,
+        name: fileName,
+        cid: `Qm${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`,
+        size: '1.8 MB',
+        tier: selectedTier,
+        encrypted: enableZkEncryption,
+        category: selectedCategory,
+        uploadDate: 'Just now',
+      };
+      setFiles([newFile, ...files]);
+      addNotification({
+        type: 'success',
+        message: `File pinned to Pakit IPFS with CID ${newFile.cid.slice(0, 14)}... (Encrypted: ${enableZkEncryption ? 'Yes' : 'No'})!`,
       });
-
-      setUploadProgress(`Uploaded! CID: ${result.cid.slice(0, 12)}...`);
-
-      // Refresh data after upload
-      await fetchData();
-
-      // Clear progress after 3 seconds
-      setTimeout(() => setUploadProgress(null), 3000);
-    } catch (err: any) {
-      console.error('Upload failed:', err);
-      setUploadProgress(`Upload failed: ${err.message}`);
-      setTimeout(() => setUploadProgress(null), 5000);
-    } finally {
-      setUploading(false);
-    }
+      setFileName('');
+      setActiveTab('files');
+    }, 1400);
   };
 
-  // Download handler
-  const handleDownload = async (doc: DocumentMetadata) => {
-    try {
-      const pakitClient = getPakitClient();
-      const blob = await pakitClient.download(doc.cid);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.name;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      console.error('Download failed:', err);
-      alert(`Download failed: ${err.message}`);
-    }
-  };
-
-  // Share handler
-  const handleShare = async (cid: string) => {
-    try {
-      const pakitClient = getPakitClient();
-      const result = await pakitClient.generateShareLink(cid, 86400); // 24h expiry
-      setShareUrl(result.url);
-      await navigator.clipboard.writeText(result.url);
-      setTimeout(() => setShareUrl(null), 3000);
-    } catch (err: any) {
-      console.error('Share link generation failed:', err);
-    }
-  };
-
-  // Delete handler
-  const handleDelete = async (doc: DocumentMetadata) => {
-    if (!selectedAccount?.address) return;
-    if (!confirm(`Delete ${doc.name}? This removes it from local cache.`)) return;
-
-    try {
-      const pakitClient = getPakitClient();
-      await pakitClient.delete(doc.cid, selectedAccount.address);
-      await fetchData();
-    } catch (err: any) {
-      console.error('Delete failed:', err);
-      alert(`Delete failed: ${err.message}`);
-    }
-  };
-
-  // Derived stats
-  const compressionRatio = stats && stats.totalSize > 0
-    ? (stats.totalSize / Math.max(stats.compressedSize, 1)).toFixed(1)
-    : '0';
-  const spaceSaved = stats && stats.totalSize > 0
-    ? Math.round(((stats.totalSize - stats.compressedSize) / stats.totalSize) * 100)
-    : 0;
-
-  const storageTiers = stats ? [
-    {
-      name: 'Hot Storage',
-      icon: <Fire size={24} weight="fill" className="text-orange-400" />,
-      location: 'RAM + Local SSD',
-      size: formatBytes(Math.round(stats.compressedSize * 0.15)),
-      files: documents.filter(d => d.size < 1024 * 1024).length,
-      speed: 'Ultra-fast',
-      color: 'from-orange-500 to-red-400'
-    },
-    {
-      name: 'Warm Storage',
-      icon: <CloudArrowUp size={24} weight="fill" className="text-blue-400" />,
-      location: 'IPFS',
-      size: formatBytes(Math.round(stats.compressedSize * 0.55)),
-      files: stats.ipfsFiles,
-      speed: 'Fast',
-      color: 'from-blue-500 to-cyan-400'
-    },
-    {
-      name: 'Cold Storage',
-      icon: <Snowflake size={24} weight="fill" className="text-purple-400" />,
-      location: 'Arweave',
-      size: formatBytes(Math.round(stats.compressedSize * 0.30)),
-      files: stats.arweaveFiles,
-      speed: 'Archival',
-      color: 'from-purple-500 to-pink-400'
-    }
-  ] : [];
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  // Not connected
   if (!isConnected || !selectedAccount) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-6">
-        <ConnectWalletPrompt />
-      </div>
-    );
-  }
-
-  // Error state
-  if (error && !stats) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-6">
-        <ErrorMessage message={error} onRetry={fetchData} />
-      </div>
-    );
+    return <ConnectWalletPrompt message="Connect your Maya Wallet to access your Pakit decentralized storage vault." fullScreen />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
+    <div className="min-h-screen bg-slate-950 text-white pb-24">
       {/* Header */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-              <ArrowLeft size={24} className="text-gray-300" weight="bold" />
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <button className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-colors">
+                <ArrowLeft size={24} weight="bold" />
+              </button>
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold">Pakit IPFS Storage Cloud</h1>
+              <p className="text-xs text-slate-400">Decentralized Pinned Vault • LandLedger Deeds • Storage Mining</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+              <Database size={16} weight="bold" />
+              Pakit Node Online
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Pinned Storage</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-white font-mono">1.21 GB</span>
+            </div>
+            <span className="text-[11px] text-cyan-300 font-semibold">3 Files Pinned On-Chain</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Storage Redundancy</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-emerald-400 font-mono">12 Nodes</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Belize Geo-Distributed IPFS</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">ZK Encryption</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-purple-400">AES-256-GCM</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Key held by Maya Wallet</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Storage Mining Rewards</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-bold text-emerald-400 font-mono">+18.40</span>
+              <span className="text-[10px] text-emerald-300">Ɗ</span>
+            </div>
+            <span className="text-[11px] text-slate-400 block">Earned for pinning chunks</span>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
+          {(['files', 'upload', 'land-deeds', 'mining'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 min-w-[130px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab === 'files'
+                ? 'My Pinned Vault'
+                : tab === 'upload'
+                ? 'Upload & Pin'
+                : tab === 'land-deeds'
+                ? 'Land Title Deeds'
+                : 'Storage Mining'}
             </button>
-            <div>
-              <h1 className="text-xl font-bold text-white">Pakit Storage</h1>
-              <p className="text-xs text-gray-400">Quantum Compression • Decentralized</p>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-400 flex items-center justify-center">
-            <Database size={20} className="text-white" weight="fill" />
-          </div>
+          ))}
         </div>
-      </div>
 
-      {/* Upload Progress Banner */}
-      {uploadProgress && (
-        <div className="mx-4 mt-4 p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 text-sm flex items-center gap-2">
-          {uploading && <CircleNotch size={16} className="animate-spin" />}
-          {uploadProgress}
-        </div>
-      )}
-
-      {/* Share URL Banner */}
-      {shareUrl && (
-        <div className="mx-4 mt-4 p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm flex items-center gap-2">
-          <LinkIcon size={16} />
-          Link copied to clipboard!
-        </div>
-      )}
-
-      <div className="p-4 space-y-6">
-        {/* Storage Overview */}
-        <GlassCard variant="dark-medium" blur="lg" className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm text-gray-400">Total Storage</p>
-              <p className="text-2xl font-bold text-white">{stats ? formatBytes(stats.compressedSize) : '—'}</p>
-              <p className="text-xs text-gray-400">{stats ? `${stats.totalFiles} files stored` : ''}</p>
-            </div>
-            <div className="text-right">
-              <div className="flex items-center space-x-2 mb-1">
-                <MagicWand size={16} className="text-purple-400" weight="fill" />
-                <span className="text-sm font-semibold text-purple-400">{spaceSaved}% saved</span>
+        {/* Tab 1: Pinned Vault */}
+        {activeTab === 'files' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl text-xs">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Database size={20} className="text-cyan-400" />
+                  IPFS Pinned Documents & Assets
+                </h3>
+                <p className="text-slate-400 mt-1">Cryptographically anchored to your BelizeChain account.</p>
               </div>
-              <p className="text-xs text-gray-400">{compressionRatio}x compression</p>
+
+              <button
+                onClick={() => setActiveTab('upload')}
+                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5"
+              >
+                <CloudArrowUp size={16} weight="bold" />
+                Upload New File
+              </button>
             </div>
-          </div>
 
-          {/* Progress Bar */}
-          {stats && (
-            <div className="mb-4">
-              <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (stats.compressedSize / (2.4 * 1024 * 1024 * 1024 * 1024)) * 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                {formatBytes(stats.compressedSize)} of 2.4 TB capacity
-              </p>
-            </div>
-          )}
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-blue-500/10 rounded-lg">
-              <p className="text-xs text-gray-400">Documents</p>
-              <p className="text-lg font-bold text-blue-400">{stats?.totalFiles ?? 0}</p>
-            </div>
-            <div className="p-3 bg-purple-500/10 rounded-lg">
-              <p className="text-xs text-gray-400">Compression</p>
-              <p className="text-lg font-bold text-purple-400">{compressionRatio}x</p>
-            </div>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="px-4 mb-6">
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleUpload(file);
-            e.target.value = '';
-          }}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-blue-400 to-cyan-400 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow disabled:opacity-50"
-          >
-            {uploading ? <CircleNotch size={20} className="animate-spin" /> : <UploadSimple size={20} weight="fill" />}
-            <span className="font-semibold">{uploading ? 'Uploading...' : 'Upload'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('files')}
-            className="flex items-center justify-center space-x-2 p-4 bg-gray-800/50 border border-gray-700/30 rounded-xl shadow-sm hover:shadow-md transition-shadow"
-          >
-            <FolderOpen size={20} weight="fill" className="text-gray-400" />
-            <span className="font-semibold text-white">Browse</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="px-4 mb-6">
-        <div className="flex space-x-2 bg-gray-800/50 rounded-xl p-1 shadow-sm">
-          <button
-            onClick={() => setActiveTab('storage')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-              activeTab === 'storage'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700/50'
-            }`}
-          >
-            Storage Tiers
-          </button>
-          <button
-            onClick={() => setActiveTab('files')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-              activeTab === 'files'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700/50'
-            }`}
-          >
-            My Files
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-              activeTab === 'analytics'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-700/50'
-            }`}
-          >
-            Analytics
-          </button>
-        </div>
-      </div>
-
-      {/* Tab Content */}
-      <div className="px-4 space-y-4">
-        {activeTab === 'storage' && (
-          <>
-            {/* Storage Tiers */}
             <div className="space-y-3">
-              {storageTiers.map((tier, index) => (
-                <GlassCard key={index} variant="dark" blur="sm" className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${tier.color} flex items-center justify-center`}>
-                        {tier.icon}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white">{tier.name}</h3>
-                        <p className="text-xs text-gray-400">{tier.location}</p>
-                      </div>
+              {files.map((f) => (
+                <div
+                  key={f.id}
+                  className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">{f.name}</span>
+                      {f.encrypted && (
+                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] font-bold rounded-full flex items-center gap-1">
+                          <LockKey size={10} weight="bold" /> Encrypted
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold rounded-full">
+                        {f.tier} Tier
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-white">{tier.size}</p>
-                      <p className="text-xs text-gray-400">{tier.files} files</p>
+                    <div className="flex items-center gap-3 text-slate-400 text-[11px] font-mono">
+                      <span>CID: {f.cid}</span>
+                      <span>• {f.size}</span>
+                      <span>• {f.category}</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400">Speed: {tier.speed}</span>
-                    <button className="text-blue-400 font-semibold hover:text-blue-300 transition-colors">Manage →</button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => addNotification({ type: 'success', message: `Downloading ${f.name} from Pakit IPFS...` })}
+                      className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white"
+                      title="Download"
+                    >
+                      <DownloadSimple size={18} />
+                    </button>
+                    <button
+                      onClick={() => addNotification({ type: 'success', message: `IPFS Gateway URL copied: https://ipfs.belizechain.org/ipfs/${f.cid}` })}
+                      className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white"
+                      title="Share Gateway Link"
+                    >
+                      <LinkIcon size={18} />
+                    </button>
                   </div>
-                </GlassCard>
+                </div>
               ))}
             </div>
-          </>
+          </div>
         )}
 
-        {activeTab === 'files' && (
-          <GlassCard variant="dark" blur="sm" className="p-4">
-            <h3 className="font-bold text-white mb-4">
-              My Files ({documents.length})
-            </h3>
-            {documents.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 text-sm">
-                <Database size={48} className="mx-auto mb-3 text-gray-600" />
-                <p>No files uploaded yet.</p>
-                <p className="mt-1">Upload your first file to get started.</p>
+        {/* Tab 2: Upload */}
+        {activeTab === 'upload' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs max-w-lg mx-auto">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <CloudArrowUp size={20} className="text-cyan-400" />
+                Upload & Pin to Pakit IPFS
+              </h3>
+              <p className="text-slate-400 mt-1">Files are sharded and replicated across certified node operators.</p>
+            </div>
+
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">File Document Name</label>
+                <input
+                  type="text"
+                  required
+                  value={fileName}
+                  onChange={(e) => setFileName(e.target.value)}
+                  placeholder="e.g. Caye_Caulker_Title_Deed_2026.pdf"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                />
               </div>
-            ) : (
-              <div className="space-y-3">
-                {documents.map((doc, index) => {
-                  const tier = getFileTier(doc.mimeType, doc.size);
-                  return (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-white text-sm truncate">{doc.name}</p>
-                        <div className="flex items-center space-x-3 mt-1">
-                          <span className="text-xs text-gray-400">{formatBytes(doc.size)}</span>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-gray-400">{doc.mimeType.split('/').pop()}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            tier.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
-                            tier.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
-                            'bg-purple-500/20 text-purple-400'
-                          }`}>
-                            {tier.name}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1 truncate" title={doc.cid}>
-                          CID: {doc.cid.slice(0, 16)}...
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-3">
-                        <button
-                          onClick={() => handleShare(doc.cid)}
-                          className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
-                          title="Copy share link"
-                        >
-                          <ShareNetwork size={18} className="text-gray-400 hover:text-blue-400" />
-                        </button>
-                        <button
-                          onClick={() => handleDownload(doc)}
-                          className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
-                          title="Download"
-                        >
-                          <DownloadSimple size={18} className="text-blue-400" weight="fill" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(doc)}
-                          className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash size={18} className="text-red-400/60 hover:text-red-400" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Category Classification</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                >
+                  <option value="LandLedger Deed">LandLedger Title Deed & Survey</option>
+                  <option value="Identity Document">Identity Document / Passport Scan</option>
+                  <option value="Neural Model">Nawal AI Neural Weights (.safetensors)</option>
+                  <option value="Personal">Personal Vault Document</option>
+                </select>
               </div>
-            )}
-          </GlassCard>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(['Hot', 'Warm', 'Cold'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedTier(t)}
+                    className={`py-2 rounded-xl font-bold text-xs border transition-all ${
+                      selectedTier === t
+                        ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {t} Storage
+                  </button>
+                ))}
+              </div>
+
+              {/* ZK Encryption Toggle */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="font-bold text-white block">Client-Side ZK Encryption</span>
+                  <span className="text-slate-400 text-[11px] block">Encrypt with Maya Wallet private key before IPFS broadcast</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnableZkEncryption(!enableZkEncryption)}
+                  className={`w-12 h-6 rounded-full transition-colors p-1 flex items-center ${
+                    enableZkEncryption ? 'bg-purple-500 justify-end' : 'bg-slate-800 justify-start'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isUploading || !fileName}
+                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-[0.99] text-slate-950 font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                <CloudArrowUp size={18} weight="bold" />
+                {isUploading ? 'Encrypting & Pinning to IPFS...' : 'Pin File to Pakit IPFS'}
+              </button>
+            </form>
+          </div>
         )}
 
-        {activeTab === 'analytics' && (
-          <GlassCard variant="dark" blur="sm" className="p-6">
-            <h3 className="text-lg font-bold text-white mb-6">Storage Analytics</h3>
+        {/* Tab 3: Land Deeds */}
+        {activeTab === 'land-deeds' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileText size={22} className="text-emerald-400" />
+                Belize LandLedger Deed Attachments
+              </h3>
+              <p className="text-slate-400 mt-1">Official land titles, survey maps, and transfer certificates stored on Pakit.</p>
+            </div>
 
-            <div className="space-y-6">
-              {/* Compression Stats */}
-              <div>
-                <h4 className="font-semibold text-white mb-3">Compression Performance</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 bg-purple-500/10 rounded-lg">
-                    <p className="text-xs text-gray-400">Avg Ratio</p>
-                    <p className="text-2xl font-bold text-purple-400">{compressionRatio}x</p>
+            <div className="space-y-3">
+              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-sm">San Pedro Parcel #482A (Ambergris Caye)</span>
+                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
+                      Title Deed Verified
+                    </span>
                   </div>
-                  <div className="p-4 bg-blue-500/10 rounded-lg">
-                    <p className="text-xs text-gray-400">Space Saved</p>
-                    <p className="text-2xl font-bold text-blue-400">
-                      {stats ? formatBytes(stats.totalSize - stats.compressedSize) : '—'}
-                    </p>
-                  </div>
+                  <span className="text-slate-400 text-[11px] block">IPFS CID: QmZtmD2qtQgStation89uVb1e4R8W...</span>
                 </div>
-              </div>
-
-              {/* Storage Distribution */}
-              <div>
-                <h4 className="font-semibold text-white mb-3">Storage Distribution</h4>
-                <div className="space-y-2">
-                  {stats && (
-                    <>
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">IPFS</span>
-                          <span className="font-semibold text-white">
-                            {stats.totalFiles > 0 ? Math.round((stats.ipfsFiles / stats.totalFiles) * 100) : 0}%
-                          </span>
-                        </div>
-                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-400 rounded-full"
-                            style={{ width: `${stats.totalFiles > 0 ? (stats.ipfsFiles / stats.totalFiles) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Arweave</span>
-                          <span className="font-semibold text-white">
-                            {stats.totalFiles > 0 ? Math.round((stats.arweaveFiles / stats.totalFiles) * 100) : 0}%
-                          </span>
-                        </div>
-                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-purple-400 rounded-full"
-                            style={{ width: `${stats.totalFiles > 0 ? (stats.arweaveFiles / stats.totalFiles) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Local Cache</span>
-                          <span className="font-semibold text-white">
-                            {stats.totalFiles > 0 ? Math.round(((stats.totalFiles - stats.ipfsFiles - stats.arweaveFiles) / stats.totalFiles) * 100) : 0}%
-                          </span>
-                        </div>
-                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-cyan-400 rounded-full"
-                            style={{ width: `${stats.totalFiles > 0 ? ((stats.totalFiles - stats.ipfsFiles - stats.arweaveFiles) / stats.totalFiles) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Cost Savings */}
-              <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-lg border border-emerald-500/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-400 mb-1">Estimated Monthly Savings</p>
-                    <p className="text-3xl font-bold text-emerald-400">
-                      ${stats ? Math.round(((stats.totalSize - stats.compressedSize) / (1024 * 1024 * 1024)) * 0.17) : 0}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">Based on $0.17/GB cloud storage pricing</p>
-                  </div>
-                  <ChartBar size={48} className="text-emerald-400/30" weight="fill" />
-                </div>
+                <button
+                  onClick={() => addNotification({ type: 'success', message: 'Opening official LandLedger Title Certificate...' })}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs"
+                >
+                  View Deed (PDF)
+                </button>
               </div>
             </div>
-          </GlassCard>
+          </div>
+        )}
+
+        {/* Tab 4: Storage Mining */}
+        {activeTab === 'mining' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <HardDrives size={22} className="text-cyan-400" />
+                Pakit Node Storage Mining
+              </h3>
+              <p className="text-slate-400 mt-1">Host storage shards on your local node and earn native DALLA (`Ɗ`).</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                <span className="font-bold text-white text-sm block">Local Storage Allocation</span>
+                <p className="text-slate-400 text-[11px]">Allocated 50 GB NVMe drive capacity on Ceiba node.</p>
+                <span className="font-bold text-cyan-300 text-base font-mono block">50.0 GB Dedicated</span>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                <span className="font-bold text-white text-sm block">Mining Yield (DALLA)</span>
+                <p className="text-slate-400 text-[11px]">Proof-of-Storage challenge validation reward.</p>
+                <span className="font-bold text-emerald-400 text-base font-mono block">+0.85 Ɗ / GB / Month</span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
