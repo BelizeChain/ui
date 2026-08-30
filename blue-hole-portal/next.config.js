@@ -4,18 +4,19 @@ const nextConfig = {
   output: 'standalone',
   transpilePackages: ['@belizechain/shared'],
   typescript: {
-    // Don't fail build on TypeScript errors during builds
     ignoreBuildErrors: false,
   },
   images: {
     remotePatterns: [
-      { protocol: 'http', hostname: 'localhost' },
-      { protocol: 'https', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'belizechain.org' },
+      { protocol: 'https', hostname: 'api.belizechain.org' },
+      { protocol: 'https', hostname: 'ipfs.belizechain.org' },
+      { protocol: 'https', hostname: 'explorer.belizechain.org' },
+      { protocol: 'https', hostname: 'wallet.belizechain.org' },
     ],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Polkadot extension packages access `window` at module init time
       config.resolve.alias = {
         ...config.resolve.alias,
         '@polkadot/extension-dapp': false,
@@ -37,15 +38,15 @@ const nextConfig = {
     return [
       {
         source: '/api/proxy/nawal/:path*',
-        destination: 'http://100.81.45.25:8080/:path*',
+        destination: 'https://belizechain.org/api/nawal/:path*',
       },
       {
         source: '/api/proxy/kinich/:path*',
-        destination: 'http://100.81.45.25:8888/:path*',
+        destination: 'https://belizechain.org/api/kinich/:path*',
       },
       {
         source: '/api/proxy/pakit/:path*',
-        destination: 'http://100.81.45.25:8001/:path*',
+        destination: 'https://belizechain.org/api/pakit/:path*',
       },
     ];
   },
