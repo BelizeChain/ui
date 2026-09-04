@@ -19,6 +19,7 @@ interface ServiceTarget {
   id: ServiceProbeId;
   label: string;
   baseUrl: string;
+  fallbackUrls?: string[];
   probePaths: string[];
 }
 
@@ -75,34 +76,37 @@ async function fetchProbe(url: string, timeoutMs: number): Promise<{ ok: boolean
 }
 
 async function probeTarget(target: ServiceTarget, timeoutMs: number): Promise<ServiceProbeStatus> {
-  const candidateUrls = buildProbeUrls(target.baseUrl, target.probePaths);
+  const allBases = Array.from(new Set([target.baseUrl, ...(target.fallbackUrls || [])])).filter(Boolean);
   let lastError: string | null = null;
   let lastStatusCode: number | null = null;
 
-  for (const url of candidateUrls) {
-    const result = await fetchProbe(url, timeoutMs);
+  for (const base of allBases) {
+    const candidateUrls = buildProbeUrls(base, target.probePaths);
+    for (const url of candidateUrls) {
+      const result = await fetchProbe(url, timeoutMs);
 
-    if (result.ok) {
-      return {
-        id: target.id,
-        label: target.label,
-        state: 'online',
-        url,
-        statusCode: result.statusCode,
-        error: null,
-        checkedAt: Date.now(),
-      };
+      if (result.ok) {
+        return {
+          id: target.id,
+          label: target.label,
+          state: 'online',
+          url,
+          statusCode: result.statusCode,
+          error: null,
+          checkedAt: Date.now(),
+        };
+      }
+
+      lastError = result.error;
+      lastStatusCode = result.statusCode;
     }
-
-    lastError = result.error;
-    lastStatusCode = result.statusCode;
   }
 
   return {
     id: target.id,
     label: target.label,
     state: 'offline',
-    url: candidateUrls[0] || target.baseUrl,
+    url: target.baseUrl,
     statusCode: lastStatusCode,
     error: lastError,
     checkedAt: Date.now(),
@@ -121,6 +125,30 @@ function buildInitialStatuses(targets: ServiceTarget[]): ServiceProbeStatus[] {
   }));
 }
 
+async function fetchServerProbes(): Promise<Record<string, { ok: boolean; status: string; url?: string }> | null> {
+  try {
+    const isWallet = typeof window !== 'undefined' && window.location.pathname.startsWith('/wallet');
+    const endpoint = isWallet ? '/wallet/api/probes' : '/api/probes';
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    window.clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.probes) {
+        return data.probes;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function useServiceProbes(options: UseServiceProbesOptions = {}) {
   const { intervalMs = 30000, timeoutMs = 4000 } = options;
   const runtimeConfig = getRuntimeConfig();
@@ -129,18 +157,21 @@ export function useServiceProbes(options: UseServiceProbesOptions = {}) {
       id: 'pakit',
       label: 'Pakit',
       baseUrl: runtimeConfig.pakitApiUrl,
+      fallbackUrls: ['http://localhost:8001', 'http://127.0.0.1:8001'],
       probePaths: ['health'],
     },
     {
       id: 'nawal',
       label: 'Nawal',
       baseUrl: runtimeConfig.nawalApiUrl,
+      fallbackUrls: ['http://localhost:8080', 'http://127.0.0.1:8080'],
       probePaths: ['health'],
     },
     {
       id: 'kinich',
       label: 'Kinich',
       baseUrl: runtimeConfig.kinichApiUrl,
+      fallbackUrls: ['http://localhost:8888', 'http://127.0.0.1:8888'],
       probePaths: ['readyz', 'health'],
     },
   ];
@@ -156,6 +187,27 @@ export function useServiceProbes(options: UseServiceProbesOptions = {}) {
     let cancelled = false;
 
     const runProbes = async () => {
+      // First try server-side probe route to avoid CORS errors
+      const serverResults = await fetchServerProbes();
+      if (serverResults && !cancelled) {
+        const updated: ServiceProbeStatus[] = serviceTargets.map((target) => {
+          const s = serverResults[target.id];
+          const isOnline = s?.ok ?? false;
+          return {
+            id: target.id,
+            label: target.label,
+            state: isOnline ? 'online' : 'offline',
+            url: s?.url || target.baseUrl,
+            statusCode: isOnline ? 200 : null,
+            error: isOnline ? null : 'Unreachable',
+            checkedAt: Date.now(),
+          };
+        });
+        setProbes(updated);
+        setIsLoading(false);
+        return;
+      }
+
       const results = await Promise.all(serviceTargets.map((target) => probeTarget(target, timeoutMs)));
 
       if (!cancelled) {

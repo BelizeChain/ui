@@ -100,3 +100,7 @@ export type { QuantumJob, QuantumResult, QuantumWorkProof, QuantumBackend } from
 export type { CommunityGroup, CommunityProposal, CommunityFund, CommunityEvent, Milestone } from './community';
 export type { NawalParticipantStats, NawalSystemMetrics, NawalRoundStatus } from './nawal';
 
+// Ethical Safeguards & Civic Justice (Pallets 35, 36, 37)
+export * from './justice';
+export * from './whistleblower';
+export * from './moderation';

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -33,6 +34,8 @@ import {
   Activity,
   ArrowsClockwise,
   Wallet,
+  Copy,
+  ArrowSquareOut,
 } from 'phosphor-react';
 
 interface OrderBookEntry {
@@ -85,6 +88,24 @@ const TRADING_PAIRS: TradingPair[] = [
 ];
 
 export default function TradePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#030914] flex flex-col items-center justify-center text-cyan-400 gap-3">
+          <div className="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+          <p className="text-xs font-mono text-slate-400 tracking-wider">INITIALIZING BELIZEX AMM TERMINAL...</p>
+        </div>
+      }
+    >
+      <TradePageInner />
+    </Suspense>
+  );
+}
+
+function TradePageInner() {
+  const searchParams = useSearchParams();
+  const initialMode = searchParams?.get('mode') === 'amm' ? 'AMM' : 'PRO';
+
   const { selectedAccount, isConnected, balance } = useWallet();
   const { addNotification } = useUIStore();
 
@@ -95,7 +116,7 @@ export default function TradePage() {
   const [pairSearch, setPairSearch] = useState('');
 
   // Main UI Mode & Tabs
-  const [tradingMode, setTradingMode] = useState<'PRO' | 'AMM'>('PRO');
+  const [tradingMode, setTradingMode] = useState<'PRO' | 'AMM'>(initialMode);
   const [chartTimeframe, setChartTimeframe] = useState<'1m' | '5m' | '15m' | '1H' | '4H' | '1D'>('15m');
   const [chartType, setChartType] = useState<'candles' | 'depth'>('candles');
   const [bottomTab, setBottomTab] = useState<'orders' | 'history' | 'trades' | 'liquidity'>('orders');
@@ -112,6 +133,19 @@ export default function TradePage() {
   const [toAsset, setToAsset] = useState<'DALLA' | 'bBZD' | 'wDOT' | 'wETH'>('bBZD');
   const [swapAmount, setSwapAmount] = useState('100');
   const [slippage, setSlippage] = useState<'0.1' | '0.5' | '1.0'>('0.5');
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [copiedRouter, setCopiedRouter] = useState(false);
+
+  const ROUTER_CONTRACT_ADDRESS = 'r1UenLmcTAhKMLsqK7fujghzYs5WinB1ttiEnjhsPRC9U4jv4';
+
+  // Get active balance for selected from asset
+  const getAssetBalance = (asset: string) => {
+    if (asset === 'DALLA') return balance?.dalla || '150,000.00';
+    if (asset === 'bBZD') return balance?.bBZD || '25,000.00';
+    if (asset === 'wDOT') return '45.20';
+    if (asset === 'wETH') return '1.85';
+    return '0.00';
+  };
 
   // Interactive Open Orders State
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([
@@ -300,17 +334,31 @@ export default function TradePage() {
     const amt = parseFloat(swapAmount || '0');
     if (!amt || amt <= 0) return;
 
-    const estOut =
-      fromAsset === 'DALLA' && toAsset === 'bBZD'
-        ? amt * 0.5
-        : fromAsset === 'bBZD' && toAsset === 'DALLA'
-        ? amt * 2.0
-        : amt;
+    setIsSwapping(true);
+    setTimeout(() => {
+      setIsSwapping(false);
+      const estOut =
+        fromAsset === 'DALLA' && toAsset === 'bBZD'
+          ? amt * 0.5
+          : fromAsset === 'bBZD' && toAsset === 'DALLA'
+          ? amt * 2.0
+          : amt;
 
+      addNotification({
+        type: 'success',
+        message: `BelizeX Router Executed: Swapped ${amt} ${fromAsset} ➔ ${estOut.toFixed(2)} ${toAsset} via contract r1Uen... (Slippage: ${slippage}%)`,
+      });
+    }, 800);
+  };
+
+  const handleCopyRouter = () => {
+    navigator.clipboard.writeText(ROUTER_CONTRACT_ADDRESS);
+    setCopiedRouter(true);
     addNotification({
       type: 'success',
-      message: `AMM Swap Confirmed: ${amt} ${fromAsset} ➔ ${estOut.toFixed(2)} ${toAsset} (Slippage: ${slippage}%, LP fee: 0.3%)`,
+      message: 'BelizeX Router Contract address copied!',
     });
+    setTimeout(() => setCopiedRouter(false), 2000);
   };
 
   // Filtered Pairs for Watchlist
@@ -332,16 +380,16 @@ export default function TradePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-20">
-      {/* Top Pro Header & Ticker Bar */}
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800">
+    <div className="min-h-screen bg-[#030914] text-slate-100 flex flex-col font-sans pb-20 selection:bg-cyan-500/30">
+      {/* Top Caribbean Cyber Header & Ticker Bar */}
+      <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-2xl border-b border-teal-500/20 shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
         <div className="max-w-[1720px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-4">
           {/* Pair Selector & Back Button */}
           <div className="flex items-center gap-3">
             <Link href="/">
               <button
                 title="Return to Maya Wallet"
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl text-slate-300 hover:text-white transition-all border border-slate-700/50"
+                className="p-2 bg-slate-800/80 hover:bg-slate-700/80 rounded-xl text-slate-300 hover:text-white transition-all border border-teal-500/20 shadow-sm"
               >
                 <ArrowLeft size={20} weight="bold" />
               </button>
@@ -351,20 +399,20 @@ export default function TradePage() {
             <div className="relative">
               <button
                 onClick={() => setPairDropdownOpen(!pairDropdownOpen)}
-                className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl transition-all"
+                className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-800/90 hover:bg-slate-750 border border-teal-500/30 rounded-xl transition-all shadow-sm"
               >
                 <div className="flex -space-x-1.5">
-                  <span className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center text-[11px] font-black text-slate-950">
+                  <span className="w-6 h-6 rounded-full bg-cyan-400 flex items-center justify-center text-[11px] font-black text-slate-950 shadow-sm">
                     {selectedPair.base[0]}
                   </span>
-                  <span className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-[11px] font-black text-slate-950">
+                  <span className="w-6 h-6 rounded-full bg-emerald-400 flex items-center justify-center text-[11px] font-black text-slate-950 shadow-sm">
                     {selectedPair.quote[0]}
                   </span>
                 </div>
                 <div className="text-left">
-                  <span className="font-bold text-sm tracking-wide flex items-center gap-1">
+                  <span className="font-bold text-sm tracking-wide flex items-center gap-1 text-white">
                     {selectedPair.symbol}
-                    <CaretDown size={14} className="text-slate-400" />
+                    <CaretDown size={14} className="text-cyan-400" />
                   </span>
                 </div>
               </button>
@@ -376,7 +424,7 @@ export default function TradePage() {
                     initial={{ opacity: 0, y: 8, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    className="absolute left-0 top-full mt-2 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 z-50"
+                    className="absolute left-0 top-full mt-2 w-80 bg-slate-900/95 border border-teal-500/30 rounded-2xl shadow-2xl p-3 z-50 backdrop-blur-2xl"
                   >
                     <div className="relative mb-2">
                       <MagnifyingGlass size={16} className="absolute left-3 top-3 text-slate-400" />
@@ -385,7 +433,7 @@ export default function TradePage() {
                         placeholder="Search markets..."
                         value={pairSearch}
                         onChange={(e) => setPairSearch(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
                       />
                     </div>
 
@@ -395,7 +443,7 @@ export default function TradePage() {
                           key={cat}
                           onClick={() => setPairFilter(cat)}
                           className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all ${
-                            pairFilter === cat ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                            pairFilter === cat ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
                           }`}
                         >
                           {cat}
@@ -410,8 +458,8 @@ export default function TradePage() {
                           onClick={() => handleSelectPair(pair)}
                           className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-all ${
                             selectedPair.symbol === pair.symbol
-                              ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-300'
-                              : 'hover:bg-slate-800 text-slate-300'
+                              ? 'bg-cyan-500/15 border border-cyan-500/40 text-cyan-300'
+                              : 'hover:bg-slate-800/70 text-slate-300'
                           }`}
                         >
                           <span className="font-bold">{pair.symbol}</span>
@@ -437,7 +485,7 @@ export default function TradePage() {
           {/* 24h Ticker Statistics */}
           <div className="flex flex-wrap items-center gap-6 text-xs">
             <div>
-              <span className="text-[10px] text-slate-400 block uppercase font-medium">Last Price</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-semibold">Last Price</span>
               <span className="text-base font-bold font-mono text-emerald-400 flex items-center gap-1">
                 {selectedPair.price.toFixed(4)}{' '}
                 <span className="text-[11px] text-slate-400 font-normal">{selectedPair.quote}</span>
@@ -445,7 +493,7 @@ export default function TradePage() {
             </div>
 
             <div className="hidden sm:block">
-              <span className="text-[10px] text-slate-400 block uppercase font-medium">24h Change</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-semibold">24h Change</span>
               <span
                 className={`font-bold font-mono flex items-center gap-1 ${
                   selectedPair.change24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -461,21 +509,21 @@ export default function TradePage() {
             </div>
 
             <div className="hidden md:block">
-              <span className="text-[10px] text-slate-400 block uppercase font-medium">24h High</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-semibold">24h High</span>
               <span className="font-mono text-slate-200 font-semibold">{selectedPair.high24h.toFixed(4)}</span>
             </div>
 
             <div className="hidden md:block">
-              <span className="text-[10px] text-slate-400 block uppercase font-medium">24h Low</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-semibold">24h Low</span>
               <span className="font-mono text-slate-200 font-semibold">{selectedPair.low24h.toFixed(4)}</span>
             </div>
 
             <div className="hidden lg:block">
-              <span className="text-[10px] text-slate-400 block uppercase font-medium">24h Volume ({selectedPair.base})</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-semibold">24h Volume ({selectedPair.base})</span>
               <span className="font-mono text-cyan-300 font-semibold">{selectedPair.volume24h.toLocaleString()}</span>
             </div>
 
-            <div className="hidden xl:flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-[11px]">
+            <div className="hidden xl:flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-teal-500/20 text-[11px]">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-slate-400">Ceiba CLOB Engine:</span>
               <span className="text-emerald-300 font-mono font-bold">2,500 TPS (12ms)</span>
@@ -483,26 +531,26 @@ export default function TradePage() {
           </div>
 
           {/* Mode Switcher: Pro CLOB vs AMM Swap */}
-          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-bold">
-            <button
-              onClick={() => setTradingMode('PRO')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                tradingMode === 'PRO'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Order Book (Pro)
-            </button>
+          <div className="flex bg-slate-950/80 p-1 rounded-xl border border-teal-500/20 text-xs font-bold">
             <button
               onClick={() => setTradingMode('AMM')}
               className={`px-3 py-1.5 rounded-lg transition-all ${
                 tradingMode === 'AMM'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md'
+                  ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 font-extrabold shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               AMM Quick Swap
+            </button>
+            <button
+              onClick={() => setTradingMode('PRO')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                tradingMode === 'PRO'
+                  ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 font-extrabold shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Order Book (Pro)
             </button>
           </div>
         </div>
@@ -515,7 +563,7 @@ export default function TradePage() {
             {/* Center Area: Interactive Chart & Bottom Positions (lg:col-span-8) */}
             <div className="lg:col-span-8 flex flex-col gap-4">
               {/* Chart Panel */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl backdrop-blur-md">
+              <div className="bg-slate-900/80 border border-teal-500/20 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl backdrop-blur-md">
                 {/* Chart Header & Controls */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
                   <div className="flex items-center gap-2">
@@ -530,7 +578,7 @@ export default function TradePage() {
 
                   {/* Timeframe Selectors & Chart Type */}
                   <div className="flex items-center gap-2">
-                    <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px] font-mono">
+                    <div className="flex bg-slate-950/90 p-1 rounded-xl border border-slate-800 text-[11px] font-mono">
                       {(['1m', '5m', '15m', '1H', '4H', '1D'] as const).map((tf) => (
                         <button
                           key={tf}
@@ -546,7 +594,7 @@ export default function TradePage() {
                       ))}
                     </div>
 
-                    <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
+                    <div className="flex bg-slate-950/90 p-1 rounded-xl border border-slate-800 text-[11px]">
                       <button
                         onClick={() => setChartType('candles')}
                         className={`px-2.5 py-1 rounded-lg transition-all ${
@@ -567,8 +615,8 @@ export default function TradePage() {
                   </div>
                 </div>
 
-                {/* Simulated Interactive SVG / Canvas Candlestick Chart */}
-                <div className="relative w-full h-72 sm:h-96 my-3 bg-slate-950/70 rounded-2xl border border-slate-800/60 p-4 flex flex-col justify-between overflow-hidden">
+                {/* Simulated Interactive SVG Candlestick Chart */}
+                <div className="relative w-full h-72 sm:h-96 my-3 bg-slate-950/80 rounded-2xl border border-slate-800/80 p-4 flex flex-col justify-between overflow-hidden">
                   {/* Grid Lines */}
                   <div className="absolute inset-0 grid grid-rows-4 grid-cols-6 pointer-events-none opacity-10">
                     {Array.from({ length: 24 }).map((_, i) => (
@@ -579,15 +627,15 @@ export default function TradePage() {
                   {/* Chart Indicators & Legend */}
                   <div className="relative z-10 flex items-center justify-between text-[11px] font-mono text-slate-400">
                     <div className="flex items-center gap-3">
-                      <span className="text-amber-400">EMA(20): { (selectedPair.price * 0.994).toFixed(4) }</span>
-                      <span className="text-purple-400">EMA(50): { (selectedPair.price * 0.988).toFixed(4) }</span>
+                      <span className="text-amber-400">EMA(20): {(selectedPair.price * 0.994).toFixed(4)}</span>
+                      <span className="text-purple-400">EMA(50): {(selectedPair.price * 0.988).toFixed(4)}</span>
                       <span className="text-cyan-400">VOL: 142.5K</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-emerald-400 font-bold">O: { (selectedPair.price * 0.995).toFixed(4) }</span>{' '}
-                      <span className="text-emerald-400">H: { selectedPair.high24h.toFixed(4) }</span>{' '}
-                      <span className="text-rose-400">L: { selectedPair.low24h.toFixed(4) }</span>{' '}
-                      <span className="text-emerald-400 font-bold">C: { selectedPair.price.toFixed(4) }</span>
+                      <span className="text-emerald-400 font-bold">O: {(selectedPair.price * 0.995).toFixed(4)}</span>{' '}
+                      <span className="text-emerald-400">H: {selectedPair.high24h.toFixed(4)}</span>{' '}
+                      <span className="text-rose-400">L: {selectedPair.low24h.toFixed(4)}</span>{' '}
+                      <span className="text-emerald-400 font-bold">C: {selectedPair.price.toFixed(4)}</span>
                     </div>
                   </div>
 
@@ -631,7 +679,6 @@ export default function TradePage() {
                       { x: 570, o: 60, c: 50, h: 45, l: 65, up: true },
                     ].map((candle, idx) => (
                       <g key={idx} className="cursor-pointer hover:opacity-80 transition-opacity">
-                        {/* Wick */}
                         <line
                           x1={candle.x}
                           y1={candle.h}
@@ -640,7 +687,6 @@ export default function TradePage() {
                           stroke={candle.up ? '#10b981' : '#f43f5e'}
                           strokeWidth="1.5"
                         />
-                        {/* Body */}
                         <rect
                           x={candle.x - 6}
                           y={Math.min(candle.o, candle.c)}
@@ -666,7 +712,7 @@ export default function TradePage() {
               </div>
 
               {/* Bottom Dashboard: Open Orders, Trade History, Public Trades, Liquidity */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-md flex-1">
+              <div className="bg-slate-900/80 border border-teal-500/20 rounded-3xl p-5 shadow-xl backdrop-blur-md flex-1">
                 {/* Tabs */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3 mb-4">
                   <div className="flex gap-2 text-xs font-bold">
@@ -862,7 +908,7 @@ export default function TradePage() {
                 {/* Tab 4: Liquidity Positions */}
                 {bottomTab === 'liquidity' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <div className="bg-slate-950/80 p-4 rounded-2xl border border-teal-500/20 space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-white text-sm">DALLA / bBZD LP Pool</span>
                         <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-md text-[10px]">
@@ -884,13 +930,13 @@ export default function TradePage() {
                             message: 'Harvested +35.40 DALLA rewards from DALLA/bBZD pool!',
                           })
                         }
-                        className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md"
+                        className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md"
                       >
                         Harvest Farming Yield
                       </button>
                     </div>
 
-                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <div className="bg-slate-950/80 p-4 rounded-2xl border border-teal-500/20 space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-white text-sm">CARBON / bBZD Eco Pool</span>
                         <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 font-bold rounded-md text-[10px]">
@@ -912,7 +958,7 @@ export default function TradePage() {
                             message: 'Harvested +14.20 DALLA rewards from CARBON/bBZD pool!',
                           })
                         }
-                        className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md"
+                        className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md"
                       >
                         Harvest Farming Yield
                       </button>
@@ -925,7 +971,7 @@ export default function TradePage() {
             {/* Right Area: CLOB Order Book & Order Ticket (lg:col-span-4) */}
             <div className="lg:col-span-4 flex flex-col gap-4">
               {/* CLOB Order Book V1 */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
+              <div className="bg-slate-900/80 border border-teal-500/20 rounded-3xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-3">
                   <div>
                     <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
@@ -955,7 +1001,6 @@ export default function TradePage() {
                       onClick={() => handleOrderBookClick(ask.price, ask.amount)}
                       className="relative grid grid-cols-3 py-1 px-1 rounded hover:bg-rose-500/10 cursor-pointer transition-colors"
                     >
-                      {/* Depth visual bar */}
                       <div
                         className="absolute right-0 top-0 bottom-0 bg-rose-500/15 rounded pointer-events-none transition-all"
                         style={{ width: `${ask.depthPercent}%` }}
@@ -968,7 +1013,7 @@ export default function TradePage() {
                 </div>
 
                 {/* Mid Market Price Banner */}
-                <div className="py-2 my-1 px-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between font-mono">
+                <div className="py-2 my-1 px-3 bg-slate-950/80 rounded-xl border border-teal-500/20 flex items-center justify-between font-mono">
                   <div className="flex items-center gap-2">
                     <span className="text-emerald-400 font-bold text-sm">{selectedPair.price.toFixed(4)}</span>
                     <TrendUp size={14} className="text-emerald-400" />
@@ -984,7 +1029,6 @@ export default function TradePage() {
                       onClick={() => handleOrderBookClick(bid.price, bid.amount)}
                       className="relative grid grid-cols-3 py-1 px-1 rounded hover:bg-emerald-500/10 cursor-pointer transition-colors"
                     >
-                      {/* Depth visual bar */}
                       <div
                         className="absolute right-0 top-0 bottom-0 bg-emerald-500/15 rounded pointer-events-none transition-all"
                         style={{ width: `${bid.depthPercent}%` }}
@@ -998,16 +1042,16 @@ export default function TradePage() {
               </div>
 
               {/* Order Execution Ticket */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-md flex-1 flex flex-col justify-between">
+              <div className="bg-slate-900/80 border border-teal-500/20 rounded-3xl p-5 shadow-xl backdrop-blur-md flex-1 flex flex-col justify-between">
                 <div className="space-y-4">
                   {/* Buy / Sell Side Selector */}
-                  <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                  <div className="flex bg-slate-950/90 p-1 rounded-2xl border border-slate-800">
                     <button
                       type="button"
                       onClick={() => setOrderSide('BUY')}
                       className={`flex-1 py-2 font-bold rounded-xl text-xs transition-all ${
                         orderSide === 'BUY'
-                          ? 'bg-emerald-500 text-slate-950 shadow-md'
+                          ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-md'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -1018,7 +1062,7 @@ export default function TradePage() {
                       onClick={() => setOrderSide('SELL')}
                       className={`flex-1 py-2 font-bold rounded-xl text-xs transition-all ${
                         orderSide === 'SELL'
-                          ? 'bg-rose-500 text-white shadow-md'
+                          ? 'bg-rose-500 text-white font-extrabold shadow-md'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -1056,7 +1100,7 @@ export default function TradePage() {
                           step="0.0001"
                           value={limitPrice}
                           onChange={(e) => setLimitPrice(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                          className="w-full bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
                         />
                       </div>
                     )}
@@ -1070,7 +1114,7 @@ export default function TradePage() {
                         type="number"
                         value={orderAmount}
                         onChange={(e) => setOrderAmount(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                        className="w-full bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
                       />
                     </div>
 
@@ -1087,7 +1131,7 @@ export default function TradePage() {
                           className={`flex-1 py-1 rounded-lg text-[10px] font-mono font-bold border transition-all ${
                             sliderPercent === pct
                               ? 'bg-slate-800 text-cyan-300 border-cyan-500/40'
-                              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                              : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-white'
                           }`}
                         >
                           {pct}%
@@ -1096,7 +1140,7 @@ export default function TradePage() {
                     </div>
 
                     {/* Order Summary Box */}
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 text-[11px] font-mono">
+                    <div className="bg-slate-950/80 p-3 rounded-xl border border-teal-500/20 space-y-1 text-[11px] font-mono">
                       <div className="flex justify-between text-slate-400">
                         <span>Order Total:</span>
                         <span className="text-white font-bold">
@@ -1121,8 +1165,8 @@ export default function TradePage() {
                       type="submit"
                       className={`w-full py-3.5 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg ${
                         orderSide === 'BUY'
-                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                          : 'bg-rose-500 hover:bg-rose-400 text-white'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold'
+                          : 'bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white font-extrabold'
                       }`}
                     >
                       Place {orderSide} {orderType} Order
@@ -1133,40 +1177,83 @@ export default function TradePage() {
             </div>
           </div>
         ) : (
-          /* AMM Quick Swap Mode */
-          <div className="max-w-xl mx-auto w-full py-8">
-            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <ArrowsLeftRight size={22} className="text-cyan-400" />
-                    BelizeChain AMM Quick Swap
-                  </h2>
-                  <p className="text-xs text-slate-400">Instant constant-product swaps with zero slippage routing</p>
+          /* Caribbean Cyber-Ocean AMM Quick Swap Mode */
+          <div className="max-w-2xl mx-auto w-full py-6 space-y-5">
+            {/* BelizeX Sovereign Router Attestation Card */}
+            <div className="bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-slate-900/60 border border-teal-500/30 rounded-2xl p-4 backdrop-blur-xl shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-300">
+                  <ShieldCheck size={24} weight="fill" />
                 </div>
-                <span className="px-3 py-1 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold font-mono">
-                  Pool Curve V1
-                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-xs">BelizeX AMM Sovereign Router</span>
+                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full text-[10px] font-mono font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      Live Contract
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-mono text-cyan-300/80 mt-0.5 break-all">
+                    {ROUTER_CONTRACT_ADDRESS.slice(0, 14)}...{ROUTER_CONTRACT_ADDRESS.slice(-10)}
+                  </p>
+                </div>
               </div>
 
-              <form onSubmit={handleExecuteSwap} className="space-y-4">
-                {/* From Asset */}
-                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                  <div className="flex justify-between text-slate-400 text-xs font-semibold mb-2">
+              <button
+                type="button"
+                onClick={handleCopyRouter}
+                className="self-start sm:self-auto px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 rounded-xl text-teal-300 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5"
+              >
+                {copiedRouter ? <Check size={14} weight="bold" className="text-emerald-400" /> : <Copy size={14} />}
+                {copiedRouter ? 'Copied' : 'Copy Router'}
+              </button>
+            </div>
+
+            {/* Main AMM Swap Card */}
+            <div className="bg-slate-900/70 border border-teal-500/30 rounded-3xl p-6 sm:p-8 space-y-6 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-2xl relative overflow-hidden">
+              {/* Subtle ambient gradient glow */}
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              {/* Title Header */}
+              <div className="flex items-center justify-between border-b border-teal-500/20 pb-4 relative z-10">
+                <div>
+                  <h2 className="text-lg font-black text-white flex items-center gap-2">
+                    <ArrowsLeftRight size={22} className="text-teal-400" />
+                    BelizeChain Constant-Product AMM
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Automated Market Maker • Zero-slippage algorithmic routing</p>
+                </div>
+                <div className="text-right">
+                  <span className="px-3 py-1 bg-teal-500/10 text-teal-300 border border-teal-500/30 rounded-full text-xs font-bold font-mono">
+                    Pool V1.05
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleExecuteSwap} className="space-y-4 relative z-10">
+                {/* From Asset Box */}
+                <div className="bg-slate-950/80 p-4 rounded-2xl border border-teal-500/20 space-y-2 hover:border-teal-500/40 transition-colors">
+                  <div className="flex justify-between text-slate-400 text-xs font-semibold">
                     <span>You Pay</span>
-                    <span>Balance: 12,450.00 {fromAsset}</span>
+                    <span className="font-mono text-cyan-300">
+                      Balance: {getAssetBalance(fromAsset)} {fromAsset}
+                    </span>
                   </div>
-                  <div className="flex gap-2">
+
+                  <div className="flex items-center gap-3">
                     <input
                       type="number"
+                      step="any"
+                      placeholder="0.00"
                       value={swapAmount}
                       onChange={(e) => setSwapAmount(e.target.value)}
-                      className="flex-1 bg-transparent text-xl font-mono font-bold text-white focus:outline-none"
+                      className="flex-1 bg-transparent text-2xl font-mono font-bold text-white focus:outline-none placeholder-slate-600"
                     />
                     <select
                       value={fromAsset}
                       onChange={(e) => setFromAsset(e.target.value as any)}
-                      className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-cyan-300 focus:outline-none"
+                      className="bg-slate-900 border border-teal-500/30 rounded-xl px-3 py-2.5 text-xs font-bold text-teal-300 focus:outline-none shadow-sm cursor-pointer"
                     >
                       <option value="DALLA">DALLA (Ɗ)</option>
                       <option value="bBZD">bBZD (BZ$)</option>
@@ -1174,10 +1261,31 @@ export default function TradePage() {
                       <option value="wETH">wETH</option>
                     </select>
                   </div>
+
+                  {/* Percentage shortcuts */}
+                  <div className="flex gap-1.5 pt-1">
+                    {[25, 50, 75, 100].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => {
+                          const rawBal = parseFloat(getAssetBalance(fromAsset).replace(/,/g, '') || '0');
+                          if (rawBal > 0) {
+                            const buffer = fromAsset === 'DALLA' && pct === 100 ? 0.05 : 0;
+                            const calc = Math.max(0, (rawBal * (pct / 100)) - buffer);
+                            setSwapAmount(calc.toFixed(2));
+                          }
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-teal-500/20 text-slate-400 hover:text-teal-300 text-[10px] font-mono font-bold border border-slate-800 transition-colors"
+                      >
+                        {pct === 100 ? 'MAX' : `${pct}%`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Flip Button */}
-                <div className="flex justify-center -my-2">
+                {/* Flip Asset Direction Button */}
+                <div className="flex justify-center -my-2 relative z-20">
                   <button
                     type="button"
                     onClick={() => {
@@ -1185,19 +1293,22 @@ export default function TradePage() {
                       setFromAsset(toAsset);
                       setToAsset(temp);
                     }}
-                    className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-700 text-cyan-400 shadow-md transition-all"
+                    className="p-3 bg-slate-900 hover:bg-teal-900/50 rounded-full border border-teal-500/40 text-teal-400 shadow-xl hover:rotate-180 transition-all duration-300"
                   >
                     <Swap size={18} weight="bold" />
                   </button>
                 </div>
 
-                {/* To Asset */}
-                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                  <div className="flex justify-between text-slate-400 text-xs font-semibold mb-2">
+                {/* To Asset Box */}
+                <div className="bg-slate-950/80 p-4 rounded-2xl border border-teal-500/20 space-y-2 hover:border-teal-500/40 transition-colors">
+                  <div className="flex justify-between text-slate-400 text-xs font-semibold">
                     <span>You Receive (Estimated)</span>
-                    <span>Balance: 5,120.00 {toAsset}</span>
+                    <span className="font-mono text-emerald-400">
+                      Balance: {getAssetBalance(toAsset)} {toAsset}
+                    </span>
                   </div>
-                  <div className="flex gap-2">
+
+                  <div className="flex items-center gap-3">
                     <input
                       type="text"
                       disabled
@@ -1208,12 +1319,12 @@ export default function TradePage() {
                           ? (parseFloat(swapAmount || '0') * 2.0).toFixed(2)
                           : parseFloat(swapAmount || '0').toFixed(2)
                       }
-                      className="flex-1 bg-transparent text-xl font-mono font-bold text-emerald-400 focus:outline-none"
+                      className="flex-1 bg-transparent text-2xl font-mono font-bold text-emerald-400 focus:outline-none"
                     />
                     <select
                       value={toAsset}
                       onChange={(e) => setToAsset(e.target.value as any)}
-                      className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-emerald-300 focus:outline-none"
+                      className="bg-slate-900 border border-teal-500/30 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-300 focus:outline-none shadow-sm cursor-pointer"
                     >
                       <option value="bBZD">bBZD (BZ$)</option>
                       <option value="DALLA">DALLA (Ɗ)</option>
@@ -1225,17 +1336,17 @@ export default function TradePage() {
 
                 {/* Slippage Settings */}
                 <div className="flex items-center justify-between px-2 text-xs">
-                  <span className="text-slate-400">Slippage Tolerance</span>
+                  <span className="text-slate-400 font-medium">Slippage Tolerance</span>
                   <div className="flex gap-1.5 font-mono">
                     {(['0.1', '0.5', '1.0'] as const).map((s) => (
                       <button
                         key={s}
                         type="button"
                         onClick={() => setSlippage(s)}
-                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition-all ${
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
                           slippage === s
-                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                            : 'bg-slate-950 text-slate-400 border-slate-800'
+                            ? 'bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-sm'
+                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                         }`}
                       >
                         {s}%
@@ -1244,29 +1355,64 @@ export default function TradePage() {
                   </div>
                 </div>
 
-                {/* Routing & Details */}
-                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs font-mono">
+                {/* Algorithmic Routing & Swap Details Breakdown */}
+                <div className="bg-slate-950/90 p-4 rounded-2xl border border-teal-500/20 space-y-2.5 text-xs font-mono">
+                  {/* Route Hop Diagram */}
+                  <div className="border-b border-slate-800 pb-2 mb-2">
+                    <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Execution Route</span>
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-300 flex-wrap">
+                      <span className="px-2 py-0.5 bg-teal-500/15 text-teal-300 rounded-md font-bold">{fromAsset}</span>
+                      <span>➔</span>
+                      <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">BelizeX Router</span>
+                      <span>➔</span>
+                      <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">CP-AMM Pool</span>
+                      <span>➔</span>
+                      <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 rounded-md font-bold">{toAsset}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-slate-400">
+                    <span>Effective Exchange Rate:</span>
+                    <span className="text-white font-bold">
+                      {fromAsset === 'DALLA' && toAsset === 'bBZD'
+                        ? '1 Ɗ = 0.5000 BZ$'
+                        : fromAsset === 'bBZD' && toAsset === 'DALLA'
+                        ? '1 BZ$ = 2.0000 Ɗ'
+                        : '1.0000'}
+                    </span>
+                  </div>
+
                   <div className="flex justify-between text-slate-400">
                     <span>Price Impact:</span>
-                    <span className="text-emerald-400 font-semibold">&lt; 0.02%</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {parseFloat(swapAmount || '0') > 5000 ? '0.24%' : '< 0.01% (Deep Sovereign Liquidity)'}
+                    </span>
                   </div>
+
                   <div className="flex justify-between text-slate-400">
-                    <span>Liquidity Provider Fee:</span>
-                    <span className="text-slate-300">0.3%</span>
+                    <span>LP Protocol Fee:</span>
+                    <span className="text-slate-300">0.30% (Distributed to Sovereign LPs)</span>
                   </div>
+
                   <div className="flex justify-between text-slate-400">
-                    <span>Guaranteed Minimum:</span>
-                    <span className="text-white">
-                      {(parseFloat(swapAmount || '0') * 0.498).toFixed(2)} {toAsset}
+                    <span>Guaranteed Minimum Received:</span>
+                    <span className="text-white font-bold">
+                      {(
+                        parseFloat(swapAmount || '0') *
+                        (fromAsset === 'DALLA' && toAsset === 'bBZD' ? 0.498 : fromAsset === 'bBZD' && toAsset === 'DALLA' ? 1.992 : 0.997)
+                      ).toFixed(2)}{' '}
+                      {toAsset}
                     </span>
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-xl"
+                  disabled={isSwapping}
+                  className="w-full py-4 bg-gradient-to-r from-teal-500 via-cyan-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(20,184,166,0.35)] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  Confirm Token Swap
+                  <ArrowsLeftRight size={18} weight="bold" />
+                  {isSwapping ? 'Executing BelizeX Swap Extrinsic...' : `Confirm Swap (${fromAsset} ➔ ${toAsset})`}
                 </button>
               </form>
             </div>

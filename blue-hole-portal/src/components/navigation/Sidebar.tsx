@@ -17,6 +17,9 @@ import {
   CaretLeft,
   CaretRight,
   BookOpen,
+  Scales,
+  Megaphone,
+  ShieldWarning,
 } from 'phosphor-react';
 import { cn } from '@/lib/utils';
 import { useGovernance } from '@/hooks/useGovernance';
@@ -95,6 +98,29 @@ export function Sidebar({ className }: SidebarProps) {
           icon: ShieldCheck,
           badgeKey: 'compliance',
           description: 'KYC/AML monitoring',
+        },
+      ],
+    },
+    {
+      title: 'Safeguards & Judiciary',
+      items: [
+        {
+          name: 'Justice Court',
+          href: '/justice',
+          icon: Scales,
+          description: 'Arbitration docket & dispute resolution',
+        },
+        {
+          name: 'Whistleblower',
+          href: '/whistleblower',
+          icon: Megaphone,
+          description: 'Integrity commission disclosures',
+        },
+        {
+          name: 'Content Safety',
+          href: '/moderation',
+          icon: ShieldWarning,
+          description: 'Moderation registry & Nawal AI filter',
         },
       ],
     },

@@ -39,6 +39,11 @@ import {
   Calculator,
   ArrowsClockwise,
   Wallet,
+  Scales,
+  Megaphone,
+  ShieldWarning,
+  Users,
+  ShieldCheck,
 } from 'phosphor-react';
 
 export default function MorePage() {
@@ -78,6 +83,14 @@ export default function MorePage() {
           href: '/rwa',
           color: 'from-amber-500 to-orange-600',
           badge: 'FSC Compliant',
+        },
+        {
+          icon: <Coins size={20} weight="fill" />,
+          label: 'Staking & Consensus Hub',
+          description: 'Live 4-node Substrate validators & PoUW claims',
+          href: '/staking',
+          color: 'from-teal-500 to-emerald-600',
+          badge: '15.5% APR',
         },
         {
           icon: <LockKey size={20} weight="fill" />,
@@ -148,6 +161,60 @@ export default function MorePage() {
           href: '/bns',
           color: 'from-blue-500 to-indigo-600',
           badge: 'IPFS Ready',
+        },
+      ],
+    },
+    {
+      title: 'Ethical Safeguards & Civic Governance',
+      description: 'Restorative justice, democracy, whistleblower protection & community safety',
+      items: [
+        {
+          icon: <Scales size={20} weight="fill" />,
+          label: 'Justice Court',
+          description: 'Restorative dispute resolution & cooling-off',
+          href: '/justice',
+          color: 'from-amber-500 to-orange-600',
+          badge: 'Pallet 35',
+        },
+        {
+          icon: <Megaphone size={20} weight="fill" />,
+          label: 'Whistleblower Shield',
+          description: 'Zero-knowledge anonymous disclosures & bounties',
+          href: '/whistleblower',
+          color: 'from-cyan-500 to-blue-600',
+          badge: 'Pallet 36',
+        },
+        {
+          icon: <ShieldWarning size={20} weight="fill" />,
+          label: 'Community Content Safety',
+          description: 'Decentralized flags & Nawal AI risk telemetry',
+          href: '/moderation',
+          color: 'from-rose-500 to-purple-600',
+          badge: 'Pallet 37',
+        },
+        {
+          icon: <Users size={20} weight="fill" />,
+          label: 'Sovereign Governance',
+          description: 'Democracy referenda, council motions & voting',
+          href: '/governance',
+          color: 'from-purple-500 to-indigo-600',
+          badge: 'Democracy',
+        },
+        {
+          icon: <Coins size={20} weight="fill" />,
+          label: 'National Treasury',
+          description: 'M-of-N multi-sig disbursements & civic grants',
+          href: '/treasury',
+          color: 'from-emerald-500 to-teal-600',
+          badge: 'Multi-Sig',
+        },
+        {
+          icon: <ShieldCheck size={20} weight="fill" />,
+          label: 'Central Bank Compliance',
+          description: 'Statutory Proof-of-Reserve (100.2%) & FIU limits',
+          href: '/compliance',
+          color: 'from-blue-500 to-cyan-600',
+          badge: '100.2% Reserve',
         },
       ],
     },
@@ -250,7 +317,7 @@ export default function MorePage() {
             <p className="text-xs text-slate-400">All Sovereign BelizeChain Apps, Services & Financial Protocols</p>
           </div>
           <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold">
-            26 Live Modules
+            30 Live Modules
           </span>
         </div>
       </div>

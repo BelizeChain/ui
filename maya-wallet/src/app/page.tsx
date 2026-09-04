@@ -31,6 +31,11 @@ import {
   PaperPlaneTilt,
   QrCode,
   ArrowsLeftRight,
+  ShieldCheck,
+  Scales,
+  IdentificationCard,
+  Bank,
+  CheckCircle,
 } from 'phosphor-react';
 
 /** Format a unix-seconds timestamp as a short relative-time label. */
@@ -320,27 +325,39 @@ export default function HomeNew() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full"
         >
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-8 border border-gray-700/50 backdrop-blur-xl">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <Coins size={40} weight="fill" className="text-white" />
+          <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-teal-950/40 to-slate-950/90 rounded-3xl p-8 border border-teal-500/30 backdrop-blur-2xl shadow-2xl shadow-teal-950/50">
+            {/* Ambient Halos */}
+            <div className="absolute -top-12 -right-12 w-40 h-40 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 p-0.5 shadow-xl shadow-teal-500/30">
+                <div className="w-full h-full bg-slate-950 rounded-[22px] flex items-center justify-center">
+                  <Coins size={38} weight="fill" className="text-teal-300" />
+                </div>
+              </div>
+              <h2 className="text-3xl font-black text-white mb-2 text-center tracking-tight">
+                Maya Sovereign Wallet
+              </h2>
+              <p className="text-slate-400 mb-6 text-center text-sm">
+                Sovereign citizen access to BelizeChain assets and civic democracy
+              </p>
+
+              <MayaShellReadinessPanel className="mb-6" />
+
+              <button
+                onClick={connect}
+                className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black py-4 px-6 rounded-2xl transition-all shadow-lg shadow-teal-500/30 active:scale-[0.98]"
+              >
+                Connect Sovereign Identity
+              </button>
             </div>
-            <h2 className="text-3xl font-bold text-white mb-3 text-center">Welcome to Maya</h2>
-            <p className="text-gray-400 mb-8 text-center">
-              Connect your wallet to access your BelizeChain assets
-            </p>
-            <MayaShellReadinessPanel className="mb-6" />
-            <button
-              onClick={connect}
-              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-emerald-500/30"
-            >
-              Connect Wallet
-            </button>
           </div>
         </motion.div>
       </div>
@@ -348,18 +365,34 @@ export default function HomeNew() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24 overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 pb-28 overflow-x-hidden text-slate-100">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="px-6 pt-8 pb-6"
+        className="px-6 pt-7 pb-3 flex items-center justify-between"
       >
-        <p className="text-gray-400 text-sm mb-1">Hello Belizean,</p>
-        <h1 className="text-white text-3xl font-bold">Welcome!!</h1>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-widest text-teal-400">
+              Sovereign Citizen Portal
+            </span>
+          </div>
+          <h1 className="text-white text-2xl font-black tracking-tight mt-0.5">
+            Welcome, Belizean
+          </h1>
+        </div>
+
+        {selectedAccount?.address && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-teal-500/20 text-xs font-mono text-teal-200 shadow-inner">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>{selectedAccount.name || `${selectedAccount.address.slice(0, 6)}...${selectedAccount.address.slice(-4)}`}</span>
+          </div>
+        )}
       </motion.div>
 
-      <div className="mx-6 mb-6">
+      <div className="mx-6 mb-4">
         <MayaShellReadinessPanel />
       </div>
 
@@ -370,25 +403,28 @@ export default function HomeNew() {
         transition={{ delay: 0.1 }}
         className="mx-6 mb-6"
       >
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-900/90 via-teal-900/80 to-emerald-800/90 backdrop-blur-xl p-6 border border-emerald-700/30">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950/90 via-teal-950/80 to-slate-900/90 backdrop-blur-2xl p-6 border border-teal-500/30 shadow-2xl shadow-teal-950/40">
           {/* Decorative blur circles */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-teal-400/15 rounded-full blur-3xl" />
+          <div className="absolute top-0 right-0 w-36 h-36 bg-teal-400/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-36 h-36 bg-emerald-400/15 rounded-full blur-3xl pointer-events-none" />
           
           <div className="relative">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-white/80 text-sm font-medium">Total Balance</p>
+              <div className="flex items-center gap-2">
+                <Coins size={18} weight="fill" className="text-teal-400" />
+                <p className="text-teal-200/90 text-xs font-bold uppercase tracking-wider">Total Sovereign Holdings</p>
+              </div>
 
               <div className="flex items-center gap-2">
                 {/* Currency Switcher Pill */}
-                <div className="flex items-center bg-black/30 backdrop-blur-md rounded-full p-0.5 border border-white/10 text-xs font-semibold">
+                <div className="flex items-center bg-black/40 backdrop-blur-md rounded-full p-0.5 border border-white/10 text-xs font-semibold">
                   {(['USD', 'BZD', 'DALLA'] as const).map((c) => (
                     <button
                       key={c}
                       onClick={() => handleCurrencyChange(c)}
                       className={`px-2.5 py-1 rounded-full transition-all ${
                         currencyPref === c
-                          ? 'bg-emerald-500 text-white shadow-sm font-bold'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-sm font-black'
                           : 'text-white/70 hover:text-white'
                       }`}
                     >
@@ -403,9 +439,9 @@ export default function HomeNew() {
                   title={balanceVisible ? 'Hide Balance' : 'Show Balance'}
                 >
                   {balanceVisible ? (
-                    <Eye size={20} className="text-white/80" weight="fill" />
+                    <Eye size={20} className="text-teal-300" weight="fill" />
                   ) : (
-                    <EyeSlash size={20} className="text-white/80" weight="fill" />
+                    <EyeSlash size={20} className="text-teal-300" weight="fill" />
                   )}
                 </button>
               </div>
@@ -417,53 +453,142 @@ export default function HomeNew() {
                 animate={{ scale: 1 }}
                 className="mb-4"
               >
-                <h2 className="text-white text-5xl font-bold tracking-tight">
+                <h2 className="text-white text-5xl font-black tracking-tight font-sans">
                   {formattedPrimaryTotal}
                 </h2>
-                <p className="text-emerald-200/80 text-xs mt-1.5 font-medium">
+                <p className="text-teal-200/90 text-xs mt-1.5 font-medium">
                   {secondaryConversionText}
                 </p>
               </motion.div>
             ) : (
               <div className="mb-4">
-                <h2 className="text-white text-5xl font-bold">••••••</h2>
+                <h2 className="text-white text-5xl font-black tracking-widest">••••••</h2>
               </div>
             )}
 
             {/* Quick Action Buttons */}
-            <div className="grid grid-cols-4 gap-3 pt-3 mt-2 border-t border-emerald-700/40">
+            <div className="grid grid-cols-4 gap-3 pt-4 mt-2 border-t border-teal-500/25">
               <Link
                 href="/send"
-                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+                className="group flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-teal-400/30 active:scale-95 transition-all text-white text-xs font-bold"
               >
-                <PaperPlaneTilt size={22} weight="fill" className="mb-1 text-emerald-300" />
+                <PaperPlaneTilt size={22} weight="fill" className="mb-1 text-teal-300 group-hover:scale-110 transition-transform" />
                 <span>Send</span>
               </Link>
               <Link
                 href="/receive"
-                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+                className="group flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-teal-400/30 active:scale-95 transition-all text-white text-xs font-bold"
               >
-                <QrCode size={22} weight="fill" className="mb-1 text-emerald-300" />
+                <QrCode size={22} weight="fill" className="mb-1 text-teal-300 group-hover:scale-110 transition-transform" />
                 <span>Receive</span>
               </Link>
               <Link
-                href="/trade"
-                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+                href="/trade?mode=amm"
+                className="group flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-teal-400/30 active:scale-95 transition-all text-white text-xs font-bold"
               >
-                <ArrowsLeftRight size={22} weight="bold" className="mb-1 text-teal-300" />
+                <ArrowsLeftRight size={22} weight="bold" className="mb-1 text-teal-300 group-hover:scale-110 transition-transform" />
                 <span>Swap</span>
               </Link>
               <Link
                 href="/staking"
-                className="flex flex-col items-center justify-center py-2.5 px-1 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white text-xs font-semibold"
+                className="group flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-teal-400/30 active:scale-95 transition-all text-white text-xs font-bold"
               >
-                <Coins size={22} weight="fill" className="mb-1 text-teal-300" />
+                <Coins size={22} weight="fill" className="mb-1 text-teal-300 group-hover:scale-110 transition-transform" />
                 <span>Staking</span>
               </Link>
             </div>
           </div>
         </div>
       </motion.div>
+
+      {/* Sovereign Citizen Civic Safeguards Hub */}
+      <div className="px-6 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={18} weight="fill" className="text-teal-400" />
+            <h3 className="text-white text-xs font-bold uppercase tracking-wider">
+              Civic Safeguards & Services
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold text-teal-400/80 uppercase tracking-wider bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
+            Sovereign
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Whistleblower Shield */}
+          <Link
+            href="/whistleblower"
+            className="group p-3.5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-950/90 border border-teal-500/20 hover:border-teal-400/50 backdrop-blur-xl transition-all hover:scale-[1.02] shadow-lg shadow-teal-950/20"
+          >
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300 group-hover:scale-110 transition-transform">
+                <ShieldCheck size={18} weight="fill" />
+              </div>
+              <span className="text-xs font-bold text-white group-hover:text-teal-200 transition-colors">
+                Whistleblower
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-snug">
+              Encrypted sovereign tip-offs & escrow rewards
+            </p>
+          </Link>
+
+          {/* Citizen Justice Court */}
+          <Link
+            href="/community"
+            className="group p-3.5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-950/90 border border-teal-500/20 hover:border-teal-400/50 backdrop-blur-xl transition-all hover:scale-[1.02] shadow-lg shadow-teal-950/20"
+          >
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-300 group-hover:scale-110 transition-transform">
+                <Scales size={18} weight="fill" />
+              </div>
+              <span className="text-xs font-bold text-white group-hover:text-teal-200 transition-colors">
+                Citizen Court
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-snug">
+              On-chain community dispute arbitration
+            </p>
+          </Link>
+
+          {/* BelizeID Sovereignty */}
+          <Link
+            href="/belizeid"
+            className="group p-3.5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-950/90 border border-teal-500/20 hover:border-teal-400/50 backdrop-blur-xl transition-all hover:scale-[1.02] shadow-lg shadow-teal-950/20"
+          >
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300 group-hover:scale-110 transition-transform">
+                <IdentificationCard size={18} weight="fill" />
+              </div>
+              <span className="text-xs font-bold text-white group-hover:text-teal-200 transition-colors">
+                BelizeID
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-snug">
+              Decentralized credentials & civic status
+            </p>
+          </Link>
+
+          {/* DAO & Treasury */}
+          <Link
+            href="/governance"
+            className="group p-3.5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-950/90 border border-teal-500/20 hover:border-teal-400/50 backdrop-blur-xl transition-all hover:scale-[1.02] shadow-lg shadow-teal-950/20"
+          >
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300 group-hover:scale-110 transition-transform">
+                <Bank size={18} weight="fill" />
+              </div>
+              <span className="text-xs font-bold text-white group-hover:text-teal-200 transition-colors">
+                Governance
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-snug">
+              Democracy referenda & Treasury proposals
+            </p>
+          </Link>
+        </div>
+      </div>
 
       {/* Profit Section */}
 

@@ -158,3 +158,72 @@ export interface KYCDocument {
   uploadedAt: number;
   ipfsHash?: string;
 }
+
+// ============================================================================
+// Ethical Safeguards & Civic Justice Types (Pallets 35, 36, 37)
+// ============================================================================
+
+// Pallet 35: BelizeJustice
+export type DisputeSeverity = 'Minor' | 'Moderate' | 'Severe';
+export type DisputeStatus = 'Pending' | 'UnderReview' | 'Ruled' | 'Appealed' | 'Closed';
+export type RehabStatus = 'Clean' | 'InCoolingOff' | 'InRehabilitation' | 'Reinstated';
+export type DisputeResolution =
+  | { type: 'Dismissed' }
+  | { type: 'Upheld' }
+  | { type: 'Mediated'; slashBps: number };
+
+export interface DisputeRecord {
+  id: number;
+  disputant: string;
+  target: string;
+  evidenceHash: string;
+  severity: DisputeSeverity;
+  openedAt: number;
+  status: DisputeStatus;
+  resolution?: DisputeResolution | null;
+  bond: string;
+  appealEvidence?: string | null;
+}
+
+// Pallet 36: BelizeWhistleblower
+export type ReportCategory = 'Fraud' | 'SystematicAbuse' | 'ChainExploit';
+export type ReportStatus = 'Pending' | 'UnderReview' | 'Verified' | 'Dismissed' | 'Claimed';
+
+export interface WhistleblowerReport {
+  id: number;
+  commitment: string;
+  target: string;
+  evidenceHash: string;
+  category: ReportCategory;
+  submittedAt: number;
+  status: ReportStatus;
+  bond: string;
+  bondDepositor: string;
+  reasoningHash?: string | null;
+  escrowedReward?: string | null;
+}
+
+export interface WhistleblowerTicket {
+  reportId?: number;
+  commitment: string;
+  secret: string; // 32-byte hex
+  target: string;
+  category: ReportCategory;
+  evidenceHash: string;
+  timestamp: number;
+  accountAddress: string;
+}
+
+// Pallet 37: BelizeModeration
+export type FlagReason = 'HateSpeech' | 'Misinformation' | 'Spam' | 'IllegalContent' | 'AddictivePattern';
+export type ModerationRuling = 'Cleared' | 'Removed' | 'Escalated';
+
+export interface ModerationItem {
+  contentHash: string;
+  flagCount: number;
+  isQueued: boolean;
+  nawalScore?: number | null;
+  ruling?: ModerationRuling | null;
+  reasons: FlagReason[];
+}
+
