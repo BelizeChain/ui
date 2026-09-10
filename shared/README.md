@@ -49,7 +49,7 @@ This package is part of the BelizeChain UI monorepo and is automatically linked 
 
 ## 📚 Full Documentation
 
-See [COMPONENT_LIBRARY.md](./COMPONENT_LIBRARY.md) for complete API reference and usage examples.
+See `COMPONENT_LIBRARY.md` for complete API reference and usage examples. *(BROKEN — flagged 2026-09-10 docs audit: that file does not exist in `shared/`. API reference lives in component source/jSDoc for now.)*
 
 ## 🚀 Quick Start
 

@@ -81,7 +81,7 @@ Reusable component library with 15+ components and custom hooks.
 ### Maya Wallet (`/wallet` on Port 3001)
 * 🆔 **BelizeID Sovereign Passport**: W3C DIDs (`did:belize:...`), ZK Selective Disclosure, biometric hardware binding, and LandLedger title deed anchors.
 * 🗺️ **LandLedger National Cadastre**: Vector GIS district maps, parcel deed inspection, 5% stamp duty calculator (1% digital discount), and RWA tokenization wizard.
-* ⚡ **Staking & Consensus Hub**: Live directory for the 4 active Substrate validators (`Ceiba-Validator-01`, `Edge-Validator-02`, `Reef-Validator-03`, `Maya-Validator-04`), bonding/nomination wizard, auto-compounding, and PoUW compute claims.
+* ⚡ **Staking & Consensus Hub**: Live directory for the 4 active Substrate validators (`val-ceiba`, `val-maya`, `val-reef`, `val-cayo` — real Docker container names as of 2026-09-10 docs audit; the `*-Validator-01/02/03/04` display names previously listed here did not match runtime). Bonding/nomination wizard, auto-compounding, and PoUW compute claims.
 * 🌐 **BNS Sovereign Domain Registrar**: Multi-TLD registrar (`.bz`, `.caye`, `.belize`), DNS/DID record manager, 1-click BelizeID/LandLedger binding, Pakit IPFS hosting manager, and P2P marketplace with atomic escrow.
 * ⚖️ **Citizen Restorative Justice (Pallet 35)**: Cooling-off block monitoring, restorative dispute filing, and arbitral appeal requests.
 * 📢 **Whistleblower Shield (Pallet 36)**: Anonymous ZK commitment generation (`blake2_256`), encrypted receipt `.json` ticket downloads, and bounty claims.
@@ -116,7 +116,7 @@ Reusable component library with 15+ components and custom hooks.
 > [!NOTE]
 > **Substrate Consensus & Smart Contracts Status**
 > - **Substrate Validators**: 4 local validator nodes (`val-ceiba`, `val-reef`, `val-cayo`, `val-maya`) are healthy and authoring via Docker at `ws://127.0.0.1:9944`.
-> - **Smart Contracts**: All 150 unit tests across ink! smart contracts (`dalla_token`, `simple_dao`, `dex`) passed. Live E2E scripts in `gem/scripts/test-e2e-live.js` have unsub-safe transaction handlers.
+> - **Smart Contracts**: 150 unit tests across ink! smart contracts (`dalla_token`, `simple_dao`, `dex`) reported passing in an earlier session — number UNVERIFIED as of 2026-09-10 docs audit (no test-run artifact in workspace); re-run `gem` contract tests to confirm. Live E2E scripts in `gem/scripts/test-e2e-live.js` have unsub-safe transaction handlers.
 > - **Nawal AI Packaging**: `nawal-ai/nawal/` contains symlinks for local module imports; evaluate replacing with `pip install -e .` in the next session.
 
 ---
