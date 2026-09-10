@@ -1,7 +1,7 @@
 # BelizeChain UI Wiring Status Report
 **Date**: January 25, 2026  
 **Scope**: Maya Wallet + Blue Hole Portal  
-**Status**: 🟡 **85% COMPLETE - Final Wiring Required**
+**Status**: 🟡 Superseded — see `UI_WIRING_STATUS_CURRENT.md` (2026-09-10). The "85% COMPLETE" figure below was an undated estimate that never matched code; verified count on 2026-09-10 is **9/14 high-priority pages wired**, with 5 mock paths still present.
 
 ---
 

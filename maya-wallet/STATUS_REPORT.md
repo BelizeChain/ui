@@ -1,7 +1,9 @@
 # Maya Wallet - BelizeChain Integration Status Report
 
 **Date**: January 2026  
-**Status**: ✅ **COMPLETE BACKEND INTEGRATION (100% Pallet Coverage)**
+**Status**: ✅ **COMPLETE BACKEND INTEGRATION (100% Pallet Service Coverage)**
+
+> ℹ️ Updated divider, 2026-09-10: "100%" here means the **service layer only** (15/15 pallet TypeScript APIs exist). Page-level chain wiring is 9/14 high-priority pages; see `../UI_WIRING_STATUS_CURRENT.md` for the full truth table including remaining mocks.
 
 ---
 

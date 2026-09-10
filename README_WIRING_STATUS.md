@@ -8,6 +8,8 @@
 
 ## 📋 Executive Summary
 
+> ⚠️ STALE as of 2026-09-10 — this "15% wiring" snapshot predates the actual wiring work. For current status see `UI_WIRING_STATUS_CURRENT.md` (authoritative): 9/14 high-priority pages wired; 5 known mock paths remain.
+
 Both BelizeChain UI applications (Maya Wallet + Blue Hole Portal) have **complete backend infrastructure** with full blockchain service integration. The remaining work is **wiring frontend pages** to replace mock data with live blockchain queries.
 
 **Infrastructure Status**: ✅ 100% Complete  

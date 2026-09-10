@@ -13,7 +13,7 @@
 | **Environment Files** | ✅ Created | Copy to `.env.local` |
 | **UI Components** | ✅ Created | Use in pages |
 | **Test Script** | ✅ Working | Run before starting |
-| **Frontend Pages** | 🟡 15% | **Wire to blockchain** |
+| **Frontend Pages** | 🟡 9/14 high-priority wired | See `UI_WIRING_STATUS_CURRENT.md` (updated 2026-09-10, supersedes the old "15%" figure below) |
 
 ---
 

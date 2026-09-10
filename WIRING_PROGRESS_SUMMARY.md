@@ -1,8 +1,10 @@
-# UI Wiring Status — Final Audit (Complete)
+# UI Wiring Status — Final Audit
+
+**Status:** 🟡 NOT COMPLETE — see `UI_WIRING_STATUS_CURRENT.md` (authoritative, 2026-09-10).
+
+> ⚠️ CORRECTED 2026-09-10: This document previously claimed "100% Wired / no critical mock data remains" — that was **false**. Verified facts: 9/14 high-priority pages wired; mock paths remain in bridge, offline, bluetooth-mesh, oracle fallback, and portal Dashboard tiles. The historical text below is retained for the record of what WAS wired in this pass.
 
 **Last verified:** July 2026 (Live source code scan)
-**Scope:** `maya-wallet` + `blue-hole-portal` + `shared`
-**Status:** 100% Wired ✅
 
 ---
 

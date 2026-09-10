@@ -11,9 +11,9 @@
 | Category | Score | Status |
 |----------|-------|--------|
 | **Design Pattern Compliance** | 100% | ✅ COMPLETE |
-| **Blockchain Integration** | 100% | ✅ VERIFIED |
+| **Blockchain Integration** | 100% (service layer) | ✅ VERIFIED — page-level wiring is 9/14; see `../UI_WIRING_STATUS_CURRENT.md` (2026-09-10) |
 | **Component Usage** | 100% | ✅ STANDARDIZED |
-| **Feature Completeness** | 100% | ✅ ALL 15 PALLETS |
+| **Feature Completeness** | service layer: ALL 15 PALLETS | ⚠️ Page-level 9/14 — "100%" originally overstated |
 | **Build Health** | 85% | ⚠️ SSR ISSUES (NOT FROM THIS WORK) |
 
 **Overall Grade**: ✅ **A+ (Design Standardization Complete)**

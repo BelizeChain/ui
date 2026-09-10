@@ -1,6 +1,9 @@
 # 🎯 BelizeChain Feature Implementation - Complete
 
-## ✅ Implementation Status: 100% Complete
+## ⚠️ Corrected 2026-09-10
+"100% Complete" below was about page routes being **created/routed**, not fully chain-wired end-to-end. Verified page wiring remains 9/14 high-priority pages (mocks in bridge, offline, bluetooth-mesh, oracle fallback); see `../UI_WIRING_STATUS_CURRENT.md`. The 11 pages described below DO exist and are routed.
+
+## Implementation Status (route-creation scope): 11 pages created
 
 All 11 new pages have been successfully created for Maya Wallet, implementing every missing BelizeChain feature identified in the comprehensive codebase scan.
 

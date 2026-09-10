@@ -1,7 +1,10 @@
 /**
  * Analytics & Data Processing Service
  * Production-grade data analytics for government dashboard
- * NO MOCK DATA - All functions process real blockchain data
+ * MOSTLY REAL DATA — Treasury analytics query real chain state.
+ * KNOWN PARTIAL: getDepartmentSpending() derives from executed treasury
+ * proposals (no dedicated department-tracking pallet yet); totalRevenue is
+ * a placeholder 0n until the revenue pallet exists. See UI_WIRING_STATUS_CURRENT.md.
  */
 
 import { blockchainService } from './blockchain';
