@@ -36,7 +36,7 @@ class BlockchainProofService {
 
   async initialize(api: ApiPromise) {
     this.api = api;
-    console.log('✅ Blockchain proof service initialized');
+    console.log('[PROOF] Blockchain proof service initialized');
   }
 
   // Submit message proof to chain
@@ -57,10 +57,10 @@ class BlockchainProofService {
       );
 
       const hash = await extrinsic.signAndSend(account);
-      console.log('✅ Message proof submitted:', hash.toHex());
+      console.log('[PROOF] Message proof submitted:', hash.toHex());
       return hash.toHex();
     } catch (error) {
-      console.error('❌ Failed to submit message proof:', error);
+      console.error('[PROOF] Failed to submit message proof:', error);
       throw error;
     }
   }
@@ -90,10 +90,10 @@ class BlockchainProofService {
       );
 
       const hash = await extrinsic.signAndSend(account);
-      console.log('✅ Governance message linked:', hash.toHex());
+      console.log('[PROOF] Governance message linked:', hash.toHex());
       return hash.toHex();
     } catch (error) {
-      console.error('❌ Failed to link governance message:', error);
+      console.error('[PROOF] Failed to link governance message:', error);
       throw error;
     }
   }
@@ -122,14 +122,14 @@ class BlockchainProofService {
       );
 
       const hash = await extrinsic.signAndSend(account);
-      console.log('🚨 Emergency broadcast submitted:', hash.toHex());
+      console.log('[PROOF] Emergency broadcast submitted:', hash.toHex());
       
       // Trigger mesh broadcast to offline nodes
       this.broadcastViaAllChannels(broadcast);
       
       return hash.toHex();
     } catch (error) {
-      console.error('❌ Failed to submit emergency broadcast:', error);
+      console.error('[PROOF] Failed to submit emergency broadcast:', error);
       throw error;
     }
   }
@@ -144,7 +144,7 @@ class BlockchainProofService {
       const proofData = proof as any;
       return proofData.isSome;
     } catch (error) {
-      console.error('❌ Failed to verify message proof:', error);
+      console.error('[PROOF] Failed to verify message proof:', error);
       return false;
     }
   }
@@ -157,7 +157,7 @@ class BlockchainProofService {
       const messages = await this.api.query.governance.proposalMessages(proposalId);
       return messages.toJSON() as any;
     } catch (error) {
-      console.error('❌ Failed to get governance messages:', error);
+      console.error('[PROOF] Failed to get governance messages:', error);
       return [];
     }
   }
@@ -175,7 +175,7 @@ class BlockchainProofService {
         b.expiresAt > Date.now()
       );
     } catch (error) {
-      console.error('❌ Failed to get emergency broadcasts:', error);
+      console.error('[PROOF] Failed to get emergency broadcasts:', error);
       return [];
     }
   }
@@ -218,14 +218,14 @@ class BlockchainProofService {
                (item: any) => item[0].toString() === 'accountType' && item[1].toString() === 'Government'
              ));
     } catch (error) {
-      console.error('❌ Authority verification failed:', error);
+      console.error('[PROOF] Authority verification failed:', error);
       return false;
     }
   }
 
   private async broadcastViaAllChannels(broadcast: EmergencyBroadcast) {
     // Broadcast through multiple channels
-    console.log('🚨 Broadcasting emergency alert through all channels');
+    console.log('[PROOF] Broadcasting emergency alert through all channels');
     
     // 1. XMTP broadcast to all conversations
     // 2. Bluetooth mesh broadcast

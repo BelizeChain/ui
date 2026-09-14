@@ -389,7 +389,7 @@ export async function getDaoProposal(caller: string, proposalId: number): Promis
 }
 
 /**
- * Fetch the most recent DAO proposals. Walks proposal_count → 0 because the
+ * Fetch the most recent DAO proposals. Walks proposal_count -> 0 because the
  * contract has no list method; cheapest path is N dry-runs.
  */
 export async function listDaoProposals(caller: string, limit = 10): Promise<DaoProposal[]> {

@@ -40,6 +40,21 @@ export async function initializeOracle(): Promise<void> {
  * @param fromCurrency - Source currency (DALLA, bBZD, USD, BZD)
  * @param toCurrency - Target currency
  */
+function toOracleCurrency(currency: string): 'BZD' | 'USD' | 'EUR' | 'CAD' | 'MXN' | null {
+  const norm = currency.toUpperCase();
+  if (norm === 'BBZD' || norm === 'BZD') return 'BZD';
+  if (norm === 'USD') return 'USD';
+  if (norm === 'EUR') return 'EUR';
+  if (norm === 'CAD') return 'CAD';
+  if (norm === 'MXN') return 'MXN';
+  return null;
+}
+
+/**
+ * Get current exchange rate from Oracle pallet
+ * @param fromCurrency - Source currency (DALLA, bBZD, USD, BZD)
+ * @param toCurrency - Target currency
+ */
 export async function getExchangeRate(
   fromCurrency: string,
   toCurrency: string
@@ -51,44 +66,79 @@ export async function getExchangeRate(
       throw new Error('Oracle API not initialized');
     }
 
-    // Query Oracle pallet for exchange rate
     const pair = `${fromCurrency}/${toCurrency}`;
-    
-    // Try to get from Oracle pallet
-    const oracleData = await apiInstance.query.oracle?.getExchangeRate?.(fromCurrency, toCurrency);
-    
-    if (oracleData && !oracleData.isEmpty) {
-      const rate = parseOracleRate(oracleData);
-      
-      return {
-        pair,
-        rate,
-        timestamp: Date.now(),
-        source: 'BelizeChain Oracle',
-      };
+    const baseCur = toOracleCurrency(fromCurrency);
+    const quoteCur = toOracleCurrency(toCurrency);
+
+    if (baseCur && quoteCur) {
+      const pairStruct = { base: baseCur, quote: quoteCur };
+
+      // 1. Check authoritative manual exchange rates (Central Bank / Admin override)
+      if (apiInstance.query.oracle?.manualExchangeRates) {
+        const manualData = await apiInstance.query.oracle.manualExchangeRates(pairStruct);
+        if (manualData && manualData.isSome) {
+          const [priceRaw] = manualData.unwrap();
+          const rate = Number(priceRaw.toBigInt()) / 1e6;
+          return {
+            pair,
+            rate,
+            timestamp: Date.now(),
+            source: 'BelizeChain Oracle (Manual Authority)',
+          };
+        }
+      }
+
+      // 2. Check aggregated price feeds
+      if (apiInstance.query.oracle?.priceFeeds) {
+        const feedData = await apiInstance.query.oracle.priceFeeds(pairStruct);
+        if (feedData && feedData.isSome) {
+          const feed = feedData.unwrap();
+          const rate = Number(feed.price.toBigInt()) / 1e6;
+          return {
+            pair,
+            rate,
+            timestamp: Date.now(),
+            source: 'BelizeChain Oracle (Aggregated Feed)',
+          };
+        }
+      }
+
+      // 3. Check inverse pair if quote/base
+      if (apiInstance.query.oracle?.manualExchangeRates) {
+        const invStruct = { base: quoteCur, quote: baseCur };
+        const invManual = await apiInstance.query.oracle.manualExchangeRates(invStruct);
+        if (invManual && invManual.isSome) {
+          const [priceRaw] = invManual.unwrap();
+          const rate = 1 / (Number(priceRaw.toBigInt()) / 1e6);
+          return {
+            pair,
+            rate,
+            timestamp: Date.now(),
+            source: 'BelizeChain Oracle (Inverse Authority)',
+          };
+        }
+      }
     }
 
-    // Fallback to hardcoded rates if Oracle not available
+    // Fallback to statutory rates if Oracle feed is empty or for unpegged native coin (DALLA)
     const fallbackRate = getFallbackRate(fromCurrency, toCurrency);
-    
-    walletLogger.warn('Using fallback exchange rate', { pair, rate: fallbackRate });
+    walletLogger.info('Using statutory exchange rate', { pair, rate: fallbackRate });
     
     return {
       pair,
       rate: fallbackRate,
       timestamp: Date.now(),
-      source: 'Fallback',
+      source: 'Statutory Reserve Peg (1 bBZD = $0.50 USD)',
     };
   } catch (error) {
     walletLogger.error('Failed to get exchange rate', error);
     
-    // Return fallback rate on error
     const fallbackRate = getFallbackRate(fromCurrency, toCurrency);
     return {
       pair: `${fromCurrency}/${toCurrency}`,
       rate: fallbackRate,
       timestamp: Date.now(),
-      source: 'Fallback (Error)',
+      source: 'Statutory Fallback',
     };
   }
 }
@@ -105,44 +155,68 @@ export async function subscribeToExchangeRate(
     await initializeOracle();
     
     const pair = `${fromCurrency}/${toCurrency}`;
-    
-    if (!apiInstance?.query?.oracle?.getExchangeRate) {
-      // Fallback: poll every 30 seconds
-      const interval = setInterval(async () => {
-        const rate = await getExchangeRate(fromCurrency, toCurrency);
-        callback(rate);
-      }, 30000);
-      
-      // Initial call
-      const initialRate = await getExchangeRate(fromCurrency, toCurrency);
-      callback(initialRate);
-      
-      const unsubscribe = () => clearInterval(interval);
-      rateSubscriptions.set(pair, unsubscribe);
-      return unsubscribe;
-    }
+    const baseCur = toOracleCurrency(fromCurrency);
+    const quoteCur = toOracleCurrency(toCurrency);
 
-    // Real subscription to Oracle pallet
-    const unsub = await apiInstance.query.oracle.getExchangeRate(
-      fromCurrency,
-      toCurrency,
-      (oracleData: any) => {
-        const rate = parseOracleRate(oracleData);
+    if (baseCur && quoteCur && apiInstance?.query?.oracle?.manualExchangeRates && apiInstance?.query?.oracle?.priceFeeds) {
+      const pairStruct = { base: baseCur, quote: quoteCur };
+
+      const unsub = await apiInstance.queryMulti([
+        [apiInstance.query.oracle.manualExchangeRates, pairStruct],
+        [apiInstance.query.oracle.priceFeeds, pairStruct],
+      ], ([manualData, feedData]: [any, any]) => {
+        if (manualData && manualData.isSome) {
+          const [priceRaw] = manualData.unwrap();
+          const rate = Number(priceRaw.toBigInt()) / 1e6;
+          callback({
+            pair,
+            rate,
+            timestamp: Date.now(),
+            source: 'BelizeChain Oracle (Manual Authority)',
+          });
+          return;
+        }
+
+        if (feedData && feedData.isSome) {
+          const feed = feedData.unwrap();
+          const rate = Number(feed.price.toBigInt()) / 1e6;
+          callback({
+            pair,
+            rate,
+            timestamp: Date.now(),
+            source: 'BelizeChain Oracle (Aggregated Feed)',
+          });
+          return;
+        }
+
+        const fallbackRate = getFallbackRate(fromCurrency, toCurrency);
         callback({
           pair,
-          rate,
+          rate: fallbackRate,
           timestamp: Date.now(),
-          source: 'BelizeChain Oracle',
+          source: 'Statutory Peg',
         });
-      }
-    );
+      });
 
-    rateSubscriptions.set(pair, unsub);
-    return unsub;
+      rateSubscriptions.set(pair, unsub);
+      return unsub;
+    }
+
+    // Polling fallback if unmapped currency pair
+    const interval = setInterval(async () => {
+      const rate = await getExchangeRate(fromCurrency, toCurrency);
+      callback(rate);
+    }, 30000);
+
+    const initialRate = await getExchangeRate(fromCurrency, toCurrency);
+    callback(initialRate);
+
+    const unsubscribe = () => clearInterval(interval);
+    rateSubscriptions.set(pair, unsubscribe);
+    return unsubscribe;
   } catch (error) {
     walletLogger.error('Failed to subscribe to exchange rate', error);
     
-    // Fallback subscription
     const interval = setInterval(async () => {
       const rate = await getExchangeRate(fromCurrency, toCurrency);
       callback(rate);
@@ -176,7 +250,7 @@ export async function getMerchantVerification(merchantId: string): Promise<{
   try {
     await initializeOracle();
     
-    if (!apiInstance?.query?.oracle?.getMerchantInfo) {
+    if (!apiInstance?.query?.oracle?.merchantCategories) {
       return {
         verified: false,
         category: 'unknown',
@@ -184,9 +258,9 @@ export async function getMerchantVerification(merchantId: string): Promise<{
       };
     }
 
-    const merchantInfo = await apiInstance.query.oracle.getMerchantInfo(merchantId);
+    const merchantInfo = await apiInstance.query.oracle.merchantCategories(merchantId);
     
-    if (merchantInfo.isEmpty) {
+    if (!merchantInfo || merchantInfo.isNone) {
       return {
         verified: false,
         category: 'unknown',
@@ -194,10 +268,12 @@ export async function getMerchantVerification(merchantId: string): Promise<{
       };
     }
 
+    const info = merchantInfo.unwrap();
+    const catStr = info.category?.toString() || 'General';
     return {
-      verified: merchantInfo.verified.isTrue,
-      category: merchantInfo.category.toString(),
-      tourismEligible: merchantInfo.tourismEligible?.isTrue || false,
+      verified: true,
+      category: catStr,
+      tourismEligible: catStr === 'Tourism' || catStr.toLowerCase().includes('tourism'),
     };
   } catch (error) {
     walletLogger.error('Failed to get merchant verification', error);

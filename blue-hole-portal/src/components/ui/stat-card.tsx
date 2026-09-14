@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { GlassCard } from './glass-card';
 import { cn } from '@/lib/utils';
 
@@ -19,9 +20,9 @@ export function StatCard({ label, value, change, icon, trend, className }: StatC
 
   const getTrendIcon = () => {
     if (!change) return null;
-    if (trend === 'up') return '↑';
-    if (trend === 'down') return '↓';
-    return '';
+    if (trend === 'up') return <TrendingUp className="w-3.5 h-3.5 inline ml-1" />;
+    if (trend === 'down') return <TrendingDown className="w-3.5 h-3.5 inline ml-1" />;
+    return null;
   };
 
   return (

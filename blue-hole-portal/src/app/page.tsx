@@ -16,6 +16,7 @@ import {
   Bank,
   CheckCircle,
   ArrowSquareOut,
+  ArrowRight,
   Cpu,
   LockKey,
 } from 'phosphor-react';
@@ -192,9 +193,9 @@ export default function NationalDashboard() {
           </div>
           <Button
             onClick={() => router.push('/validators')}
-            className="self-start sm:self-auto text-xs text-teal-300 hover:text-teal-200 font-semibold bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl transition-colors"
+            className="self-start sm:self-auto text-xs text-teal-300 hover:text-teal-200 font-semibold bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl transition-colors inline-flex items-center"
           >
-            Inspect Staking & Slashing →
+            Inspect Staking & Slashing <ArrowRight size={14} className="ml-1" />
           </Button>
         </div>
 

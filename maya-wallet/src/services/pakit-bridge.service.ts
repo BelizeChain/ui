@@ -40,10 +40,10 @@ class PakitBridgeService {
     const available = await this.checkPakitAvailability();
     
     if (available) {
-      console.log('✅ Pakit bridge initialized');
+      console.log('[PAKIT] Pakit bridge initialized');
       this.startAutoSync();
     } else {
-      console.warn('⚠️ Pakit service unavailable, messages will queue');
+      console.warn('[PAKIT] Pakit service unavailable, messages will queue');
     }
   }
 
@@ -62,7 +62,7 @@ class PakitBridgeService {
   // Queue mesh message for upload
   queueMessage(message: MeshMessage) {
     this.pendingMessages.push(message);
-    console.log(`📦 Queued message for Pakit upload (${this.pendingMessages.length} pending)`);
+    console.log(`[PAKIT] Queued message for Pakit upload (${this.pendingMessages.length} pending)`);
     
     // Try immediate upload if online
     if (navigator.onLine) {
@@ -102,7 +102,7 @@ class PakitBridgeService {
       }
 
       const result = await response.json();
-      console.log('✅ Message bundle uploaded to IPFS:', result.ipfsHash);
+      console.log('[PAKIT] Message bundle uploaded to IPFS:', result.ipfsHash);
       
       return {
         ipfsHash: result.ipfsHash,
@@ -111,7 +111,7 @@ class PakitBridgeService {
         timestamp: Date.now()
       };
     } catch (error) {
-      console.error('❌ Pakit upload failed:', error);
+      console.error('[PAKIT] Pakit upload failed:', error);
       throw error;
     }
   }
@@ -131,10 +131,10 @@ class PakitBridgeService {
       const data = await response.text();
       const bundle: MessageBundle = JSON.parse(data);
       
-      console.log('✅ Message bundle downloaded from IPFS:', ipfsHash);
+      console.log('[PAKIT] Message bundle downloaded from IPFS:', ipfsHash);
       return bundle;
     } catch (error) {
-      console.error('❌ Pakit download failed:', error);
+      console.error('[PAKIT] Pakit download failed:', error);
       throw error;
     }
   }
@@ -168,10 +168,10 @@ class PakitBridgeService {
         );
       }
 
-      console.log(`✅ Synced ${bundles.length} bundle(s) to Pakit`);
+      console.log(`[PAKIT] Synced ${bundles.length} bundle(s) to Pakit`);
       return true;
     } catch (error) {
-      console.error('❌ Sync failed:', error);
+      console.error('[PAKIT] Sync failed:', error);
       return false;
     }
   }
@@ -242,7 +242,7 @@ class PakitBridgeService {
             }
             reject(new Error(message));
           } else {
-            console.log('✅ Proof submitted on‑chain');
+            console.log('[PAKIT] Proof submitted on-chain');
 
             // Best-effort: acknowledge the relay on the interoperability pallet
             // so bridge tracking stays in sync with mesh activity.
@@ -272,16 +272,16 @@ class PakitBridgeService {
         ?? api.tx.messaging?.acknowledgeMeshRelay;
 
       if (!extrinsic) {
-        console.log('ℹ️  Interoperability pallet does not expose acknowledgeMeshRelay — skipping');
+        console.log('[PAKIT] Interoperability pallet does not expose acknowledgeMeshRelay - skipping');
         return;
       }
 
       const ackTx = extrinsic(ipfsHash, messageCount, Date.now());
       await ackTx.signAndSend(from, { signer });
-      console.log('✅ Interop relay acknowledgment submitted');
+      console.log('[PAKIT] Interop relay acknowledgment submitted');
     } catch (error) {
       // Non-fatal: the primary mesh proof is already on-chain
-      console.warn('⚠️  Interop acknowledgment failed (non-fatal):', error);
+      console.warn('[PAKIT] Interop acknowledgment failed (non-fatal):', error);
     }
   }
 

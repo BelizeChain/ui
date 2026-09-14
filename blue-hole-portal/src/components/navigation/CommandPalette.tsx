@@ -234,7 +234,7 @@ export function CommandPalette() {
                         <p className="text-xs text-gray-400">{item.description}</p>
                       </div>
                       <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-400">
-                        ↵
+                        Enter
                       </kbd>
                     </Command.Item>
                   );
@@ -265,7 +265,7 @@ export function CommandPalette() {
                         <p className="text-xs text-gray-400">{item.description}</p>
                       </div>
                       <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-400">
-                        ↵
+                        Enter
                       </kbd>
                     </Command.Item>
                   );
@@ -277,11 +277,11 @@ export function CommandPalette() {
           <div className="flex items-center justify-between px-4 py-2 border-t border-gray-700 bg-gray-900/50">
             <div className="flex items-center gap-4 text-xs text-gray-400">
               <div className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-xs">↑↓</kbd>
+                <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-xs">Up/Down</kbd>
                 <span>Navigate</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-xs">↵</kbd>
+                <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-xs">Enter</kbd>
                 <span>Select</span>
               </div>
               <div className="flex items-center gap-1.5">

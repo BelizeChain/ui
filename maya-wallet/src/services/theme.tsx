@@ -205,7 +205,7 @@ function Header() {
         onClick={toggleTheme}
         className="p-2 rounded-lg bg-surface hover:bg-gray-200 dark:hover:bg-gray-700"
       >
-        {theme === 'light' ? '🌙' : '☀️'}
+        {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
       </button>
     </header>
   );

@@ -226,8 +226,8 @@ export function DashboardHome() {
                     </Badge>
                   )}
                 </div>
-                <Link href="/wallet/exchange" className="text-white/90 hover:text-white text-sm font-medium">
-                  Exchange →
+                <Link href="/wallet/exchange" className="text-white/90 hover:text-white text-sm font-medium inline-flex items-center">
+                  Exchange <CaretRight size={14} className="ml-1" />
                 </Link>
               </div>
             </>
@@ -323,7 +323,7 @@ export function DashboardHome() {
                   <p className="text-xs text-caribbean-600">Active Proposals</p>
                 </div>
               </div>
-              <p className="text-sm text-caribbean-700 font-medium">Vote Now →</p>
+              <p className="text-sm text-caribbean-700 font-medium inline-flex items-center">Vote Now <CaretRight size={14} className="ml-1" /></p>
             </Card>
           </Link>
 
@@ -339,7 +339,7 @@ export function DashboardHome() {
                   <p className="text-xs text-jungle-600">Community Votes</p>
                 </div>
               </div>
-              <p className="text-sm text-jungle-700 font-medium">Participate →</p>
+              <p className="text-sm text-jungle-700 font-medium inline-flex items-center">Participate <CaretRight size={14} className="ml-1" /></p>
             </Card>
           </Link>
         </div>

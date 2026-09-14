@@ -82,7 +82,7 @@ class BluetoothMeshService {
 
   async initialize(): Promise<boolean> {
     if (!navigator.bluetooth) {
-      console.error('❌ Web Bluetooth API not available');
+      console.error('[BLE-MESH] Web Bluetooth API not available');
       return false;
     }
 
@@ -93,11 +93,11 @@ class BluetoothMeshService {
         optionalServices: [this.SERVICE_UUID]
       });
 
-      console.log('✅ Bluetooth device selected:', this.device.name);
+      console.log('[BLE-MESH] Bluetooth device selected:', this.device.name);
 
       // Connect to GATT server
       const server = await this.device.gatt!.connect();
-      console.log('✅ Connected to GATT server');
+      console.log('[BLE-MESH] Connected to GATT server');
 
       // Get mesh service
       const service = await server.getPrimaryService(this.SERVICE_UUID);
@@ -112,10 +112,10 @@ class BluetoothMeshService {
       // Start peer discovery
       this.startPeerDiscovery();
 
-      console.log('✅ Bluetooth Mesh initialized');
+      console.log('[BLE-MESH] Bluetooth Mesh initialized');
       return true;
     } catch (error) {
-      console.error('❌ Bluetooth Mesh initialization failed:', error);
+      console.error('[BLE-MESH] Bluetooth Mesh initialization failed:', error);
       return false;
     }
   }
@@ -131,7 +131,7 @@ class BluetoothMeshService {
   }
 
   private async discoverPeers() {
-    console.log('🔍 Discovering mesh peers via BLE service UUID 0000fff0-0000-1000-8000-00805f9b34fb...');
+    console.log('[BLE-MESH] Discovering mesh peers via BLE service UUID 0000fff0-0000-1000-8000-00805f9b34fb...');
     if (typeof navigator !== 'undefined' && navigator.bluetooth) {
       this.peers.set('peer_ble_node_01', {
         id: 'peer_ble_node_01',
@@ -158,13 +158,13 @@ class BluetoothMeshService {
 
       // Validate signature
       if (!this.validateMessage(message)) {
-        console.warn('⚠️ Invalid message signature');
+        console.warn('[BLE-MESH] Invalid message signature');
         return;
       }
 
       // Check if message is for us
       if (message.to === this.getLocalAddress()) {
-        console.log('📨 Received mesh message:', message);
+        console.log('[BLE-MESH] Received mesh message:', message);
         this.deliverMessage(message);
       } else if (message.ttl > 0 && this.isRelayNode()) {
         // Relay message to next hop
@@ -177,7 +177,7 @@ class BluetoothMeshService {
 
   async sendMessage(to: string, content: string): Promise<boolean> {
     if (!this.characteristic) {
-      console.error('❌ Bluetooth not initialized');
+      console.error('[BLE-MESH] Bluetooth not initialized');
       return false;
     }
 
@@ -203,7 +203,7 @@ class BluetoothMeshService {
       // Try to send immediately
       return await this.transmitMessage(message);
     } catch (error) {
-      console.error('❌ Failed to send mesh message:', error);
+      console.error('[BLE-MESH] Failed to send mesh message:', error);
       return false;
     }
   }
@@ -216,16 +216,16 @@ class BluetoothMeshService {
 
       // Check size limit
       if (data.byteLength > this.MAX_MESSAGE_SIZE) {
-        console.error('❌ Message too large for mesh transmission');
+        console.error('[BLE-MESH] Message too large for mesh transmission');
         return false;
       }
 
       // Write to characteristic
       await this.characteristic!.writeValue(data);
-      console.log('✅ Message transmitted via Bluetooth mesh');
+      console.log('[BLE-MESH] Message transmitted via Bluetooth mesh');
       return true;
     } catch (error) {
-      console.error('❌ Transmission failed:', error);
+      console.error('[BLE-MESH] Transmission failed:', error);
       return false;
     }
   }
@@ -240,7 +240,7 @@ class BluetoothMeshService {
       return; // Already relayed this message
     }
 
-    console.log(`📡 Relaying message (TTL: ${message.ttl})`);
+    console.log(`[BLE-MESH] Relaying message (TTL: ${message.ttl})`);
     await this.transmitMessage(message);
   }
 
@@ -326,7 +326,7 @@ class BluetoothMeshService {
     this.device = null;
     this.characteristic = null;
     this.peers.clear();
-    console.log('✅ Bluetooth Mesh disconnected');
+    console.log('[BLE-MESH] Bluetooth Mesh disconnected');
   }
 }
 

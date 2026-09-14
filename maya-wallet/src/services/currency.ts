@@ -157,7 +157,7 @@ export function getAllExchangeRates(): ExchangeRate[] {
   return merged;
 }
 
-// Calculate cross-rate (e.g., DALLA → USD via bBZD)
+// Calculate cross-rate (e.g., DALLA -> USD via bBZD)
 // Returns the calculated rate or falls back to Oracle
 export async function calculateCrossRate(from: string, to: string, via: string): Promise<number> {
   try {

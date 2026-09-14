@@ -67,10 +67,10 @@ class XMTPService {
         persistConversations: config.persistConversations
       });
 
-      console.log('✅ XMTP Client initialized for address:', wallet.address);
+      console.log('[XMTP] Client initialized for address:', wallet.address);
       return this.client;
     } catch (error) {
-      console.error('❌ XMTP initialization failed:', error);
+      console.error('[XMTP] Initialization failed:', error);
       throw error;
     }
   }

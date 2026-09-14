@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { RuntimeEnvironmentBadge, getRuntimeConfig } from '@belizechain/shared';
-import { ArrowLeft, Code, Terminal, Cube, Link as LinkIcon, FileCode, Flask, Package } from 'phosphor-react';
+import { ArrowLeft, ArrowRight, Code, Terminal, Cube, Link as LinkIcon, FileCode, Flask, Package } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 
 export default function DeveloperPage() {
@@ -163,8 +163,8 @@ console.log('Transaction hash:', hash.toHex());`,
               </div>
             ))}
           </div>
-          <button className="mt-4 text-sm text-blue-400 hover:text-blue-300 transition-colors">
-            View Full API Documentation →
+          <button className="mt-4 text-sm text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center">
+            View Full API Documentation <ArrowRight size={14} className="ml-1" />
           </button>
         </GlassCard>
 

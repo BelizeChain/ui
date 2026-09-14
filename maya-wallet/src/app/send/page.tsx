@@ -8,6 +8,7 @@ import { useUIStore } from '@/store/ui';
 import { getContacts, type Contact } from '@/services/contacts';
 import {
   ArrowLeft,
+  ArrowRight,
   User,
   Users,
   Check,
@@ -336,7 +337,7 @@ export default function SendPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-teal-400 text-sm font-bold group-hover:translate-x-1 transition-transform">→</span>
+                    <ArrowRight size={16} className="text-teal-400 group-hover:translate-x-1 transition-transform" />
                   </div>
                 ))}
               </div>
@@ -370,7 +371,7 @@ export default function SendPage() {
                           </p>
                         </div>
                       </div>
-                      <span className="text-slate-500 text-sm">→</span>
+                      <ArrowRight size={16} className="text-slate-500" />
                     </div>
                   ))}
                 </div>

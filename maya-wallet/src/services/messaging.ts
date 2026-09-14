@@ -38,7 +38,7 @@ const MAX_MESSAGES_PER_CONVERSATION = 500;
 let pakitClient: ReturnType<typeof getPakitClient> | null = null;
 
 export function initializeMessaging(apiUrl?: string): void {
-  // ✅ REAL PAKIT CLIENT - Initialize for encrypted message backups
+  // [PAKIT] Real Pakit Client - Initialize for encrypted message backups
   pakitClient = getPakitClient();
   walletLogger.info('Messaging initialized with Pakit backup', { apiUrl });
 }
@@ -140,7 +140,7 @@ export async function sendMessage(
   
   saveConversations(conversations);
   
-  // ✅ REAL PAKIT BACKUP - Store encrypted message on IPFS for backup/sync
+  // [PAKIT] Real Pakit Backup - Store encrypted message on IPFS for backup/sync
   if (pakitClient) {
     try {
       const messageBlob = new Blob([JSON.stringify(message)], { type: 'application/json' });
@@ -308,11 +308,11 @@ export async function sendPaymentConfirmation(
 function getMessagePreview(type: Message['type'], metadata?: Message['metadata']): string {
   switch (type) {
     case 'payment-request':
-      return `💰 Payment request: ${metadata?.amount} ${metadata?.currency}`;
+      return `[Payment Request] ${metadata?.amount} ${metadata?.currency}`;
     case 'payment-confirmation':
-      return `✅ Payment sent: ${metadata?.amount} ${metadata?.currency}`;
+      return `[Payment Sent] ${metadata?.amount} ${metadata?.currency}`;
     case 'split-bill':
-      return `🧾 Split bill: ${metadata?.amount} ${metadata?.currency}`;
+      return `[Split Bill] ${metadata?.amount} ${metadata?.currency}`;
     default:
       return 'Message';
   }
