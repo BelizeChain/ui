@@ -36,6 +36,7 @@ interface WalletState {
   disconnectWallet: () => void;
   selectAccount: (account: InjectedAccountWithMeta) => void;
   setBalances: (balances: Partial<WalletState['balances']>) => void;
+  fetchBalances: (address?: string) => Promise<void>;
   refreshAccounts: () => Promise<void>;
 }
 
@@ -99,6 +100,10 @@ export const useWalletStore = create<WalletState>()(
             error: null,
           });
           
+          if (selectedAccount?.address) {
+            void get().fetchBalances(selectedAccount.address);
+          }
+
           console.log(`[WALLET] Connected wallet: ${allAccounts.length} accounts found`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet';
@@ -119,10 +124,10 @@ export const useWalletStore = create<WalletState>()(
           extensionAvailable: false,
           error: null,
           balances: {
-            dalla: '0',
-            bBZD: '0',
-            locked: '0',
-            reserved: '0',
+            dalla: '0.00',
+            bBZD: '0.00',
+            locked: '0.00',
+            reserved: '0.00',
           },
         });
         console.log('[WALLET] Wallet disconnected');
@@ -133,15 +138,16 @@ export const useWalletStore = create<WalletState>()(
         set({ selectedAccount: account });
         console.log(`[WALLET] Selected account: ${account.meta.name || account.address}`);
         
-        // Reset balances when switching accounts
+        // Reset and trigger refresh of balances for new account
         set({
           balances: {
-            dalla: '0',
-            bBZD: '0',
-            locked: '0',
-            reserved: '0',
+            dalla: '0.00',
+            bBZD: '0.00',
+            locked: '0.00',
+            reserved: '0.00',
           },
         });
+        void get().fetchBalances(account.address);
       },
       
       // Update balances
@@ -152,6 +158,57 @@ export const useWalletStore = create<WalletState>()(
             ...newBalances,
           },
         }));
+      },
+
+      // Fetch live balances from BelizeChain node
+      fetchBalances: async (address?: string) => {
+        const targetAddress = address || get().selectedAccount?.address;
+        if (!targetAddress) return;
+        try {
+          const { connectionManager } = await import('@/lib/blockchain/connection');
+          const api = await connectionManager.connect();
+          if (!api?.query?.system?.account) return;
+
+          const accountInfo: any = await api.query.system.account(targetAddress);
+          const data = accountInfo.data;
+          const freeBig = BigInt(data.free.toString());
+          const dallaNum = Number(freeBig) / 1e12;
+          const free = dallaNum.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+          const reservedBig = BigInt(data.reserved.toString());
+          const reserved = (Number(reservedBig) / 1e12).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+
+          let bBZD = '0.00';
+          try {
+            if (api.query.belizeEconomy?.bBzdBalances) {
+              const bBzdRaw: any = await api.query.belizeEconomy.bBzdBalances(targetAddress);
+              if (bBzdRaw) {
+                bBZD = (Number(BigInt(bBzdRaw.toString())) / 1e12).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                });
+              }
+            }
+          } catch {
+            // Ignore optional bBZD lookup
+          }
+
+          set({
+            balances: {
+              dalla: free,
+              bBZD,
+              locked: '0.00',
+              reserved,
+            },
+          });
+        } catch (err) {
+          console.warn('[WALLET] Failed to fetch balances:', err);
+        }
       },
       
       // Refresh accounts from extension
