@@ -63,52 +63,73 @@ echo "2. PYTHON SERVICES (Optional but Recommended)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Nawal (Federated Learning)
-if check_port 8001; then
-  echo -e "${GREEN}✅ Nawal service running on http://localhost:8001${NC}"
+NAWAL_PORT=8080
+if check_port 8080; then
+  NAWAL_PORT=8080
+elif check_port 8001; then
+  NAWAL_PORT=8001
+fi
+
+if check_port $NAWAL_PORT; then
+  echo -e "${GREEN}✅ Nawal service running on http://localhost:${NAWAL_PORT}${NC}"
   PASS=$((PASS + 1))
   
   # Try health check
   if command -v curl &> /dev/null; then
-    STATUS=$(check_http "http://localhost:8001/health")
+    STATUS=$(check_http "http://localhost:${NAWAL_PORT}/health")
     if [ "$STATUS" = "200" ]; then
       echo -e "   Health check: ${GREEN}OK${NC}"
     fi
   fi
 else
   echo -e "${YELLOW}⚠️  Nawal service NOT running (optional)${NC}"
-  echo -e "   ${BLUE}Start with: cd nawal && python -m nawal.orchestrator server${NC}"
+  echo -e "   ${BLUE}Start with: cd nawal-ai && ./.venv/bin/uvicorn api_server:app --port 8080${NC}"
   WARN=$((WARN + 1))
 fi
 echo ""
 
 # Kinich (Quantum Computing)
-if check_port 8002; then
-  echo -e "${GREEN}✅ Kinich service running on http://localhost:8002${NC}"
+KINICH_PORT=8888
+if check_port 8888; then
+  KINICH_PORT=8888
+elif check_port 8002; then
+  KINICH_PORT=8002
+fi
+
+if check_port $KINICH_PORT; then
+  echo -e "${GREEN}✅ Kinich service running on http://localhost:${KINICH_PORT}${NC}"
   PASS=$((PASS + 1))
   
-  STATUS=$(check_http "http://localhost:8002/health" 2>/dev/null || echo "000")
+  STATUS=$(check_http "http://localhost:${KINICH_PORT}/health" 2>/dev/null || echo "000")
   if [ "$STATUS" = "200" ]; then
     echo -e "   Health check: ${GREEN}OK${NC}"
   fi
 else
   echo -e "${YELLOW}⚠️  Kinich service NOT running (optional)${NC}"
-  echo -e "   ${BLUE}Start with: cd kinich && python -m kinich.core.quantum_node${NC}"
+  echo -e "   ${BLUE}Start with: cd kinich-quantum && ./.venv/bin/uvicorn api_server:app --port 8888${NC}"
   WARN=$((WARN + 1))
 fi
 echo ""
 
 # Pakit (Storage)
-if check_port 8003; then
-  echo -e "${GREEN}✅ Pakit service running on http://localhost:8003${NC}"
+PAKIT_PORT=8001
+if check_port 8001 && curl -s "http://localhost:8001/health" | grep -q "pakit"; then
+  PAKIT_PORT=8001
+elif check_port 8003; then
+  PAKIT_PORT=8003
+fi
+
+if check_port $PAKIT_PORT; then
+  echo -e "${GREEN}✅ Pakit service running on http://localhost:${PAKIT_PORT}${NC}"
   PASS=$((PASS + 1))
   
-  STATUS=$(check_http "http://localhost:8003/health" 2>/dev/null || echo "000")
+  STATUS=$(check_http "http://localhost:${PAKIT_PORT}/health" 2>/dev/null || echo "000")
   if [ "$STATUS" = "200" ]; then
     echo -e "   Health check: ${GREEN}OK${NC}"
   fi
 else
   echo -e "${YELLOW}⚠️  Pakit service NOT running (optional)${NC}"
-  echo -e "   ${BLUE}Start with: cd pakit && python -m pakit.api_server${NC}"
+  echo -e "   ${BLUE}Start with: cd pakit-storage && ./.venv/bin/uvicorn api_server:app --port 8001${NC}"
   WARN=$((WARN + 1))
 fi
 echo ""
@@ -143,7 +164,7 @@ echo "4. ENVIRONMENT CONFIGURATION"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Check if .env.local files exist
-if [ -f "ui/maya-wallet/.env.local" ]; then
+if [ -f "ui/maya-wallet/.env.local" ] || [ -f "maya-wallet/.env.local" ]; then
   echo -e "${GREEN}✅ Maya Wallet environment configured (.env.local)${NC}"
   PASS=$((PASS + 1))
 else
