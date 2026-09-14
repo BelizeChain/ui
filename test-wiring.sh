@@ -174,7 +174,7 @@ else
 fi
 echo ""
 
-if [ -f "ui/blue-hole-portal/.env.local" ]; then
+if [ -f "ui/blue-hole-portal/.env.local" ] || [ -f "blue-hole-portal/.env.local" ]; then
   echo -e "${GREEN}✅ Blue Hole Portal environment configured (.env.local)${NC}"
   PASS=$((PASS + 1))
 else
