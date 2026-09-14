@@ -13,6 +13,7 @@ import {
   Users,
   CheckCircle,
   ArrowLeft,
+  ArrowRight,
   BookOpen,
   Code,
   Broadcast,
@@ -524,7 +525,10 @@ export default function EducationModulesPage() {
                     {isClaimingReward ? (
                       'Minting Credential...'
                     ) : currentQuestionIdx + 1 < activeQuest.quiz.length ? (
-                      'Next Question ➔'
+                      <>
+                        <span>Next Question</span>
+                        <ArrowRight size={14} weight="bold" />
+                      </>
                     ) : (
                       'Claim +50 Ɗ Grant & Mint Badge'
                     )}

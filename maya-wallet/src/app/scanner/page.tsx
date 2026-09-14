@@ -8,6 +8,7 @@ import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   ArrowLeft,
+  ArrowRight,
   Scan,
   CheckCircle,
   XCircle,
@@ -394,9 +395,10 @@ export default function ScannerPage() {
                 </div>
                 <button
                   onClick={() => router.push(`/send?to=${encodeURIComponent(scannedResult)}`)}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs"
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5"
                 >
-                  Pay Recipient ➔
+                  <span>Pay Recipient</span>
+                  <ArrowRight size={14} weight="bold" />
                 </button>
               </div>
             )}

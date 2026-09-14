@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { GlassCard } from './ui';
 import { useWallet } from '@/contexts/WalletContext';
-import { X, PaperPlaneRight, Heart, User, Confetti } from 'phosphor-react';
+import { X, PaperPlaneRight, Heart, User } from 'phosphor-react';
 import { cn } from '@/lib/utils';
 
 interface Comment {
@@ -24,7 +23,7 @@ interface CommentsModalProps {
   onClose: () => void;
   postId: string;
   postAuthor: string;
-  postContent: string;
+  postContent: React.ReactNode;
 }
 
 export function CommentsModal({
@@ -41,10 +40,10 @@ export function CommentsModal({
       id: '1',
       author: {
         name: 'Sarah Williams',
-        avatar: <User size={24} weight="fill" className="text-gray-400" />,
+        avatar: <User size={20} weight="fill" className="text-teal-400" />,
         address: '5FHne...',
       },
-      content: <>This is amazing! Congrats on completing your first cycle! <Confetti size={20} weight="fill" className="inline text-yellow-500 mb-1" /></>,
+      content: 'Outstanding contribution to BelizeChain decentralized computing network. This verifiable compute proof was validated on block #149,210.',
       timestamp: '1h ago',
       likes: 5,
       liked: false,
@@ -53,10 +52,10 @@ export function CommentsModal({
       id: '2',
       author: {
         name: 'John Martinez',
-        avatar: <User size={24} weight="fill" className="text-gray-400" />,
+        avatar: <User size={20} weight="fill" className="text-cyan-400" />,
         address: '5DAn3...',
       },
-      content: 'Welcome to the PoUW network! Keep contributing!',
+      content: 'Approved and seconded in the Orange Walk district municipal council docket.',
       timestamp: '45m ago',
       likes: 3,
       liked: true,
@@ -69,8 +68,8 @@ export function CommentsModal({
     const comment: Comment = {
       id: Date.now().toString(),
       author: {
-        name: selectedAccount.name || 'Anonymous',
-        avatar: selectedAccount.name ? <User size={24} weight="fill" className="text-gray-400" /> : <User size={24} weight="fill" className="text-gray-400" />,
+        name: selectedAccount.name || 'Verified Citizen',
+        avatar: <User size={20} weight="fill" className="text-teal-400" />,
         address: `${selectedAccount.address.slice(0, 5)}...`,
       },
       content: newComment.trim(),
@@ -103,75 +102,80 @@ export function CommentsModal({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full max-h-[90vh] flex flex-col">
-          <GlassCard variant="medium" blur="xl" className="flex flex-col max-h-full">
+        <div className="max-w-xl w-full max-h-[90vh] flex flex-col">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-full">
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-              <h2 className="text-xl font-bold text-gray-900">Comments</h2>
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between flex-shrink-0 bg-slate-950/40">
+              <div>
+                <h2 className="text-base font-bold text-white">Assembly Discussion</h2>
+                <p className="text-xs text-slate-400">Citizen comments & deliberative review</p>
+              </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
               >
-                <X size={24} className="text-gray-500" />
+                <X size={18} weight="bold" />
               </button>
             </div>
 
-            {/* Original Post */}
-            <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex-shrink-0">
+            {/* Original Post Summary */}
+            <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex-shrink-0">
               <div className="flex items-start space-x-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-400 to-emerald-500 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold">{postAuthor[0]}</span>
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 font-bold text-xs flex-shrink-0">
+                  {postAuthor?.[0] || 'C'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">{postAuthor}</p>
-                  <p className="text-sm text-gray-600 mt-1">{postContent}</p>
+                  <p className="font-semibold text-white text-xs">{postAuthor}</p>
+                  <div className="text-xs text-slate-300 mt-0.5 line-clamp-2 leading-relaxed">{postContent}</div>
                 </div>
               </div>
             </div>
 
             {/* Comments List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {comments.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-gray-500">No comments yet. Be the first to comment!</p>
+                  <p className="text-slate-500 text-sm">No comments recorded on this assembly docket yet.</p>
                 </div>
               ) : (
                 comments.map((comment) => (
                   <div key={comment.id} className="flex items-start space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-lg">{comment.author.avatar}</span>
+                    <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center flex-shrink-0">
+                      {comment.author.avatar}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="bg-gray-100 rounded-2xl px-4 py-3">
-                        <p className="font-semibold text-gray-900 text-sm">
-                          {comment.author.name}
-                          <span className="text-xs text-gray-500 font-normal ml-2">
+                      <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl px-4 py-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-semibold text-white text-xs">
+                            {comment.author.name}
+                          </p>
+                          <span className="text-[10px] text-slate-500 font-mono">
                             {comment.author.address}
                           </span>
-                        </p>
-                        <p className="text-sm text-gray-700 mt-1">{comment.content}</p>
+                        </div>
+                        <div className="text-xs text-slate-300 leading-relaxed">{comment.content}</div>
                       </div>
-                      <div className="flex items-center space-x-4 mt-2 px-2">
+                      <div className="flex items-center space-x-4 mt-1.5 px-2">
                         <button
                           onClick={() => handleLikeComment(comment.id)}
                           className={cn(
                             'flex items-center space-x-1 text-xs font-semibold transition-colors',
-                            comment.liked ? 'text-red-600' : 'text-gray-500 hover:text-red-600'
+                            comment.liked ? 'text-rose-400' : 'text-slate-400 hover:text-rose-400'
                           )}
                         >
                           <Heart
-                            size={14}
+                            size={13}
                             weight={comment.liked ? 'fill' : 'regular'}
                           />
-                          <span>{comment.likes > 0 && comment.likes}</span>
+                          <span className="font-mono text-[11px]">{comment.likes > 0 && comment.likes}</span>
                         </button>
-                        <span className="text-xs text-gray-400">{comment.timestamp}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">{comment.timestamp}</span>
                       </div>
                     </div>
                   </div>
@@ -180,19 +184,17 @@ export function CommentsModal({
             </div>
 
             {/* Add Comment */}
-            <div className="p-4 border-t border-gray-200 flex-shrink-0">
+            <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex-shrink-0">
               <div className="flex items-end space-x-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-400 to-emerald-500 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold">
-                    {selectedAccount?.name?.[0] || 'U'}
-                  </span>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/40 flex items-center justify-center text-cyan-300 font-bold text-xs flex-shrink-0">
+                  {selectedAccount?.name?.[0] || 'U'}
                 </div>
                 <div className="flex-1">
                   <textarea
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Write a comment..."
-                    className="w-full px-4 py-2 rounded-2xl border border-gray-300 focus:border-forest-500 focus:ring-2 focus:ring-forest-200 outline-none transition-all resize-none"
+                    placeholder="Submit deliberative comment..."
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-950/90 border border-slate-800 text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all resize-none text-xs leading-relaxed"
                     rows={2}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -205,13 +207,14 @@ export function CommentsModal({
                 <button
                   onClick={handleAddComment}
                   disabled={!newComment.trim()}
-                  className="p-3 rounded-full bg-gradient-to-r from-forest-500 to-forest-600 hover:from-forest-600 hover:to-forest-700 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all"
+                  className="p-3 rounded-2xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 font-bold transition-all shadow-md"
+                  title="Submit Comment"
                 >
-                  <PaperPlaneRight size={20} weight="fill" />
+                  <PaperPlaneRight size={18} weight="fill" />
                 </button>
               </div>
             </div>
-          </GlassCard>
+          </div>
         </div>
       </div>
     </>

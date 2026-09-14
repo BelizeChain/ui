@@ -37,6 +37,7 @@ import {
   Clock,
   Trash,
   Folder,
+  Lock,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui';
 
@@ -76,7 +77,7 @@ export default function DocumentsPage() {
     try {
       setLoading(true);
       
-      // ✅ REAL PAKIT INTEGRATION - Using actual IPFS/Arweave backends!
+      // [PAKIT] REAL PAKIT INTEGRATION - Using actual IPFS/Arweave backends!
       const pakitClient = getPakitClient();
       const pakitDocs = await pakitClient.listDocuments(account.address);
       
@@ -146,7 +147,7 @@ export default function DocumentsPage() {
     setIsUploading(true);
     
     try {
-      // ✅ REAL PAKIT UPLOAD - Using actual IPFS/Arweave backends!
+      // [PAKIT] REAL PAKIT UPLOAD - Using actual IPFS/Arweave backends!
       const pakitClient = getPakitClient();
       
       for (const file of Array.from(files)) {
@@ -162,7 +163,7 @@ export default function DocumentsPage() {
           },
         });
 
-        console.log('✅ Document uploaded to Pakit:', {
+        console.log('[PAKIT] Document uploaded to Pakit:', {
           name: file.name,
           cid: uploadResult.cid,
           size: uploadResult.size,
@@ -185,7 +186,7 @@ export default function DocumentsPage() {
     if (!account?.address) return;
 
     try {
-      // ✅ REAL PAKIT SHARE LINK - Generate actual shareable link!
+      // [PAKIT] REAL PAKIT SHARE LINK - Generate actual shareable link!
       const pakitClient = getPakitClient();
       const shareResult = await pakitClient.generateShareLink(
         doc.hash, 
@@ -193,7 +194,7 @@ export default function DocumentsPage() {
       );
       
       await navigator.clipboard.writeText(shareResult.url);
-      console.log('✅ Share link generated via Pakit:', shareResult);
+      console.log('[PAKIT] Share link generated via Pakit:', shareResult);
       
       const expiryDate = shareResult.expiresAt 
         ? new Date(shareResult.expiresAt * 1000).toLocaleDateString()
@@ -208,7 +209,7 @@ export default function DocumentsPage() {
 
   const handleDownload = async (doc: Document) => {
     try {
-      // ✅ REAL PAKIT DOWNLOAD - Retrieve from IPFS/Arweave!
+      // [PAKIT] REAL PAKIT DOWNLOAD - Retrieve from IPFS/Arweave!
       const pakitClient = getPakitClient();
       const blob = await pakitClient.download(doc.hash);
       
@@ -222,7 +223,7 @@ export default function DocumentsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      console.log('✅ Document downloaded from Pakit:', { name: doc.name, cid: doc.hash });
+      console.log('[PAKIT] Document downloaded from Pakit:', { name: doc.name, cid: doc.hash });
     } catch (error) {
       console.error('Pakit download failed:', error);
       alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -236,11 +237,11 @@ export default function DocumentsPage() {
     if (!confirmed) return;
 
     try {
-      // ✅ REAL PAKIT DELETE - Remove from cache (Arweave data is permanent)
+      // [PAKIT] REAL PAKIT DELETE - Remove from cache (Arweave data is permanent)
       const pakitClient = getPakitClient();
       await pakitClient.delete(doc.hash, account.address);
       
-      console.log('✅ Document deleted from Pakit cache:', { name: doc.name, cid: doc.hash });
+      console.log('[PAKIT] Document deleted from Pakit cache:', { name: doc.name, cid: doc.hash });
       
       // Reload from Pakit to reflect changes
       await loadDocuments();
@@ -412,8 +413,9 @@ export default function DocumentsPage() {
                       </p>
                       
                       {doc.encrypted && (
-                        <p className="text-xs text-jungle-600 font-medium">
-                          🔒 End-to-end encrypted
+                        <p className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                          <Lock size={12} weight="fill" />
+                          <span>End-to-end encrypted</span>
                         </p>
                       )}
                       

@@ -37,17 +37,17 @@ export function BadgeDisplay({ badges, maxDisplay, className }: BadgeDisplayProp
         >
           <div
             className={cn(
-              'w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg',
+              'w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg border',
               badge.rarity && badge.earned
-                ? `bg-gradient-to-br ${rarityColors[badge.rarity]}`
-                : 'bg-gray-200'
+                ? `bg-gradient-to-br ${rarityColors[badge.rarity]} border-white/20`
+                : 'bg-slate-800/90 border-slate-700/60 text-slate-400'
             )}
           >
             {typeof badge.icon === 'string' ? badge.icon : badge.icon}
           </div>
           
           {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2.5 py-1 bg-slate-900/95 border border-slate-700 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 font-mono">
             {badge.name}
             {badge.rarity && (
               <span className="ml-1 capitalize text-amber-300">({badge.rarity})</span>
@@ -57,7 +57,7 @@ export function BadgeDisplay({ badges, maxDisplay, className }: BadgeDisplayProp
       ))}
       
       {remaining > 0 && (
-        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-600">
+        <div className="w-12 h-12 rounded-xl bg-slate-800/90 border border-slate-700/60 flex items-center justify-center text-sm font-semibold text-slate-400">
           +{remaining}
         </div>
       )}

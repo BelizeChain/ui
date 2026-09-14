@@ -277,13 +277,19 @@ interface IBelizeXSwap {
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">HTTP JSON-RPC</span>
                 <span className="font-mono text-cyan-300 text-xs block truncate">http://100.81.45.25:9933</span>
-                <span className="text-[10px] text-emerald-400 font-semibold block">● Online (200 OK)</span>
+                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Online (200 OK)
+                </span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">WebSocket (WSS)</span>
                 <span className="font-mono text-cyan-300 text-xs block truncate">ws://100.81.45.25:9944</span>
-                <span className="text-[10px] text-emerald-400 font-semibold block">● Latency: {rpcLatency}ms</span>
+                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Latency: {rpcLatency}ms
+                </span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">

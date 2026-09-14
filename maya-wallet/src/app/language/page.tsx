@@ -19,11 +19,11 @@ export default function LanguagePage() {
   const [selectedTimezone, setSelectedTimezone] = useState('America/Belize');
 
   const languages = [
-    { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧', users: '1.5B' },
-    { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸', users: '559M' },
-    { code: 'kr', name: 'Kriol', nativeName: 'Belize Kriol', flag: '🇧🇿', users: '100K' },
-    { code: 'my', name: 'Mayan', nativeName: 'Maya', flag: '🇬🇹', users: '7M' },
-    { code: 'ga', name: 'Garifuna', nativeName: 'Garífuna', flag: '🇧🇿', users: '200K' }
+    { code: 'en', name: 'English', nativeName: 'English', flag: 'EN', users: '1.5B' },
+    { code: 'es', name: 'Spanish', nativeName: 'Español', flag: 'ES', users: '559M' },
+    { code: 'kr', name: 'Kriol', nativeName: 'Belize Kriol', flag: 'BZ', users: '100K' },
+    { code: 'my', name: 'Mayan', nativeName: 'Maya', flag: 'MYA', users: '7M' },
+    { code: 'ga', name: 'Garifuna', nativeName: 'Garífuna', flag: 'GAR', users: '200K' }
   ];
 
   const regions = [
@@ -76,7 +76,9 @@ export default function LanguagePage() {
                 className="w-full p-4 flex items-center justify-between hover:bg-gray-700/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">{lang.flag}</span>
+                  <span className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center font-mono font-bold text-xs text-cyan-300 shrink-0">
+                    {lang.flag}
+                  </span>
                   <div className="text-left">
                   <p className="font-medium text-white">{lang.name}</p>
                   <p className="text-xs text-gray-400">{lang.nativeName}</p>

@@ -17,9 +17,9 @@ if (typeof window !== 'undefined' && !xmtpServiceLoading) {
   xmtpServiceLoading = true;
   import('@/services/xmtp.service').then((mod) => {
     xmtpService = mod.xmtpService;
-    console.log('✅ XMTP service loaded dynamically');
+    console.log('[XMTP] Service loaded dynamically');
   }).catch((err) => {
-    console.warn('⚠️ XMTP service failed to load:', err);
+    console.warn('[XMTP] Service failed to load:', err);
   });
 }
 
@@ -370,7 +370,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         
         // Show notification
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('🚨 Emergency Alert', {
+          new Notification('Emergency Broadcast Alert', {
             body: broadcast.message,
             tag: broadcast.id
           });

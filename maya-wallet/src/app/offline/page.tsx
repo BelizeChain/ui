@@ -10,6 +10,7 @@ import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   QrCode,
   ArrowLeft,
+  ArrowRight,
   ShieldCheck,
   Broadcast,
   CheckCircle,
@@ -422,7 +423,8 @@ export default function OfflineSigningPage() {
                 onClick={() => setStep('broadcast')}
                 className="py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 shadow-lg"
               >
-                Enter Signed Hex ➔
+                <span>Enter Signed Hex</span>
+                <ArrowRight size={14} weight="bold" />
               </button>
             </div>
           </div>
@@ -528,7 +530,8 @@ export default function OfflineSigningPage() {
               </button>
               <Link href="/history">
                 <button className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 shadow-lg">
-                  View in History ➔
+                  <span>View in History</span>
+                  <ArrowRight size={14} weight="bold" />
                 </button>
               </Link>
             </div>

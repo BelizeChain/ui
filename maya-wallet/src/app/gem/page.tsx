@@ -105,8 +105,6 @@ export default function GemPage() {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
-
   const refreshDao = useCallback(async () => {
     if (!selectedAccount?.address) return;
     setDaoLoading(true);
@@ -330,540 +328,594 @@ export default function GemPage() {
 
   // (DAO proposals now sourced from listDaoProposals(); see DAO tab.)
 
+  if (!mounted) return null;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28 selection:bg-teal-500/30">
       {/* Header */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
-        <div className="flex items-center justify-between p-4">
+      <header className="sticky top-0 bg-slate-950/85 backdrop-blur-2xl border-b border-slate-800/80 px-4 sm:px-6 py-4 z-20 shadow-lg shadow-black/40">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/">
-              <button className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-                <ArrowLeft size={24} className="text-gray-300" weight="bold" />
-              </button>
+            <Link href="/" className="p-2 hover:bg-slate-900 rounded-xl text-slate-400 hover:text-white transition-colors">
+              <ArrowLeft size={22} weight="bold" />
             </Link>
             <div>
-              <h1 className="text-xl font-bold text-white flex items-center gap-2">The Gem <Diamond size={18} weight="fill" className="text-pink-400" aria-hidden="true" /></h1>
-              <p className="text-xs text-gray-400">Smart Contracts Platform (ink!)</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                  The Gem
+                </h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/10 text-teal-400 border border-teal-500/30 tracking-wider uppercase font-mono">
+                  ink! v5 WASM
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-mono">
+                Sovereign Smart Contracts Platform & Developer Registry
+              </p>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-red-400 flex items-center justify-center">
-            <FileCode size={20} className="text-white" weight="fill" />
+
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-teal-500/20 to-cyan-500/20 border border-teal-500/30 flex items-center justify-center text-teal-300 shadow-md">
+            <FileCode size={22} weight="fill" />
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="p-4 space-y-6">
+      <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         {/* Stats Overview */}
-        <GlassCard variant="dark-medium" blur="lg" className="p-6">
+        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl shadow-black/30">
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Contracts</p>
-              <p className="text-2xl font-bold text-pink-400">{deployedCount}/{catalog.length}</p>
+              <p className="text-xs text-slate-400 font-mono uppercase mb-1">Contracts Live</p>
+              <p className="text-2xl sm:text-3xl font-bold text-teal-400 font-mono">{deployedCount}/{catalog.length}</p>
             </div>
-            <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Network</p>
-              <p className="text-sm font-bold text-blue-400 truncate" title={runtimeConfig.blockchainWsUrl}>
+            <div className="text-center border-x border-slate-800/80">
+              <p className="text-xs text-slate-400 font-mono uppercase mb-1">Substrate Network</p>
+              <p className="text-sm sm:text-base font-bold text-cyan-400 truncate font-mono" title={runtimeConfig.blockchainWsUrl}>
                 {runtimeConfig.networkName}
               </p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-gray-400 mb-1">Endpoint</p>
-              <p className="text-sm font-bold text-emerald-400 capitalize">{runtimeConfig.endpointSource}</p>
+              <p className="text-xs text-slate-400 font-mono uppercase mb-1">RPC Endpoint</p>
+              <p className="text-sm sm:text-base font-bold text-emerald-400 capitalize font-mono">{runtimeConfig.endpointSource}</p>
             </div>
           </div>
-        </GlassCard>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="px-4 mb-6">
-        <div className="grid grid-cols-2 gap-3">
-          <button className="flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-pink-400 to-red-400 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-            <Rocket size={20} weight="fill" />
-            <span className="font-semibold">Deploy</span>
-          </button>
-          <button className="flex items-center justify-center space-x-2 p-4 bg-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-            <Code size={20} weight="fill" className="text-gray-400" />
-            <span className="font-semibold text-white">Interact</span>
-          </button>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="px-4 mb-6">
-        <div className="flex space-x-2 bg-gray-200 rounded-xl p-1 shadow-sm">
+        {/* Sleek Dark Pill Tabs */}
+        <div className="bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-slate-800 p-1.5 shadow-inner flex flex-wrap sm:flex-nowrap gap-1">
           <button
             onClick={() => setActiveTab('deploy')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'deploy'
-                ? 'bg-gradient-to-r from-pink-500 to-red-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-200'
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 shadow-md shadow-teal-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
             }`}
           >
-            Deploy
+            <Rocket size={16} weight="bold" />
+            <span>Deploy Templates</span>
           </button>
           <button
             onClick={() => setActiveTab('contracts')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'contracts'
-                ? 'bg-gradient-to-r from-pink-500 to-red-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-200'
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 shadow-md shadow-teal-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
             }`}
           >
-            My Contracts
+            <Package size={16} weight="bold" />
+            <span>My Contracts</span>
           </button>
           <button
             onClick={() => setActiveTab('dao')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'dao'
-                ? 'bg-gradient-to-r from-pink-500 to-red-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-200'
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 shadow-md shadow-teal-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
             }`}
           >
-            DAO
+            <Users size={16} weight="bold" />
+            <span>DAO Governance</span>
           </button>
           <button
             onClick={() => setActiveTab('nft')}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'nft'
-                ? 'bg-gradient-to-r from-pink-500 to-red-400 text-white shadow-md'
-                : 'text-gray-400 hover:bg-gray-200'
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 shadow-md shadow-teal-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
             }`}
           >
-            NFTs
+            <Heart size={16} weight="bold" />
+            <span>BeliNFT Studio</span>
           </button>
         </div>
-      </div>
 
-      {/* Tab Content */}
-      <div className="px-4 space-y-4">
-        {activeTab === 'deploy' && (
-          <>
-            <GlassCard variant="dark" blur="sm" className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-white">Testnet Faucet</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {faucetStatus
-                      ? `${(BigInt(faucetStatus.dripAmount) / 10n ** 12n).toString()} DALLA per claim, ${faucetStatus.cooldown}-block cooldown`
-                      : 'Get test DALLA from the on-chain faucet'}
-                  </p>
-                </div>
-                <Lightning size={32} className="text-amber-400" weight="fill" />
-              </div>
-              <button
-                onClick={handleClaim}
-                disabled={claiming || !selectedAccount?.address || (faucetStatus ? !faucetStatus.canClaim : false)}
-                className="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-400 text-white font-semibold rounded-lg hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {claiming ? 'Claiming…' : selectedAccount?.address ? 'Claim Test DALLA' : 'Connect Wallet to Claim'}
-              </button>
-              <p className="text-xs text-gray-400 text-center mt-2">
-                {faucetError
-                  ? faucetError
-                  : claimTxHash
-                    ? `✓ Claim submitted: ${claimTxHash.slice(0, 14)}…`
-                    : faucetStatus
-                      ? faucetStatus.canClaim
-                        ? 'Ready to claim'
-                        : `Next claim available in ${faucetStatus.blocksUntilClaim} blocks`
-                      : 'Loading faucet status…'}
-              </p>
-            </GlassCard>
-
-            <GlassCard variant="dark" blur="sm" className="p-4">
-              <h3 className="font-bold text-white mb-4">Contract Templates</h3>
-              <div className="space-y-3">
-                {templates.map((template, index) => (
-                  <div key={index} className="p-4 bg-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start space-x-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center shadow-sm">
-                          {template.icon}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-white">{template.name}</h4>
-                          <p className="text-xs text-gray-400 mt-0.5">{template.description}</p>
-                        </div>
-                      </div>
-                      <Play size={20} className="text-pink-400" weight="fill" />
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className={`px-2 py-1 rounded-full font-semibold ${
-                        template.complexity === 'Beginner' ? 'bg-green-500/100/20 text-green-400' :
-                        template.complexity === 'Intermediate' ? 'bg-blue-500/100/20 text-blue-400' :
-                        'bg-purple-100 text-purple-700'
-                      }`}>
-                        {template.complexity}
-                      </span>
-                      <span className="text-gray-400">Est. Gas: {template.gasEstimate}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
-
-            <GlassCard variant="dark" blur="sm" className="p-6">
-              <h3 className="font-bold text-white mb-4">SDK & Documentation</h3>
-              <div className="space-y-3">
-                <button className="w-full p-3 bg-gradient-to-r from-gray-200 to-gray-900 text-white rounded-lg flex items-center justify-between hover:shadow-lg transition-shadow">
-                  <div className="flex items-center space-x-3">
-                    <Package size={20} weight="fill" />
-                    <span className="font-medium">Install SDK</span>
-                  </div>
-                  <Download size={20} weight="fill" />
-                </button>
-                <div className="p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
-                  <p className="text-xs text-gray-400 mb-2">Installation command:</p>
-                  <div className="flex items-center justify-between bg-gray-200 text-white p-2 rounded font-mono text-xs">
-                    <span>npm install @belizechain/gem-sdk</span>
-                    <Copy size={14} className="cursor-pointer hover:text-blue-400" />
-                  </div>
-                </div>
-              </div>
-            </GlassCard>
-          </>
-        )}
-
-        {activeTab === 'contracts' && (
-          <div className="space-y-3">
-            {deployedContracts.map((contract, index) => (
-              <GlassCard key={index} variant="dark" blur="sm" className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <h4 className="font-semibold text-white">{contract.name}</h4>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        contract.type === 'PSP22' ? 'bg-blue-500/100/20 text-blue-400' :
-                        contract.type === 'PSP34' ? 'bg-pink-100 text-pink-700' :
-                        contract.type === 'DEX' ? 'bg-cyan-100 text-cyan-700' :
-                        contract.type === 'PSP37' ? 'bg-amber-100 text-amber-700' :
-                        'bg-purple-100 text-purple-700'
-                      }`}>
-                        {contract.type}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${contract.deployed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                        {contract.deployed ? 'Live' : 'Pending'}
-                      </span>
-                    </div>
-                    <p className="text-xs font-mono text-gray-400" title={contract.fullAddress}>{contract.address}</p>
-                  </div>
-                  <button
-                    className="ml-2 disabled:opacity-40"
-                    disabled={!contract.fullAddress}
-                    onClick={() => contract.fullAddress && navigator.clipboard?.writeText(contract.fullAddress)}
-                    title="Copy full address"
-                  >
-                    <Copy size={20} className="text-pink-400" weight="fill" />
-                  </button>
-                </div>
-
-                <div className="flex space-x-2">
-                  <button
-                    className="flex-1 py-2 bg-gradient-to-r from-pink-400 to-red-400 text-white text-sm font-semibold rounded-lg hover:shadow-md transition-shadow disabled:opacity-50"
-                    disabled={!contract.deployed}
-                  >
-                    {contract.deployed ? 'Interact' : 'Deploy First'}
-                  </button>
-                  <button
-                    className="px-4 py-2 bg-gray-200 text-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-                    disabled={!contract.fullAddress}
-                  >
-                    View
-                  </button>
-                </div>
-              </GlassCard>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'dao' && (
-          <>
-            <GlassCard variant="dark" blur="sm" className="p-6 bg-gradient-to-br from-purple-50 to-pink-50">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-white">My Voting Power</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Based on DALLA holdings</p>
-                </div>
-                <Users size={32} className="text-purple-400" weight="fill" />
-              </div>
-              <p className="text-3xl font-bold text-purple-400">
-                {selectedAccount?.address ? `${votingPowerDisplay} DALLA` : 'Connect wallet'}
-              </p>
-              {nftCollection && (
-                <p className="text-xs text-gray-400 mt-2">
-                  {nftCollection.name} ({nftCollection.symbol}): {nftBalance} held / {nftCollection.totalSupply} total
-                </p>
-              )}
-            </GlassCard>
-
-            {daoError && (
-              <div className="text-xs text-red-400">{daoError}</div>
-            )}
-
-            <GlassCard variant="dark" blur="sm" className="p-5">
-              <h3 className="font-bold text-white mb-1">Create Proposal</h3>
-              <p className="text-xs text-gray-400 mb-4">
-                Submit a text proposal, or attach a treasury DALLA transfer.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Description</label>
-                  <textarea
-                    value={propDescription}
-                    onChange={(e) => setPropDescription(e.target.value)}
-                    placeholder="What should the DAO do?"
-                    rows={3}
-                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Tab Content */}
+        <div className="space-y-6">
+          {activeTab === 'deploy' && (
+            <>
+              {/* Testnet Faucet Card */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      Transfer target <span className="text-gray-500">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={propTransferTarget}
-                      onChange={(e) => setPropTransferTarget(e.target.value)}
-                      placeholder="r1... AccountId"
-                      className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
-                    />
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <Lightning size={20} className="text-amber-400" weight="fill" />
+                      <span>Testnet Faucet</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1 font-mono">
+                      {faucetStatus
+                        ? `${(BigInt(faucetStatus.dripAmount) / 10n ** 12n).toString()} DALLA per claim • ${faucetStatus.cooldown}-block cooldown`
+                        : 'Claim developer test DALLA directly from on-chain faucet'}
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Transfer DALLA</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.000001"
-                      value={propTransferValue}
-                      onChange={(e) => setPropTransferValue(e.target.value)}
-                      className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700"
-                    />
-                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-mono bg-amber-500/10 border border-amber-500/30 text-amber-300 uppercase tracking-wider">
+                    Developer Reserve
+                  </span>
                 </div>
-                {propTxHash && (
-                  <div className="text-xs text-emerald-300 break-all">
-                    Submitted: {propTxHash}
-                  </div>
-                )}
-                <button
-                  onClick={handleCreateProposal}
-                  disabled={propBusy || !selectedAccount?.address || !propDescription.trim()}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {propBusy ? 'Submitting…' : 'Submit Proposal'}
-                </button>
-              </div>
-            </GlassCard>
 
-            <div className="space-y-3">
-              {daoLoading && daoProposals.length === 0 ? (
-                <p className="text-sm text-gray-400">Loading proposals…</p>
-              ) : daoProposals.length === 0 ? (
-                <p className="text-sm text-gray-400">
-                  {selectedAccount?.address
-                    ? 'No proposals yet. Submit one from the DAO contract.'
-                    : 'Connect a wallet to view DAO proposals.'}
+                <button
+                  onClick={handleClaim}
+                  disabled={claiming || !selectedAccount?.address || (faucetStatus ? !faucetStatus.canClaim : false)}
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-2xl text-xs hover:shadow-lg hover:shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Lightning size={16} weight="fill" />
+                  <span>{claiming ? 'Claiming DALLA…' : selectedAccount?.address ? 'Claim 100 Test DALLA' : 'Connect Wallet to Claim'}</span>
+                </button>
+
+                <p className="text-xs text-slate-400 text-center font-mono">
+                  {faucetError
+                    ? faucetError
+                    : claimTxHash
+                      ? `Claim submitted: ${claimTxHash.slice(0, 14)}…`
+                      : faucetStatus
+                        ? faucetStatus.canClaim
+                          ? 'Ready to claim test tokens'
+                          : `Next claim available in ${faucetStatus.blocksUntilClaim} blocks`
+                        : 'Loading faucet status…'}
                 </p>
-              ) : (
-                daoProposals.map((proposal) => {
-                  const yes = BigInt(proposal.votesFor || '0');
-                  const no = BigInt(proposal.votesAgainst || '0');
-                  const total = yes + no;
-                  const yesPct = total > 0n ? Number((yes * 10000n) / total) / 100 : 0;
-                  const isActive = proposal.status.toLowerCase() === 'active' || proposal.status.toLowerCase() === 'pending';
-                  const busy = voteBusyId === proposal.id;
-                  return (
-                    <GlassCard key={proposal.id} variant="dark" blur="sm" className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-white">
-                            {proposal.description || `Proposal #${proposal.id}`}
-                          </h4>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            ID #{proposal.id} • Ends @ block {proposal.endBlock.toLocaleString()}
-                          </p>
-                        </div>
-                        <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ml-2 ${
-                          isActive ? 'bg-blue-500/20 text-blue-400' :
-                          proposal.status.toLowerCase() === 'passed' || proposal.status.toLowerCase() === 'executed' ? 'bg-emerald-500/20 text-emerald-400' :
-                          'bg-red-500/20 text-red-400'
-                        }`}>
-                          {proposal.status}
-                        </div>
-                      </div>
-
-                      <div className="mb-3">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-400">For: {yes.toString()}</span>
-                          <span className="text-gray-400">Against: {no.toString()}</span>
-                        </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-400 rounded-l-full"
-                            style={{ width: `${yesPct}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">Proposer: {proposal.proposer.slice(0, 8)}…{proposal.proposer.slice(-6)}</span>
-                        {isActive && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleVote(proposal.id, true)}
-                              disabled={busy || !selectedAccount?.address}
-                              className="px-4 py-1.5 bg-emerald-400 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {busy ? '…' : 'Vote For'}
-                            </button>
-                            <button
-                              onClick={() => handleVote(proposal.id, false)}
-                              disabled={busy || !selectedAccount?.address}
-                              className="px-4 py-1.5 bg-gray-200 text-gray-300 text-xs font-semibold rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {busy ? '…' : 'Against'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </GlassCard>
-                  );
-                })
-              )}
-            </div>
-          </>
-        )}
-
-        {activeTab === 'nft' && (
-          <>
-            <GlassCard variant="dark" blur="sm" className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-bold text-white">{nftCollection?.name ?? 'BeliNFT Collection'}</h3>
-                  <p className="text-xs text-gray-400">
-                    {nftCollection?.symbol ?? 'BNFT'} • {nftCollection?.totalSupply ?? 0} minted total
-                  </p>
-                </div>
-                <Heart size={32} className="text-pink-400" weight="fill" />
               </div>
-              <p className="text-sm text-gray-300">
-                You hold <span className="font-bold text-white">{nftBalance}</span>{' '}
-                {nftCollection?.symbol ?? 'BNFT'}
-              </p>
-            </GlassCard>
 
-            {nftError && <div className="text-xs text-red-400">{nftError}</div>}
-            {nftTxHash && (
-              <div className="text-xs text-emerald-300 break-all">Submitted: {nftTxHash}</div>
-            )}
+              {/* Contract Templates */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-white text-base">Standard Contract Templates</h3>
+                  <span className="text-xs text-slate-400 font-mono">WASM Bytecode Ready</span>
+                </div>
 
-            <GlassCard variant="dark" blur="sm" className="p-5">
-              <h3 className="font-bold text-white mb-1">Mint NFT</h3>
-              <p className="text-xs text-gray-400 mb-4">
-                Mint a new BeliNFT. Typically restricted to the collection owner.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Recipient <span className="text-gray-500">(defaults to you)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={nftMintTo}
-                    onChange={(e) => setNftMintTo(e.target.value)}
-                    placeholder={selectedAccount?.address ?? 'r1...'}
-                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Metadata URI</label>
-                  <input
-                    type="text"
-                    value={nftMintUri}
-                    onChange={(e) => setNftMintUri(e.target.value)}
-                    placeholder="ipfs://… or https://…"
-                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
-                  />
-                </div>
-                <button
-                  onClick={handleMintNft}
-                  disabled={nftMintBusy || !selectedAccount?.address || !nftMintUri.trim()}
-                  className="w-full bg-gradient-to-r from-pink-500 to-red-400 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {nftMintBusy ? 'Minting…' : 'Mint NFT'}
-                </button>
-              </div>
-            </GlassCard>
-
-            <GlassCard variant="dark" blur="sm" className="p-5">
-              <h3 className="font-bold text-white mb-1">Transfer NFT</h3>
-              <p className="text-xs text-gray-400 mb-4">Send a BeliNFT you own.</p>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Recipient</label>
-                  <input
-                    type="text"
-                    value={nftTransferTo}
-                    onChange={(e) => setNftTransferTo(e.target.value)}
-                    placeholder="r1..."
-                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 placeholder-gray-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Token ID</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={nftTransferId}
-                    onChange={(e) => setNftTransferId(e.target.value)}
-                    placeholder="0"
-                    className="w-full bg-gray-800/60 text-white text-sm px-3 py-2 rounded-lg border border-gray-700"
-                  />
-                </div>
-                <button
-                  onClick={handleTransferNft}
-                  disabled={nftTransferBusy || !selectedAccount?.address || !nftTransferTo.trim() || !nftTransferId.trim()}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {nftTransferBusy ? 'Transferring…' : 'Transfer NFT'}
-                </button>
-              </div>
-            </GlassCard>
-
-            <GlassCard variant="dark" blur="sm" className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-white">Your NFTs</h3>
-                <button
-                  onClick={() => void refreshOwnedNfts()}
-                  className="text-xs text-pink-400 hover:text-pink-300"
-                >
-                  Refresh
-                </button>
-              </div>
-              {ownedNfts.length === 0 ? (
-                <p className="text-sm text-gray-400">
-                  {selectedAccount?.address
-                    ? 'No BeliNFTs found in the first 100 token IDs.'
-                    : 'Connect a wallet to view your NFTs.'}
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {ownedNfts.map((n) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {templates.map((template, index) => (
                     <div
-                      key={n.id}
-                      className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-xs text-gray-300"
+                      key={index}
+                      className="p-4 bg-slate-950/70 border border-slate-850 hover:border-teal-500/40 rounded-2xl transition-all cursor-pointer group shadow-md"
                     >
-                      <p className="font-semibold text-white mb-1">Token #{n.id}</p>
-                      <p className="break-all text-gray-400">{n.uri ?? '— no URI —'}</p>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                            {template.icon}
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-white text-sm group-hover:text-teal-300 transition-colors">
+                              {template.name}
+                            </h4>
+                            <p className="text-xs text-slate-400 mt-0.5">{template.description}</p>
+                          </div>
+                        </div>
+                        <Play size={18} className="text-slate-500 group-hover:text-teal-400 transition-colors" weight="fill" />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-850 font-mono">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                          template.complexity === 'Beginner' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                          template.complexity === 'Intermediate' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' :
+                          'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                        }`}>
+                          {template.complexity}
+                        </span>
+                        <span className="text-slate-500">{template.gasEstimate}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* SDK & CLI Documentation */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <h3 className="font-bold text-white text-base">Developer SDK & CLI</h3>
+                <div className="space-y-3">
+                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+                    <p className="text-xs text-slate-400 font-mono">Installation Command:</p>
+                    <div className="flex items-center justify-between bg-slate-900 border border-slate-800 text-teal-300 p-3 rounded-xl font-mono text-xs">
+                      <span>npm install @belizechain/gem-sdk</span>
+                      <button
+                        onClick={() => navigator.clipboard?.writeText('npm install @belizechain/gem-sdk')}
+                        title="Copy command"
+                        className="hover:text-white transition-colors"
+                      >
+                        <Copy size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'contracts' && (
+            <div className="space-y-3">
+              {deployedContracts.map((contract, index) => (
+                <div
+                  key={index}
+                  className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-white text-sm">{contract.name}</h4>
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-teal-500/15 border border-teal-500/30 text-teal-400">
+                          {contract.type}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                          contract.deployed
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                        }`}>
+                          {contract.deployed ? 'Live on Testnet' : 'Pending Deployment'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-mono text-slate-400 truncate max-w-md" title={contract.fullAddress}>
+                        {contract.address}
+                      </p>
+                    </div>
+
+                    <button
+                      className="p-2 hover:bg-slate-850 rounded-xl text-slate-400 hover:text-teal-400 transition-colors disabled:opacity-40"
+                      disabled={!contract.fullAddress}
+                      onClick={() => contract.fullAddress && navigator.clipboard?.writeText(contract.fullAddress)}
+                      title="Copy full address"
+                    >
+                      <Copy size={18} weight="fill" />
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-slate-800/80">
+                    <button
+                      className="flex-1 py-2.5 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={!contract.deployed}
+                    >
+                      {contract.deployed ? 'Interact with ABI' : 'Deploy First'}
+                    </button>
+                    <button
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs rounded-xl transition-all disabled:opacity-40"
+                      disabled={!contract.fullAddress}
+                    >
+                      Inspect Source
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'dao' && (
+            <>
+              {/* Voting Power Card */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-white text-base">My DAO Voting Power</h3>
+                    <p className="text-xs text-slate-400 mt-0.5 font-mono">Weighted by DALLA sovereign holdings</p>
+                  </div>
+                  <Users size={28} className="text-teal-400" weight="fill" />
+                </div>
+                <p className="text-3xl font-black text-teal-400 font-mono">
+                  {selectedAccount?.address ? `${votingPowerDisplay} Ɗ` : 'Connect wallet'}
+                </p>
+                {nftCollection && (
+                  <p className="text-xs text-slate-400 font-mono pt-1 border-t border-slate-800">
+                    {nftCollection.name} ({nftCollection.symbol}): {nftBalance} held / {nftCollection.totalSupply} total
+                  </p>
+                )}
+              </div>
+
+              {daoError && (
+                <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-xs text-rose-300 font-mono">
+                  {daoError}
+                </div>
               )}
-            </GlassCard>
-          </>
-        )}
-      </div>
+
+              {/* Create Proposal Form */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div>
+                  <h3 className="font-bold text-white text-base">Submit DAO Proposal</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Introduce governance text motions or attach on-chain DALLA disbursements.
+                  </p>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-slate-400 font-mono uppercase block mb-1">Proposal Motion Description</label>
+                    <textarea
+                      value={propDescription}
+                      onChange={(e) => setPropDescription(e.target.value)}
+                      placeholder="Specify proposal objectives, parameters, and rationale..."
+                      rows={3}
+                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 focus:outline-none focus:border-teal-500/50 transition-all resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-400 font-mono uppercase block mb-1">
+                        Transfer Target <span className="text-slate-500">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={propTransferTarget}
+                        onChange={(e) => setPropTransferTarget(e.target.value)}
+                        placeholder="5... SS58 Address"
+                        className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-400 font-mono uppercase block mb-1">Disbursement (DALLA Ɗ)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.000001"
+                        value={propTransferValue}
+                        onChange={(e) => setPropTransferValue(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {propTxHash && (
+                    <div className="text-xs text-teal-300 font-mono p-3 bg-teal-500/10 border border-teal-500/30 rounded-xl break-all">
+                      Submitted on-chain: {propTxHash}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleCreateProposal}
+                    disabled={propBusy || !selectedAccount?.address || !propDescription.trim()}
+                    className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold rounded-2xl text-xs hover:shadow-lg hover:shadow-teal-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {propBusy ? 'Submitting to ink! Contract…' : 'Submit DAO Proposal'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Proposals List */}
+              <div className="space-y-3">
+                {daoLoading && daoProposals.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-6 font-mono">Loading proposals from Substrate RPC…</p>
+                ) : daoProposals.length === 0 ? (
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 text-center text-xs text-slate-400 font-mono">
+                    {selectedAccount?.address
+                      ? 'No proposals active in this contract block. Submit the first proposal above!'
+                      : 'Connect wallet to view ink! DAO proposals.'}
+                  </div>
+                ) : (
+                  daoProposals.map((proposal) => {
+                    const yes = BigInt(proposal.votesFor || '0');
+                    const no = BigInt(proposal.votesAgainst || '0');
+                    const total = yes + no;
+                    const yesPct = total > 0n ? Number((yes * 10000n) / total) / 100 : 0;
+                    const isActive = proposal.status.toLowerCase() === 'active' || proposal.status.toLowerCase() === 'pending';
+                    const busy = voteBusyId === proposal.id;
+                    return (
+                      <div
+                        key={proposal.id}
+                        className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <h4 className="font-bold text-white text-sm">
+                              {proposal.description || `Proposal #${proposal.id}`}
+                            </h4>
+                            <p className="text-xs text-slate-400 font-mono">
+                              ID #{proposal.id} • Ends @ block {proposal.endBlock.toLocaleString()}
+                            </p>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-mono font-bold uppercase border ${
+                            isActive ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' :
+                            proposal.status.toLowerCase() === 'passed' || proposal.status.toLowerCase() === 'executed'
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                              : 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                          }`}>
+                            {proposal.status}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 font-mono text-xs">
+                          <div className="flex justify-between text-slate-400">
+                            <span>Aye: {yes.toString()}</span>
+                            <span>Nay: {no.toString()}</span>
+                          </div>
+                          <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                            <div
+                              className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 rounded-full transition-all duration-500"
+                              style={{ width: `${yesPct}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 font-mono text-xs">
+                          <span className="text-slate-500">Proposer: {proposal.proposer.slice(0, 8)}…{proposal.proposer.slice(-6)}</span>
+                          {isActive && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleVote(proposal.id, true)}
+                                disabled={busy || !selectedAccount?.address}
+                                className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
+                              >
+                                {busy ? '…' : 'Vote Aye'}
+                              </button>
+                              <button
+                                onClick={() => handleVote(proposal.id, false)}
+                                disabled={busy || !selectedAccount?.address}
+                                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
+                              >
+                                {busy ? '…' : 'Vote Nay'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'nft' && (
+            <>
+              {/* Collection Summary */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-white text-base">{nftCollection?.name ?? 'BeliNFT Collection'}</h3>
+                    <p className="text-xs text-slate-400 font-mono">
+                      {nftCollection?.symbol ?? 'BNFT'} • {nftCollection?.totalSupply ?? 0} minted total
+                    </p>
+                  </div>
+                  <Heart size={28} className="text-teal-400" weight="fill" />
+                </div>
+                <p className="text-xs font-mono text-slate-300 pt-2 border-t border-slate-800">
+                  Citizen Holdings: <span className="font-bold text-teal-400">{nftBalance}</span> {nftCollection?.symbol ?? 'BNFT'}
+                </p>
+              </div>
+
+              {nftError && (
+                <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-xs text-rose-300 font-mono">
+                  {nftError}
+                </div>
+              )}
+
+              {nftTxHash && (
+                <div className="p-3 bg-teal-500/10 border border-teal-500/30 rounded-2xl text-xs text-teal-300 font-mono break-all">
+                  Submitted: {nftTxHash}
+                </div>
+              )}
+
+              {/* Mint NFT Card */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div>
+                  <h3 className="font-bold text-white text-base">Mint BeliNFT</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Deploy a new unique asset into the BeliNFT ink! contract.
+                  </p>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-slate-400 font-mono uppercase block mb-1">
+                      Recipient <span className="text-slate-500">(Defaults to connected wallet)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={nftMintTo}
+                      onChange={(e) => setNftMintTo(e.target.value)}
+                      placeholder={selectedAccount?.address ?? '5...'}
+                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-mono uppercase block mb-1">Metadata IPFS / HTTPS URI</label>
+                    <input
+                      type="text"
+                      value={nftMintUri}
+                      onChange={(e) => setNftMintUri(e.target.value)}
+                      placeholder="ipfs://bafy... or pakit://..."
+                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={handleMintNft}
+                    disabled={nftMintBusy || !selectedAccount?.address || !nftMintUri.trim()}
+                    className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold rounded-2xl text-xs hover:shadow-lg hover:shadow-teal-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {nftMintBusy ? 'Minting NFT…' : 'Mint BeliNFT'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Transfer NFT Card */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div>
+                  <h3 className="font-bold text-white text-base">Transfer BeliNFT</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Transfer sovereign ownership to another citizen.</p>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-slate-400 font-mono uppercase block mb-1">Recipient Address</label>
+                    <input
+                      type="text"
+                      value={nftTransferTo}
+                      onChange={(e) => setNftTransferTo(e.target.value)}
+                      placeholder="5..."
+                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-mono uppercase block mb-1">Token ID</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={nftTransferId}
+                      onChange={(e) => setNftTransferId(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={handleTransferNft}
+                    disabled={nftTransferBusy || !selectedAccount?.address || !nftTransferTo.trim() || !nftTransferId.trim()}
+                    className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 font-bold rounded-2xl text-xs hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {nftTransferBusy ? 'Transferring…' : 'Transfer NFT'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Owned NFTs */}
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-white text-base">Your BeliNFTs</h3>
+                  <button
+                    onClick={() => void refreshOwnedNfts()}
+                    className="text-xs font-mono text-teal-400 hover:text-teal-300 transition-colors"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {ownedNfts.length === 0 ? (
+                  <p className="text-xs text-slate-400 font-mono text-center py-4">
+                    {selectedAccount?.address
+                      ? 'No BeliNFTs registered to this account in the first 100 token IDs.'
+                      : 'Connect wallet to view your owned NFTs.'}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {ownedNfts.map((n) => (
+                      <div
+                        key={n.id}
+                        className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-xs space-y-1 font-mono"
+                      >
+                        <p className="font-bold text-white text-sm">Token #{n.id}</p>
+                        <p className="break-all text-slate-400 text-[11px]">{n.uri ?? '— no URI —'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

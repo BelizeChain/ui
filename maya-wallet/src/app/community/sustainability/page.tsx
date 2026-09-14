@@ -19,6 +19,7 @@ import {
   Coins,
   Receipt,
   DownloadSimple,
+  Check,
 } from 'phosphor-react';
 
 interface GreenProject {
@@ -263,13 +264,17 @@ export default function SustainabilityPage() {
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <span className="font-bold text-white text-sm block">Turneffe Marine Eco-Operator Badge</span>
                 <p className="text-slate-400 text-[11px]">Certified 0% single-use plastic and 100% solar dive boat telemetry on BelizeChain.</p>
-                <span className="text-emerald-400 text-[10px] font-bold block">✓ Verified by Ministry of Blue Economy</span>
+                <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                  <Check size={12} weight="bold" /> Verified by Ministry of Blue Economy
+                </span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <span className="font-bold text-white text-sm block">Cayo Agroforestry Carbon Neutral Badge</span>
                 <p className="text-slate-400 text-[11px]">Organic shade-grown cacao farm with satellite-verified canopy coverage on LandLedger.</p>
-                <span className="text-emerald-400 text-[10px] font-bold block">✓ Verified by Ministry of Agriculture</span>
+                <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                  <Check size={12} weight="bold" /> Verified by Ministry of Agriculture
+                </span>
               </div>
             </div>
           </div>

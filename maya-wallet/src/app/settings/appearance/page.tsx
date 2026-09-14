@@ -1,130 +1,122 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Moon, Sun } from 'phosphor-react';
+import { ArrowLeft, Moon, Sun, Sparkle, CheckCircle } from 'phosphor-react';
 import { useState, useEffect } from 'react';
 
 export default function SettingsAppearancePage() {
-  const [theme, setThemeState] = useState<'light' | 'dark'>('light');
+  const [theme, setThemeState] = useState<'dark' | 'midnight' | 'cyberpunk'>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Load theme from localStorage
     const stored = localStorage.getItem('maya-theme');
-    if (stored === 'light' || stored === 'dark') {
-      setThemeState(stored);
+    if (stored === 'dark' || stored === 'midnight' || stored === 'cyberpunk') {
+      setThemeState(stored as any);
     }
   }, []);
 
-  const setTheme = (newTheme: 'light' | 'dark') => {
+  const setTheme = (newTheme: 'dark' | 'midnight' | 'cyberpunk') => {
     setThemeState(newTheme);
     localStorage.setItem('maya-theme', newTheme);
-    // Apply theme to document
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
   };
 
   if (!mounted) {
-    return null; // Avoid SSR hydration mismatch
+    return null;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-caribbean-50 to-blue-50 pb-20">
-      <div className="bg-gradient-to-r from-caribbean-600 to-caribbean-500 text-white p-6 shadow-lg">
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-[#030914] to-slate-950 text-white pb-20">
+      {/* Header */}
+      <div className="sticky top-0 z-20 backdrop-blur-xl bg-slate-950/80 border-b border-slate-800/80 px-4 py-4">
+        <div className="max-w-3xl mx-auto flex items-center gap-4">
           <Link href="/settings">
-            <button className="p-2 hover:bg-gray-700/20 rounded-lg transition-colors">
-              <ArrowLeft size={24} weight="bold" />
+            <button className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 text-slate-300 hover:text-white transition-colors">
+              <ArrowLeft size={20} weight="bold" />
             </button>
           </Link>
-          <h1 className="text-2xl font-bold">Appearance</h1>
+          <div>
+            <h1 className="text-lg font-bold text-white tracking-tight">Appearance</h1>
+            <p className="text-xs text-slate-400">Customize theme and visual aesthetics</p>
+          </div>
         </div>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="max-w-3xl mx-auto p-4 space-y-6 mt-2">
         {/* Theme Selection */}
-        <div className="bg-gray-800 rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-bluehole-900 mb-4">Theme</h2>
-          
-          <div className="space-y-3">
-            {/* Light Mode */}
-            <button
-              onClick={() => setTheme('light')}
-              className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                theme === 'light'
-                  ? 'border-caribbean-500 bg-caribbean-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Sun size={24} weight="fill" className="text-yellow-600" />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-bluehole-900">Light</p>
-                  <p className="text-sm text-gray-400">Bright and clean</p>
-                </div>
-              </div>
-              {theme === 'light' && (
-                <div className="h-6 w-6 rounded-full bg-caribbean-500 flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-full bg-gray-800"></div>
-                </div>
-              )}
-            </button>
+        <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-white">Visual Themes</h2>
+            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-medium">
+              Dark Mode Active
+            </span>
+          </div>
 
-            {/* Dark Mode */}
+          <div className="space-y-3">
+            {/* Dark Slate (Default) */}
             <button
               onClick={() => setTheme('dark')}
-              className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+              className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left ${
                 theme === 'dark'
-                  ? 'border-caribbean-500 bg-caribbean-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-cyan-500/60 bg-cyan-500/10 shadow-lg shadow-cyan-500/5'
+                  : 'border-slate-800 bg-slate-950/50 hover:border-slate-700'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <Moon size={24} weight="fill" className="text-indigo-600" />
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-cyan-400">
+                  <Moon size={20} weight="fill" />
                 </div>
-                <div className="text-left">
-                  <p className="font-semibold text-bluehole-900">Dark</p>
-                  <p className="text-sm text-gray-400">Easy on the eyes</p>
+                <div>
+                  <p className="text-sm font-bold text-white">Maya Deep Cyan (Default)</p>
+                  <p className="text-xs text-slate-400">Sovereign glassmorphism with cyan and emerald accents</p>
                 </div>
               </div>
               {theme === 'dark' && (
-                <div className="h-6 w-6 rounded-full bg-caribbean-500 flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-full bg-gray-800"></div>
+                <div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center text-slate-950">
+                  <CheckCircle size={18} weight="fill" />
                 </div>
               )}
             </button>
 
-            {/* System Mode - Coming Soon */}
-            <div className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 opacity-60">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-100 rounded-lg">
-                  <div className="flex">
-                    <Sun size={12} className="text-yellow-600" />
-                    <Moon size={12} className="text-indigo-600" />
-                  </div>
+            {/* Midnight Obsidian */}
+            <button
+              onClick={() => setTheme('midnight')}
+              className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left ${
+                theme === 'midnight'
+                  ? 'border-cyan-500/60 bg-cyan-500/10 shadow-lg shadow-cyan-500/5'
+                  : 'border-slate-800 bg-slate-950/50 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-indigo-400">
+                  <Sparkle size={20} weight="fill" />
                 </div>
-                <div className="text-left">
-                  <p className="font-semibold text-bluehole-900">System</p>
-                  <p className="text-sm text-gray-400">Coming soon</p>
+                <div>
+                  <p className="text-sm font-bold text-white">Midnight Obsidian</p>
+                  <p className="text-xs text-slate-400">OLED pure black backdrop with high-contrast borders</p>
                 </div>
               </div>
-            </div>
+              {theme === 'midnight' && (
+                <div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center text-slate-950">
+                  <CheckCircle size={18} weight="fill" />
+                </div>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Preview */}
-        <div className="bg-gray-800 rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-bluehole-900 mb-4">Preview</h2>
-          <div className="bg-gradient-to-br from-caribbean-600 to-caribbean-500 rounded-xl p-4 text-white">
-            <p className="font-semibold mb-1">Maya Wallet</p>
-            <p className="text-sm text-white/80">Your digital gateway to Belize</p>
+        {/* Live Preview Card */}
+        <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-xl space-y-3">
+          <h2 className="text-sm font-bold text-white">Theme Preview</h2>
+          <div className="rounded-xl p-5 bg-gradient-to-r from-slate-900 via-[#04101e] to-slate-900 border border-cyan-500/30 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-cyan-400 font-mono tracking-wider">MAYA WALLET Ɗ</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono">
+                CONNECTED
+              </span>
+            </div>
+            <p className="text-xl font-bold text-white tracking-tight">1,250.00 Ɗ</p>
+            <p className="text-xs text-slate-400 mt-1">Sovereign Web3 Gateway to Belize</p>
           </div>
         </div>
       </div>

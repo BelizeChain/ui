@@ -13,6 +13,7 @@ import {
   ArrowSquareOut,
   FileText,
   Heartbeat,
+  X,
 } from 'phosphor-react';
 import { useWallet } from '@/contexts/WalletContext';
 import {
@@ -355,7 +356,9 @@ export default function CitizenJusticePage() {
                 <Scales size={22} className="text-amber-400" />
                 <h3 className="text-base font-bold text-white">Open Restorative Dispute</h3>
               </div>
-              <button onClick={() => setIsOpenModalOpen(false)} className="text-gray-400 hover:text-white">✕</button>
+              <button onClick={() => setIsOpenModalOpen(false)} className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+                <X size={18} />
+              </button>
             </div>
 
             <form onSubmit={handleOpenDispute} className="space-y-4">
@@ -463,7 +466,9 @@ export default function CitizenJusticePage() {
                 <Scales size={22} className="text-purple-400" />
                 <h3 className="text-base font-bold text-white">Appeal Ruling #{appealDispute.id}</h3>
               </div>
-              <button onClick={() => setAppealDispute(null)} className="text-gray-400 hover:text-white">✕</button>
+              <button onClick={() => setAppealDispute(null)} className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+                <X size={18} />
+              </button>
             </div>
 
             <form onSubmit={handleAppealSubmit} className="space-y-4">

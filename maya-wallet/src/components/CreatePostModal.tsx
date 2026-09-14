@@ -6,7 +6,6 @@ import { useWallet } from '@/contexts/WalletContext';
 import {
   X,
   ImageSquare,
-  Smiley,
   MapPin,
   Globe,
   Users,
@@ -33,9 +32,9 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const postTypes = [
-    { value: 'community', label: 'Community', icon: Users, color: 'text-blue-400 bg-blue-500/20' },
-    { value: 'governance', label: 'Governance', icon: Scales, color: 'text-purple-400 bg-purple-500/20' },
-    { value: 'environment', label: 'Environment', icon: Leaf, color: 'text-emerald-400 bg-emerald-500/20' },
+    { value: 'community', label: 'District Initiative', icon: Users, color: 'text-blue-300 bg-blue-500/15' },
+    { value: 'governance', label: 'Civic Governance', icon: Scales, color: 'text-cyan-300 bg-cyan-500/15' },
+    { value: 'environment', label: 'Reef & Ecology', icon: Leaf, color: 'text-emerald-300 bg-emerald-500/15' },
   ];
 
   const districts = [
@@ -46,7 +45,7 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
     'Cayo',
     'Stann Creek',
     'Toledo',
-    'Islands'
+    'San Pedro / Islands'
   ];
 
   const handleSubmit = async () => {
@@ -75,48 +74,49 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-md z-50"
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl">
+        <div className="max-w-xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Create Post</h2>
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">District Assembly Submission</h2>
+                <p className="text-xs text-slate-400">Publish a citizen initiative or community petition</p>
+              </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-700/50 rounded-full transition-colors"
+                className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
               >
-                <X size={24} className="text-gray-400 hover:text-white" />
+                <X size={20} weight="bold" />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               {/* User Info */}
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">
-                    {selectedAccount?.name?.[0] || 'U'}
-                  </span>
+              <div className="flex items-center space-x-3 bg-slate-950/50 p-3 rounded-2xl border border-slate-800/80">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/40 flex items-center justify-center text-cyan-300 font-bold">
+                  {selectedAccount?.name?.[0] || 'U'}
                 </div>
                 <div>
-                  <p className="font-semibold text-white">
-                    {selectedAccount?.name || 'Anonymous'}
+                  <p className="font-semibold text-white text-sm">
+                    {selectedAccount?.name || 'Verified Citizen'}
                   </p>
-                  <p className="text-xs text-gray-400">
-                    {selectedAccount?.address.slice(0, 6)}...{selectedAccount?.address.slice(-4)}
+                  <p className="text-xs text-slate-400 font-mono">
+                    {selectedAccount?.address ? `${selectedAccount.address.slice(0, 6)}...${selectedAccount.address.slice(-4)}` : 'On-Chain Identity'}
                   </p>
                 </div>
               </div>
 
               {/* Post Type Selection */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  Post Type
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Initiative Category
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {postTypes.map((type) => {
@@ -124,18 +124,19 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
                     return (
                       <button
                         key={type.value}
+                        type="button"
                         onClick={() => setPostType(type.value as any)}
                         className={cn(
-                          'p-3 rounded-lg border-2 transition-all flex flex-col items-center space-y-2',
+                          'p-3 rounded-xl border transition-all flex flex-col items-center space-y-1.5 text-center',
                           postType === type.value
-                            ? 'border-emerald-500 bg-emerald-500/10'
-                            : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
+                            ? 'border-cyan-500 bg-cyan-500/10 text-cyan-300 shadow-sm'
+                            : 'border-slate-800 hover:border-slate-700 bg-slate-950/50 text-slate-400'
                         )}
                       >
-                        <div className={cn('p-2 rounded-lg', type.color)}>
-                          <Icon size={20} weight="fill" />
+                        <div className={cn('p-1.5 rounded-lg', type.color)}>
+                          <Icon size={18} weight="fill" />
                         </div>
-                        <span className="text-xs font-semibold text-white">
+                        <span className="text-xs font-semibold">
                           {type.label}
                         </span>
                       </button>
@@ -146,21 +147,21 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
 
               {/* District Selection */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  <MapPin size={16} className="inline mr-1 text-emerald-400" weight="fill" />
-                  District (Optional)
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <MapPin size={14} className="inline mr-1 text-teal-400" weight="fill" />
+                  Belize District / Municipality
                 </label>
                 <select
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all text-sm font-sans"
                   style={{
                     colorScheme: 'dark',
                   }}
                 >
-                  <option value="" style={{ backgroundColor: '#1f2937', color: '#9ca3af' }}>Select district...</option>
+                  <option value="" style={{ backgroundColor: '#090d16', color: '#94a3b8' }}>Select District Jurisdiction...</option>
                   {districts.map((d) => (
-                    <option key={d} value={d} style={{ backgroundColor: '#1f2937', color: '#ffffff' }}>
+                    <option key={d} value={d} style={{ backgroundColor: '#090d16', color: '#ffffff' }}>
                       {d}
                     </option>
                   ))}
@@ -169,27 +170,22 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
 
               {/* Text Area */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  What's happening in Belize?
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Assembly Proposal / Statement
                 </label>
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Share your thoughts, ideas, or updates..."
-                  className="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all resize-none"
-                  rows={6}
+                  placeholder="Introduce a district assembly proposal, local community initiative, or civic question..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-slate-800 text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all resize-none text-sm leading-relaxed"
+                  rows={5}
                   maxLength={500}
                 />
                 <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center space-x-2">
-                    <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors">
-                      <ImageSquare size={20} className="text-gray-400 hover:text-emerald-400" />
-                    </button>
-                    <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors">
-                      <Smiley size={20} className="text-gray-400 hover:text-emerald-400" />
-                    </button>
-                  </div>
-                  <span className="text-sm text-gray-400">
+                  <span className="text-xs text-slate-500 font-mono">
+                    Strictly respectful, sovereign civic discourse
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
                     {content.length}/500
                   </span>
                 </div>
@@ -197,19 +193,21 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-gray-700/50 flex items-center justify-end space-x-3">
+            <div className="p-4 border-t border-slate-800 flex items-center justify-end space-x-3 bg-slate-950/40">
               <button
+                type="button"
                 onClick={onClose}
-                className="px-6 py-2 rounded-lg border border-gray-700 hover:bg-gray-700/50 font-semibold text-gray-300 hover:text-white transition-colors"
+                className="px-5 py-2 rounded-xl border border-slate-800 hover:bg-slate-800 font-semibold text-slate-300 hover:text-white transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSubmit}
                 disabled={!content.trim() || isSubmitting}
-                className="px-6 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-all"
+                className="px-6 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold transition-all text-sm shadow-md"
               >
-                {isSubmitting ? 'Posting...' : 'Post'}
+                {isSubmitting ? 'Publishing...' : 'Publish to Assembly'}
               </button>
             </div>
           </div>

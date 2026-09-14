@@ -19,6 +19,7 @@ import {
   Receipt,
   Sparkle,
   ShieldCheck,
+  X,
 } from 'phosphor-react';
 
 interface BudgetCategory {
@@ -237,8 +238,8 @@ export default function BudgetPage() {
                 <Plus size={20} className="text-emerald-400" />
                 Add Budget Envelope
               </span>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
-                ✕
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+                <X size={18} />
               </button>
             </div>
 

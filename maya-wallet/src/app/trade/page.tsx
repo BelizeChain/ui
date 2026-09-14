@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import { TradingChartCanvas } from '@/components/trade/TradingChartCanvas';
 import {
   ArrowsLeftRight,
   TrendUp,
@@ -16,6 +17,7 @@ import {
   Vault,
   Lightning,
   ArrowLeft,
+  ArrowRight,
   ChartLineUp,
   Sparkle,
   SlidersHorizontal,
@@ -77,6 +79,135 @@ interface TradingPair {
   category: 'Sovereign' | 'Cross-Chain' | 'RWA & Eco';
 }
 
+interface CandleData {
+  time: string;
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  up: boolean;
+}
+
+function formatPairPrice(val: number, p?: TradingPair): string {
+  if (isNaN(val)) return '0.0000';
+  if (val >= 1000) return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (val >= 10) return val.toFixed(3);
+  return val.toFixed(4);
+}
+
+function generateCandles(pair: TradingPair, tf: string, count?: number): CandleData[] {
+  const now = Date.now();
+  let stepMinutes = 15;
+  let defaultCount = 180;
+  if (tf === '1m') {
+    stepMinutes = 1;
+    defaultCount = 200;
+  } else if (tf === '5m') {
+    stepMinutes = 5;
+    defaultCount = 200;
+  } else if (tf === '15m') {
+    stepMinutes = 15;
+    defaultCount = 200;
+  } else if (tf === '30m') {
+    stepMinutes = 30;
+    defaultCount = 200;
+  } else if (tf === '1H') {
+    stepMinutes = 60;
+    defaultCount = 200;
+  } else if (tf === '4H') {
+    stepMinutes = 240;
+    defaultCount = 200;
+  } else if (tf === '1D') {
+    stepMinutes = 1440;
+    defaultCount = 365;
+  } else if (tf === '1W') {
+    stepMinutes = 10080;
+    defaultCount = 104;
+  } else if (tf === '1M') {
+    stepMinutes = 43200;
+    defaultCount = 36;
+  }
+
+  const effectiveCount = count ?? defaultCount;
+  const stepMs = stepMinutes * 60 * 1000;
+  const candles: CandleData[] = [];
+
+  let seed = 0;
+  const hashKey = pair.symbol + '_' + tf;
+  for (let i = 0; i < hashKey.length; i++) {
+    seed = (seed * 31 + hashKey.charCodeAt(i)) & 0xffffffff;
+  }
+  const pseudoRandom = () => {
+    seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+    return (seed >>> 0) / 4294967296;
+  };
+
+  const currentPrice = pair.price;
+  const spread = Math.max(pair.high24h - pair.low24h, currentPrice * 0.035);
+  const lowBound = Math.min(pair.low24h, currentPrice - spread * 0.5);
+  const highBound = Math.max(pair.high24h, currentPrice + spread * 0.5);
+
+  const closes: number[] = [currentPrice];
+  let p = currentPrice;
+  for (let i = 1; i < effectiveCount; i++) {
+    const delta = (pseudoRandom() - 0.485) * (spread * 0.17);
+    p = Math.max(lowBound * 0.99, Math.min(highBound * 1.01, p - delta));
+    closes.unshift(p);
+  }
+
+  for (let i = 0; i < effectiveCount; i++) {
+    const close = closes[i];
+    const open = i === 0 ? close * (1 + (pseudoRandom() - 0.5) * 0.008) : closes[i - 1];
+    const maxOC = Math.max(open, close);
+    const minOC = Math.min(open, close);
+    const wickHigh = maxOC + pseudoRandom() * (spread * 0.06);
+    const wickLow = Math.max(minOC * 0.92, minOC - pseudoRandom() * (spread * 0.06));
+    const high = Math.max(maxOC, wickHigh);
+    const low = Math.min(minOC, wickLow);
+    const up = close >= open;
+
+    const candleTime = new Date(now - (effectiveCount - 1 - i) * stepMs);
+    let timeStr = '';
+    if (stepMinutes >= 43200) {
+      timeStr = candleTime.toLocaleDateString(undefined, { year: '2-digit', month: 'short' });
+    } else if (stepMinutes >= 1440) {
+      timeStr = candleTime.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } else {
+      timeStr = candleTime.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const volume = Math.floor((pair.volume24h / effectiveCount) * (0.5 + pseudoRandom() * 1.1));
+
+    candles.push({
+      time: timeStr,
+      timestamp: candleTime.getTime(),
+      open,
+      high,
+      low,
+      close,
+      volume,
+      up,
+    });
+  }
+
+  return candles;
+}
+
+function calculateEMA(candles: CandleData[], period: number): number[] {
+  if (candles.length === 0) return [];
+  const k = 2 / (period + 1);
+  const emas: number[] = [];
+  let ema = candles[0].close;
+  emas.push(ema);
+  for (let i = 1; i < candles.length; i++) {
+    ema = candles[i].close * k + ema * (1 - k);
+    emas.push(ema);
+  }
+  return emas;
+}
+
 const TRADING_PAIRS: TradingPair[] = [
   { symbol: 'DALLA/bBZD', base: 'DALLA', quote: 'bBZD', price: 0.5000, change24h: 4.25, high24h: 0.5280, low24h: 0.4810, volume24h: 1842500, category: 'Sovereign' },
   { symbol: 'DALLA/USDT', base: 'DALLA', quote: 'USDT', price: 0.2500, change24h: 3.80, high24h: 0.2640, low24h: 0.2405, volume24h: 940200, category: 'Sovereign' },
@@ -117,14 +248,25 @@ function TradePageInner() {
 
   // Main UI Mode & Tabs
   const [tradingMode, setTradingMode] = useState<'PRO' | 'AMM'>(initialMode);
-  const [chartTimeframe, setChartTimeframe] = useState<'1m' | '5m' | '15m' | '1H' | '4H' | '1D'>('15m');
+  const [chartTimeframe, setChartTimeframe] = useState<
+    '1m' | '5m' | '15m' | '30m' | '1H' | '4H' | '1D' | '1W' | '1M'
+  >('15m');
   const [chartType, setChartType] = useState<'candles' | 'depth'>('candles');
   const [bottomTab, setBottomTab] = useState<'orders' | 'history' | 'trades' | 'liquidity'>('orders');
+
+  // Order Book UI View & Precision State
+  const [orderBookView, setOrderBookView] = useState<'BOTH' | 'BIDS' | 'ASKS'>('BOTH');
+  const [bookPrecision, setBookPrecision] = useState<'AUTO' | '0.0001' | '0.001' | '0.01'>('AUTO');
+
+  // Chart Interactive Hover State
+  const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null);
+  const [hoverCoords, setHoverCoords] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredDepth, setHoveredDepth] = useState<{ side: 'BID' | 'ASK'; price: number; amount: number; total: number } | null>(null);
 
   // Order Ticket State
   const [orderType, setOrderType] = useState<'LIMIT' | 'MARKET' | 'STOP_LOSS'>('LIMIT');
   const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY');
-  const [limitPrice, setLimitPrice] = useState<string>(selectedPair.price.toFixed(4));
+  const [limitPrice, setLimitPrice] = useState<string>(formatPairPrice(TRADING_PAIRS[0].price, TRADING_PAIRS[0]));
   const [orderAmount, setOrderAmount] = useState<string>('500');
   const [sliderPercent, setSliderPercent] = useState<number>(25);
 
@@ -209,15 +351,21 @@ function TradePageInner() {
     { id: 't-6', price: 0.4990, amount: 6200, side: 'SELL', time: '12:00:52' },
   ]);
 
-  // Live Simulated Order Book
+  // Live Simulated Institutional Order Book (12 Depth Tiers)
   const bids: OrderBookEntry[] = useMemo(() => {
     const rawBids = [
-      { price: selectedPair.price * 0.999, amount: 14200 },
-      { price: selectedPair.price * 0.996, amount: 28500 },
-      { price: selectedPair.price * 0.990, amount: 45000 },
-      { price: selectedPair.price * 0.985, amount: 32000 },
-      { price: selectedPair.price * 0.980, amount: 68000 },
-      { price: selectedPair.price * 0.975, amount: 89000 },
+      { price: selectedPair.price * 0.9995, amount: 8400 },
+      { price: selectedPair.price * 0.9985, amount: 14200 },
+      { price: selectedPair.price * 0.9960, amount: 28500 },
+      { price: selectedPair.price * 0.9935, amount: 36200 },
+      { price: selectedPair.price * 0.9900, amount: 45000 },
+      { price: selectedPair.price * 0.9875, amount: 22000 },
+      { price: selectedPair.price * 0.9850, amount: 32000 },
+      { price: selectedPair.price * 0.9820, amount: 54000 },
+      { price: selectedPair.price * 0.9800, amount: 68000 },
+      { price: selectedPair.price * 0.9775, amount: 41000 },
+      { price: selectedPair.price * 0.9750, amount: 89000 },
+      { price: selectedPair.price * 0.9700, amount: 112000 },
     ];
     let runningTotal = 0;
     const maxTotal = rawBids.reduce((acc, b) => acc + b.amount, 0);
@@ -234,12 +382,18 @@ function TradePageInner() {
 
   const asks: OrderBookEntry[] = useMemo(() => {
     const rawAsks = [
-      { price: selectedPair.price * 1.001, amount: 12400 },
-      { price: selectedPair.price * 1.004, amount: 21800 },
-      { price: selectedPair.price * 1.010, amount: 38200 },
-      { price: selectedPair.price * 1.015, amount: 49000 },
-      { price: selectedPair.price * 1.020, amount: 72000 },
-      { price: selectedPair.price * 1.025, amount: 95000 },
+      { price: selectedPair.price * 1.0005, amount: 7200 },
+      { price: selectedPair.price * 1.0015, amount: 12400 },
+      { price: selectedPair.price * 1.0040, amount: 21800 },
+      { price: selectedPair.price * 1.0065, amount: 29500 },
+      { price: selectedPair.price * 1.0100, amount: 38200 },
+      { price: selectedPair.price * 1.0125, amount: 19400 },
+      { price: selectedPair.price * 1.0150, amount: 49000 },
+      { price: selectedPair.price * 1.0180, amount: 58000 },
+      { price: selectedPair.price * 1.0200, amount: 72000 },
+      { price: selectedPair.price * 1.0225, amount: 39000 },
+      { price: selectedPair.price * 1.0250, amount: 95000 },
+      { price: selectedPair.price * 1.0300, amount: 128000 },
     ];
     let runningTotal = 0;
     const maxTotal = rawAsks.reduce((acc, a) => acc + a.amount, 0);
@@ -254,20 +408,117 @@ function TradePageInner() {
     });
   }, [selectedPair.price]);
 
+  // Spread calculation
+  const spreadValue = useMemo(() => {
+    if (asks.length === 0 || bids.length === 0) return { absolute: 0, percent: 0 };
+    const diff = Math.max(0, asks[0].price - bids[0].price);
+    const pct = (diff / selectedPair.price) * 100;
+    return { absolute: diff, percent: pct };
+  }, [asks, bids, selectedPair.price]);
+
+  // Dynamic Candlestick Data
+  const candles: CandleData[] = useMemo(() => {
+    return generateCandles(selectedPair, chartTimeframe);
+  }, [selectedPair, chartTimeframe]);
+
+  const activeCandle = hoveredCandle || (candles.length > 0 ? candles[candles.length - 1] : null);
+
+  const { minPrice, maxPrice, maxVolume } = useMemo(() => {
+    if (candles.length === 0) return { minPrice: 0, maxPrice: 1, maxVolume: 1 };
+    const min = Math.min(...candles.map((c) => c.low));
+    const max = Math.max(...candles.map((c) => c.high));
+    const pad = (max - min) * 0.08 || min * 0.02;
+    return {
+      minPrice: Math.max(0.0001, min - pad),
+      maxPrice: max + pad,
+      maxVolume: Math.max(...candles.map((c) => c.volume), 1),
+    };
+  }, [candles]);
+
+  const ema9 = useMemo(() => calculateEMA(candles, 9), [candles]);
+  const ema21 = useMemo(() => calculateEMA(candles, 21), [candles]);
+
+  const maxDepthTotal = useMemo(() => {
+    return Math.max(
+      bids[bids.length - 1]?.total || 1,
+      asks[asks.length - 1]?.total || 1
+    );
+  }, [bids, asks]);
+
+  const bidsReversed = useMemo(() => [...bids].reverse(), [bids]);
+
+  const bidsDepthPath = useMemo(() => {
+    if (bidsReversed.length === 0) return '';
+    const points = bidsReversed.map((b, i) => {
+      const x = 20 + (i / Math.max(1, bidsReversed.length - 1)) * 330;
+      const y = 220 - (b.total / maxDepthTotal) * 165;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    return `M 20,220 L ${points.join(' L ')} L 350,220 Z`;
+  }, [bidsReversed, maxDepthTotal]);
+
+  const asksDepthPath = useMemo(() => {
+    if (asks.length === 0) return '';
+    const points = asks.map((a, i) => {
+      const x = 370 + (i / Math.max(1, asks.length - 1)) * 330;
+      const y = 220 - (a.total / maxDepthTotal) * 165;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    return `M 370,220 L ${points.join(' L ')} L 700,220 Z`;
+  }, [asks, maxDepthTotal]);
+
+  const handleChartMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = Math.max(0, Math.min(720, ((e.clientX - rect.left) / rect.width) * 720));
+    const mouseY = Math.max(0, Math.min(250, ((e.clientY - rect.top) / rect.height) * 250));
+    const slotW = 720 / Math.max(1, candles.length);
+    const idx = Math.min(candles.length - 1, Math.max(0, Math.floor(mouseX / slotW)));
+    setHoveredCandle(candles[idx]);
+    setHoverCoords({ x: idx * slotW + slotW / 2, y: mouseY });
+  };
+
+  const handleChartMouseLeave = () => {
+    setHoveredCandle(null);
+    setHoverCoords(null);
+    setHoveredDepth(null);
+  };
+
+  const handleDepthMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = Math.max(0, Math.min(720, ((e.clientX - rect.left) / rect.width) * 720));
+    if (mouseX < 350) {
+      const ratio = Math.max(0, Math.min(1, (mouseX - 20) / 330));
+      const idx = Math.min(bids.length - 1, Math.floor((1 - ratio) * bids.length));
+      const b = bids[idx];
+      if (b) {
+        setHoveredDepth({ side: 'BID', price: b.price, amount: b.amount, total: b.total });
+      }
+    } else if (mouseX > 370) {
+      const ratio = Math.max(0, Math.min(1, (mouseX - 370) / 330));
+      const idx = Math.min(asks.length - 1, Math.floor(ratio * asks.length));
+      const a = asks[idx];
+      if (a) {
+        setHoveredDepth({ side: 'ASK', price: a.price, amount: a.amount, total: a.total });
+      }
+    } else {
+      setHoveredDepth(null);
+    }
+  };
+
   // Handle Pair Switching
   const handleSelectPair = (pair: TradingPair) => {
     setSelectedPair(pair);
-    setLimitPrice(pair.price.toFixed(4));
+    setLimitPrice(formatPairPrice(pair.price, pair));
     setPairDropdownOpen(false);
   };
 
   // Handle Click-to-Trade from Order Book
   const handleOrderBookClick = (price: number, amount: number) => {
-    setLimitPrice(price.toFixed(4));
+    setLimitPrice(formatPairPrice(price, selectedPair));
     setOrderAmount(amount.toString());
     addNotification({
       type: 'info',
-      message: `Pre-filled ${selectedPair.symbol} order ticket: ${amount} @ ${price.toFixed(4)}`,
+      message: `Pre-filled ${selectedPair.symbol} order ticket: ${amount.toLocaleString()} @ ${formatPairPrice(price, selectedPair)}`,
     });
   };
 
@@ -346,7 +597,7 @@ function TradePageInner() {
 
       addNotification({
         type: 'success',
-        message: `BelizeX Router Executed: Swapped ${amt} ${fromAsset} ➔ ${estOut.toFixed(2)} ${toAsset} via contract r1Uen... (Slippage: ${slippage}%)`,
+        message: `BelizeX Router Executed: Swapped ${amt} ${fromAsset} to ${estOut.toFixed(2)} ${toAsset} via contract r1Uen... (Slippage: ${slippage}%)`,
       });
     }, 800);
   };
@@ -464,7 +715,7 @@ function TradePageInner() {
                         >
                           <span className="font-bold">{pair.symbol}</span>
                           <div className="text-right">
-                            <span className="font-mono block">{pair.price.toFixed(4)}</span>
+                            <span className="font-mono block">{formatPairPrice(pair.price, pair)}</span>
                             <span
                               className={`text-[10px] font-semibold ${
                                 pair.change24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -487,7 +738,7 @@ function TradePageInner() {
             <div>
               <span className="text-[10px] text-slate-400 block uppercase font-semibold">Last Price</span>
               <span className="text-base font-bold font-mono text-emerald-400 flex items-center gap-1">
-                {selectedPair.price.toFixed(4)}{' '}
+                {formatPairPrice(selectedPair.price, selectedPair)}{' '}
                 <span className="text-[11px] text-slate-400 font-normal">{selectedPair.quote}</span>
               </span>
             </div>
@@ -510,12 +761,12 @@ function TradePageInner() {
 
             <div className="hidden md:block">
               <span className="text-[10px] text-slate-400 block uppercase font-semibold">24h High</span>
-              <span className="font-mono text-slate-200 font-semibold">{selectedPair.high24h.toFixed(4)}</span>
+              <span className="font-mono text-slate-200 font-semibold">{formatPairPrice(selectedPair.high24h, selectedPair)}</span>
             </div>
 
             <div className="hidden md:block">
               <span className="text-[10px] text-slate-400 block uppercase font-semibold">24h Low</span>
-              <span className="font-mono text-slate-200 font-semibold">{selectedPair.low24h.toFixed(4)}</span>
+              <span className="font-mono text-slate-200 font-semibold">{formatPairPrice(selectedPair.low24h, selectedPair)}</span>
             </div>
 
             <div className="hidden lg:block">
@@ -579,11 +830,11 @@ function TradePageInner() {
                   {/* Timeframe Selectors & Chart Type */}
                   <div className="flex items-center gap-2">
                     <div className="flex bg-slate-950/90 p-1 rounded-xl border border-slate-800 text-[11px] font-mono">
-                      {(['1m', '5m', '15m', '1H', '4H', '1D'] as const).map((tf) => (
+                      {(['1m', '5m', '15m', '30m', '1H', '4H', '1D', '1W', '1M'] as const).map((tf) => (
                         <button
                           key={tf}
                           onClick={() => setChartTimeframe(tf)}
-                          className={`px-2.5 py-1 rounded-lg transition-all ${
+                          className={`px-2 py-1 rounded-lg transition-all ${
                             chartTimeframe === tf
                               ? 'bg-slate-800 text-cyan-300 font-bold'
                               : 'text-slate-400 hover:text-white'
@@ -615,100 +866,147 @@ function TradePageInner() {
                   </div>
                 </div>
 
-                {/* Simulated Interactive SVG Candlestick Chart */}
-                <div className="relative w-full h-72 sm:h-96 my-3 bg-slate-950/80 rounded-2xl border border-slate-800/80 p-4 flex flex-col justify-between overflow-hidden">
-                  {/* Grid Lines */}
-                  <div className="absolute inset-0 grid grid-rows-4 grid-cols-6 pointer-events-none opacity-10">
-                    {Array.from({ length: 24 }).map((_, i) => (
-                      <div key={i} className="border-b border-r border-slate-400" />
-                    ))}
-                  </div>
-
-                  {/* Chart Indicators & Legend */}
-                  <div className="relative z-10 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                    <div className="flex items-center gap-3">
-                      <span className="text-amber-400">EMA(20): {(selectedPair.price * 0.994).toFixed(4)}</span>
-                      <span className="text-purple-400">EMA(50): {(selectedPair.price * 0.988).toFixed(4)}</span>
-                      <span className="text-cyan-400">VOL: 142.5K</span>
+                {/* Interactive Dynamic Candlestick & Depth Chart */}
+                {chartType === 'depth' ? (
+                  <div className="relative w-full h-72 sm:h-96 my-3 bg-slate-950/80 rounded-2xl border border-slate-800/80 p-4 flex flex-col justify-between overflow-hidden">
+                    {/* Depth Header & Metrics */}
+                    <div className="relative z-10 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400 border-b border-slate-800/80 pb-2 gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                          Bids: {bids.reduce((s, b) => s + b.amount, 0).toLocaleString()} {selectedPair.base}
+                        </span>
+                        <span className="text-rose-400 font-bold flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />
+                          Asks: {asks.reduce((s, a) => s + a.amount, 0).toLocaleString()} {selectedPair.base}
+                        </span>
+                      </div>
+                      <div className="text-right text-cyan-300 font-semibold">
+                        Spread: {formatPairPrice(spreadValue.absolute, selectedPair)} ({spreadValue.percent.toFixed(2)}%)
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-emerald-400 font-bold">O: {(selectedPair.price * 0.995).toFixed(4)}</span>{' '}
-                      <span className="text-emerald-400">H: {selectedPair.high24h.toFixed(4)}</span>{' '}
-                      <span className="text-rose-400">L: {selectedPair.low24h.toFixed(4)}</span>{' '}
-                      <span className="text-emerald-400 font-bold">C: {selectedPair.price.toFixed(4)}</span>
+
+                    {/* SVG Depth Chart */}
+                    <svg
+                      className="w-full h-56 sm:h-72 my-auto cursor-crosshair"
+                      viewBox="0 0 720 240"
+                      preserveAspectRatio="none"
+                      onMouseMove={handleDepthMouseMove}
+                      onMouseLeave={handleChartMouseLeave}
+                    >
+                      <defs>
+                        <linearGradient id="bidsDepthGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.05" />
+                        </linearGradient>
+                        <linearGradient id="asksDepthGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.45" />
+                          <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.05" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Grid Lines */}
+                      <line x1="20" y1="55" x2="700" y2="55" stroke="#334155" strokeDasharray="3 3" strokeWidth="0.8" opacity="0.4" />
+                      <line x1="20" y1="110" x2="700" y2="110" stroke="#334155" strokeDasharray="3 3" strokeWidth="0.8" opacity="0.4" />
+                      <line x1="20" y1="165" x2="700" y2="165" stroke="#334155" strokeDasharray="3 3" strokeWidth="0.8" opacity="0.4" />
+                      <line x1="20" y1="220" x2="700" y2="220" stroke="#475569" strokeWidth="1" opacity="0.6" />
+
+                      {/* Mid Market Divider */}
+                      <line x1="360" y1="25" x2="360" y2="220" stroke="#06b6d4" strokeDasharray="4 4" strokeWidth="1.5" opacity="0.8" />
+                      <rect x="315" y="12" width="90" height="20" rx="4" fill="#0f172a" stroke="#06b6d4" strokeWidth="1" />
+                      <text x="360" y="26" fill="#38bdf8" fontSize="10" fontFamily="monospace" textAnchor="middle" fontWeight="bold">
+                        Mid {formatPairPrice(selectedPair.price, selectedPair)}
+                      </text>
+
+                      {/* Bids Depth Fill and Stroke */}
+                      {bidsDepthPath && <path d={bidsDepthPath} fill="url(#bidsDepthGradient)" />}
+                      {bidsDepthPath && (
+                        <path
+                          d={bidsDepthPath.replace(' Z', '').replace('M 20,220 L ', 'M ')}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="2.5"
+                        />
+                      )}
+
+                      {/* Asks Depth Fill and Stroke */}
+                      {asksDepthPath && <path d={asksDepthPath} fill="url(#asksDepthGradient)" />}
+                      {asksDepthPath && (
+                        <path
+                          d={asksDepthPath.replace(' Z', '').replace('M 370,220 L ', 'M ')}
+                          fill="none"
+                          stroke="#f43f5e"
+                          strokeWidth="2.5"
+                        />
+                      )}
+
+                      {/* Depth Hover Tooltip */}
+                      {hoveredDepth && (
+                        <g className="pointer-events-none">
+                          <rect
+                            x={hoveredDepth.side === 'BID' ? 60 : 480}
+                            y={40}
+                            width={180}
+                            height={62}
+                            fill="#090d16"
+                            fillOpacity="0.95"
+                            stroke={hoveredDepth.side === 'BID' ? '#10b981' : '#f43f5e'}
+                            strokeWidth="1"
+                            rx="8"
+                          />
+                          <text
+                            x={hoveredDepth.side === 'BID' ? 72 : 492}
+                            y={58}
+                            fill={hoveredDepth.side === 'BID' ? '#34d399' : '#fb7185'}
+                            fontSize="11"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {hoveredDepth.side} LIQUIDITY
+                          </text>
+                          <text
+                            x={hoveredDepth.side === 'BID' ? 72 : 492}
+                            y={74}
+                            fill="#cbd5e1"
+                            fontSize="10"
+                            fontFamily="monospace"
+                          >
+                            Price: {formatPairPrice(hoveredDepth.price, selectedPair)} {selectedPair.quote}
+                          </text>
+                          <text
+                            x={hoveredDepth.side === 'BID' ? 72 : 492}
+                            y={90}
+                            fill="#94a3b8"
+                            fontSize="10"
+                            fontFamily="monospace"
+                          >
+                            Depth: {hoveredDepth.total.toLocaleString()} {selectedPair.base}
+                          </text>
+                        </g>
+                      )}
+                    </svg>
+
+                    {/* Bottom Depth Price Range Axis */}
+                    <div className="relative z-10 flex justify-between text-[10px] font-mono text-slate-400 pt-2 border-t border-slate-800/80">
+                      <span className="text-emerald-400 font-semibold">{formatPairPrice(bids[bids.length - 1]?.price || selectedPair.price * 0.97, selectedPair)}</span>
+                      <span className="text-emerald-400">{formatPairPrice(bids[0]?.price || selectedPair.price * 0.999, selectedPair)}</span>
+                      <span className="text-cyan-300 font-bold">{formatPairPrice(selectedPair.price, selectedPair)}</span>
+                      <span className="text-rose-400">{formatPairPrice(asks[0]?.price || selectedPair.price * 1.001, selectedPair)}</span>
+                      <span className="text-rose-400 font-semibold">{formatPairPrice(asks[asks.length - 1]?.price || selectedPair.price * 1.025, selectedPair)}</span>
                     </div>
                   </div>
-
-                  {/* Visual Candlesticks SVG */}
-                  <svg className="w-full h-56 sm:h-72 my-auto" viewBox="0 0 600 200" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-
-                    {/* Background Area Gradient */}
-                    <path
-                      d="M 0 160 Q 60 140 120 150 T 240 120 T 360 90 T 480 70 T 600 50 L 600 200 L 0 200 Z"
-                      fill="url(#chartGlow)"
-                    />
-
-                    {/* Trend Line */}
-                    <path
-                      d="M 0 160 Q 60 140 120 150 T 240 120 T 360 90 T 480 70 T 600 50"
-                      fill="none"
-                      stroke="#06b6d4"
-                      strokeWidth="2.5"
-                    />
-
-                    {/* Interactive Candlesticks */}
-                    {[
-                      { x: 30, o: 155, c: 145, h: 140, l: 165, up: true },
-                      { x: 75, o: 145, c: 150, h: 142, l: 158, up: false },
-                      { x: 120, o: 150, c: 135, h: 130, l: 155, up: true },
-                      { x: 165, o: 135, c: 125, h: 120, l: 140, up: true },
-                      { x: 210, o: 125, c: 132, h: 122, l: 138, up: false },
-                      { x: 255, o: 132, c: 110, h: 105, l: 135, up: true },
-                      { x: 300, o: 110, c: 100, h: 95, l: 115, up: true },
-                      { x: 345, o: 100, c: 105, h: 98, l: 112, up: false },
-                      { x: 390, o: 105, c: 85, h: 80, l: 110, up: true },
-                      { x: 435, o: 85, c: 75, h: 70, l: 92, up: true },
-                      { x: 480, o: 75, c: 82, h: 72, l: 88, up: false },
-                      { x: 525, o: 82, c: 60, h: 55, l: 85, up: true },
-                      { x: 570, o: 60, c: 50, h: 45, l: 65, up: true },
-                    ].map((candle, idx) => (
-                      <g key={idx} className="cursor-pointer hover:opacity-80 transition-opacity">
-                        <line
-                          x1={candle.x}
-                          y1={candle.h}
-                          x2={candle.x}
-                          y2={candle.l}
-                          stroke={candle.up ? '#10b981' : '#f43f5e'}
-                          strokeWidth="1.5"
-                        />
-                        <rect
-                          x={candle.x - 6}
-                          y={Math.min(candle.o, candle.c)}
-                          width="12"
-                          height={Math.max(4, Math.abs(candle.o - candle.c))}
-                          fill={candle.up ? '#10b981' : '#f43f5e'}
-                          rx="2"
-                        />
-                      </g>
-                    ))}
-                  </svg>
-
-                  {/* Bottom Time Axis */}
-                  <div className="relative z-10 flex justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-800/80">
-                    <span>08:00</span>
-                    <span>09:00</span>
-                    <span>10:00</span>
-                    <span>11:00</span>
-                    <span>12:00</span>
-                    <span className="text-cyan-400 font-bold">LIVE (Ceiba Substrate)</span>
-                  </div>
-                </div>
+                ) : (
+                  <TradingChartCanvas
+                    pairSymbol={selectedPair.symbol}
+                    baseAsset={selectedPair.base}
+                    quoteAsset={selectedPair.quote}
+                    currentPrice={selectedPair.price}
+                    candles={candles}
+                    timeframe={chartTimeframe}
+                    formatPrice={(val) => formatPairPrice(val, selectedPair)}
+                    onSelectTimeframe={(tf) => setChartTimeframe(tf as any)}
+                  />
+                )}
               </div>
 
               {/* Bottom Dashboard: Open Orders, Trade History, Public Trades, Liquidity */}
@@ -797,7 +1095,7 @@ function TradePageInner() {
                                   {ord.side}
                                 </span>
                               </td>
-                              <td className="py-3 font-bold text-white">{ord.price.toFixed(4)}</td>
+                              <td className="py-3 font-bold text-white">{formatPairPrice(ord.price, selectedPair)}</td>
                               <td className="py-3 text-slate-200">{ord.amount}</td>
                               <td className="py-3 text-cyan-400">
                                 {((ord.filled / ord.amount) * 100).toFixed(0)}% ({ord.filled}/{ord.amount})
@@ -850,7 +1148,7 @@ function TradePageInner() {
                                 {ord.side}
                               </span>
                             </td>
-                            <td className="py-3 font-bold text-white">{ord.price.toFixed(4)}</td>
+                            <td className="py-3 font-bold text-white">{formatPairPrice(ord.price, selectedPair)}</td>
                             <td className="py-3 text-slate-200">{ord.amount}</td>
                             <td className="py-3">
                               <span className="text-emerald-400 font-bold flex items-center gap-1">
@@ -886,7 +1184,7 @@ function TradePageInner() {
                                 trade.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
                               }`}
                             >
-                              {trade.price.toFixed(4)}
+                              {formatPairPrice(trade.price, selectedPair)}
                             </td>
                             <td className="py-2 text-slate-200">{trade.amount.toLocaleString()}</td>
                             <td className="py-2">
@@ -970,75 +1268,157 @@ function TradePageInner() {
 
             {/* Right Area: CLOB Order Book & Order Ticket (lg:col-span-4) */}
             <div className="lg:col-span-4 flex flex-col gap-4">
-              {/* CLOB Order Book V1 */}
-              <div className="bg-slate-900/80 border border-teal-500/20 rounded-3xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-3">
+              {/* Institutional CLOB Order Book */}
+              <div className="bg-slate-900/80 border border-teal-500/20 rounded-3xl p-4 sm:p-5 shadow-xl backdrop-blur-md flex flex-col">
+                {/* Header: Title, Book View Modes & Spread */}
+                <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-3 mb-3 gap-2">
                   <div>
-                    <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
-                      <Vault size={16} className="text-cyan-400" />
-                      Order Book V1
-                    </h3>
-                    <span className="text-[10px] text-slate-400">Click any row to trade</span>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
+                        <Vault size={16} className="text-cyan-400" />
+                        Order Book
+                      </h3>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-cyan-300 rounded font-mono border border-cyan-500/20">
+                        Ceiba L2
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">Click any row to fill ticket</span>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 block">Spread</span>
-                    <span className="text-xs font-mono text-cyan-300 font-bold">0.0015 (0.30%)</span>
+
+                  {/* View Modes & Precision */}
+                  <div className="flex items-center gap-2">
+                    {/* 3 View Filter Buttons */}
+                    <div className="flex bg-slate-950/90 p-0.5 rounded-lg border border-slate-800">
+                      <button
+                        onClick={() => setOrderBookView('BOTH')}
+                        title="Split Book (Bids & Asks)"
+                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          orderBookView === 'BOTH'
+                            ? 'bg-slate-800 text-cyan-300 font-extrabold shadow'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                      </button>
+                      <button
+                        onClick={() => setOrderBookView('BIDS')}
+                        title="Bids Only (Buy Liquidity)"
+                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          orderBookView === 'BIDS'
+                            ? 'bg-emerald-500/20 text-emerald-300 font-extrabold shadow border border-emerald-500/40'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                        Bids
+                      </button>
+                      <button
+                        onClick={() => setOrderBookView('ASKS')}
+                        title="Asks Only (Sell Liquidity)"
+                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          orderBookView === 'ASKS'
+                            ? 'bg-rose-500/20 text-rose-300 font-extrabold shadow border border-rose-500/40'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
+                        Asks
+                      </button>
+                    </div>
+
+                    {/* Precision Selector */}
+                    <select
+                      value={bookPrecision}
+                      onChange={(e) => setBookPrecision(e.target.value as any)}
+                      className="bg-slate-950/90 text-slate-300 border border-slate-800 rounded-lg px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-cyan-400"
+                    >
+                      <option value="AUTO">Dec: Auto</option>
+                      <option value="0.0001">0.0001</option>
+                      <option value="0.001">0.001</option>
+                      <option value="0.01">0.01</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Table Header */}
-                <div className="grid grid-cols-3 text-[10px] font-mono text-slate-400 pb-1.5 border-b border-slate-800/60">
+                {/* Spread & Market Info Bar */}
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 pb-2 mb-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-500">Spread</span>
+                  <span className="text-cyan-300 font-bold">
+                    {formatPairPrice(spreadValue.absolute, selectedPair)} ({spreadValue.percent.toFixed(2)}%)
+                  </span>
+                </div>
+
+                {/* Table Column Headers */}
+                <div className="grid grid-cols-3 text-[10px] font-mono text-slate-400 pb-1.5 border-b border-slate-800/80">
                   <span>Price ({selectedPair.quote})</span>
                   <span className="text-right">Size ({selectedPair.base})</span>
                   <span className="text-right">Total</span>
                 </div>
 
-                {/* Asks (Sell Orders - Top, Red) */}
-                <div className="space-y-0.5 my-1.5 font-mono text-[11px]">
-                  {asks.slice(0, 5).reverse().map((ask, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => handleOrderBookClick(ask.price, ask.amount)}
-                      className="relative grid grid-cols-3 py-1 px-1 rounded hover:bg-rose-500/10 cursor-pointer transition-colors"
-                    >
-                      <div
-                        className="absolute right-0 top-0 bottom-0 bg-rose-500/15 rounded pointer-events-none transition-all"
-                        style={{ width: `${ask.depthPercent}%` }}
-                      />
-                      <span className="text-rose-400 font-bold relative z-10">{ask.price.toFixed(4)}</span>
-                      <span className="text-slate-300 text-right relative z-10">{ask.amount.toLocaleString()}</span>
-                      <span className="text-slate-400 text-right relative z-10">{ask.total.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
+                {/* Asks (Sell Orders Ladder - Top, Red) */}
+                {(orderBookView === 'BOTH' || orderBookView === 'ASKS') && (
+                  <div className="space-y-0.5 my-1 font-mono text-[11px]">
+                    {(orderBookView === 'BOTH' ? asks.slice(0, 7) : asks)
+                      .slice()
+                      .reverse()
+                      .map((ask, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => handleOrderBookClick(ask.price, ask.amount)}
+                          className="relative grid grid-cols-3 py-1 px-1.5 rounded hover:bg-rose-500/20 cursor-pointer transition-all group"
+                        >
+                          <div
+                            className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-rose-500/20 to-rose-500/5 rounded pointer-events-none transition-all"
+                            style={{ width: `${ask.depthPercent}%` }}
+                          />
+                          <span className="text-rose-400 font-bold relative z-10 group-hover:underline">
+                            {formatPairPrice(ask.price, selectedPair)}
+                          </span>
+                          <span className="text-slate-300 text-right relative z-10">{ask.amount.toLocaleString()}</span>
+                          <span className="text-slate-400 text-right relative z-10">{ask.total.toLocaleString()}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
 
                 {/* Mid Market Price Banner */}
-                <div className="py-2 my-1 px-3 bg-slate-950/80 rounded-xl border border-teal-500/20 flex items-center justify-between font-mono">
+                <div className="py-2.5 my-1.5 px-3 bg-slate-950/90 rounded-xl border border-teal-500/20 flex items-center justify-between font-mono shadow-inner">
                   <div className="flex items-center gap-2">
-                    <span className="text-emerald-400 font-bold text-sm">{selectedPair.price.toFixed(4)}</span>
-                    <TrendUp size={14} className="text-emerald-400" />
+                    <span className="text-emerald-400 font-bold text-base tracking-wide">
+                      {formatPairPrice(selectedPair.price, selectedPair)}
+                    </span>
+                    <TrendUp size={16} className="text-emerald-400" />
+                    <span className="text-[10px] text-slate-400 font-sans">{selectedPair.quote}</span>
                   </div>
-                  <span className="text-[10px] text-slate-400">Mid Market Price</span>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 block">Mid Market</span>
+                    <span className="text-[10px] text-slate-500 font-bold">Ceiba #7010</span>
+                  </div>
                 </div>
 
-                {/* Bids (Buy Orders - Bottom, Green) */}
-                <div className="space-y-0.5 my-1.5 font-mono text-[11px]">
-                  {bids.slice(0, 5).map((bid, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => handleOrderBookClick(bid.price, bid.amount)}
-                      className="relative grid grid-cols-3 py-1 px-1 rounded hover:bg-emerald-500/10 cursor-pointer transition-colors"
-                    >
+                {/* Bids (Buy Orders Ladder - Bottom, Green) */}
+                {(orderBookView === 'BOTH' || orderBookView === 'BIDS') && (
+                  <div className="space-y-0.5 my-1 font-mono text-[11px]">
+                    {(orderBookView === 'BOTH' ? bids.slice(0, 7) : bids).map((bid, idx) => (
                       <div
-                        className="absolute right-0 top-0 bottom-0 bg-emerald-500/15 rounded pointer-events-none transition-all"
-                        style={{ width: `${bid.depthPercent}%` }}
-                      />
-                      <span className="text-emerald-400 font-bold relative z-10">{bid.price.toFixed(4)}</span>
-                      <span className="text-slate-300 text-right relative z-10">{bid.amount.toLocaleString()}</span>
-                      <span className="text-slate-400 text-right relative z-10">{bid.total.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
+                        key={idx}
+                        onClick={() => handleOrderBookClick(bid.price, bid.amount)}
+                        className="relative grid grid-cols-3 py-1 px-1.5 rounded hover:bg-emerald-500/20 cursor-pointer transition-all group"
+                      >
+                        <div
+                          className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-emerald-500/20 to-emerald-500/5 rounded pointer-events-none transition-all"
+                          style={{ width: `${bid.depthPercent}%` }}
+                        />
+                        <span className="text-emerald-400 font-bold relative z-10 group-hover:underline">
+                          {formatPairPrice(bid.price, selectedPair)}
+                        </span>
+                        <span className="text-slate-300 text-right relative z-10">{bid.amount.toLocaleString()}</span>
+                        <span className="text-slate-400 text-right relative z-10">{bid.total.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Order Execution Ticket */}
@@ -1362,11 +1742,11 @@ function TradePageInner() {
                     <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Execution Route</span>
                     <div className="flex items-center gap-1.5 text-[11px] text-slate-300 flex-wrap">
                       <span className="px-2 py-0.5 bg-teal-500/15 text-teal-300 rounded-md font-bold">{fromAsset}</span>
-                      <span>➔</span>
+                      <ArrowRight size={11} className="text-slate-500" weight="bold" />
                       <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">BelizeX Router</span>
-                      <span>➔</span>
+                      <ArrowRight size={11} className="text-slate-500" weight="bold" />
                       <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">CP-AMM Pool</span>
-                      <span>➔</span>
+                      <ArrowRight size={11} className="text-slate-500" weight="bold" />
                       <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 rounded-md font-bold">{toAsset}</span>
                     </div>
                   </div>
@@ -1412,7 +1792,7 @@ function TradePageInner() {
                   className="w-full py-4 bg-gradient-to-r from-teal-500 via-cyan-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(20,184,166,0.35)] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <ArrowsLeftRight size={18} weight="bold" />
-                  {isSwapping ? 'Executing BelizeX Swap Extrinsic...' : `Confirm Swap (${fromAsset} ➔ ${toAsset})`}
+                  {isSwapping ? 'Executing BelizeX Swap Extrinsic...' : `Confirm Swap (${fromAsset} to ${toAsset})`}
                 </button>
               </form>
             </div>

@@ -17,6 +17,7 @@ import {
 } from '@/services/pallets/interoperability';
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowsLeftRight,
   Info,
   ShieldCheck,
@@ -39,10 +40,10 @@ const ASSET_OPTIONS = [
   { id: 'bBZD', name: 'bBZD', symbol: 'BZ$', type: 'Statutory Stable (1:1 BZD)', icon: 'BZ$', color: 'cyan' },
   { id: 'USDT', name: 'Tether USD', symbol: 'USDT', type: 'Bridged Stablecoin', icon: '₮', color: 'emerald' },
   { id: 'USDC', name: 'USD Coin', symbol: 'USDC', type: 'Circle USD', icon: '$', color: 'blue' },
-  { id: 'ETH', name: 'Ether', symbol: 'ETH', type: 'Gas Asset', icon: '⟠', color: 'purple' },
-  { id: 'SOL', name: 'Solana', symbol: 'SOL', type: 'Gas Asset', icon: '🟣', color: 'purple' },
-  { id: 'TRX', name: 'TRON TRX', symbol: 'TRX', type: 'Gas Asset', icon: '🔴', color: 'red' },
-  { id: 'BTC', name: 'Bitcoin', symbol: 'BTC', type: 'Wrapped / Runes', icon: '₿', color: 'amber' },
+  { id: 'ETH', name: 'Ether', symbol: 'ETH', type: 'Gas Asset', icon: 'ETH', color: 'purple' },
+  { id: 'SOL', name: 'Solana', symbol: 'SOL', type: 'Gas Asset', icon: 'SOL', color: 'purple' },
+  { id: 'TRX', name: 'TRON TRX', symbol: 'TRX', type: 'Gas Asset', icon: 'TRX', color: 'red' },
+  { id: 'BTC', name: 'Bitcoin', symbol: 'BTC', type: 'Wrapped / Runes', icon: 'BTC', color: 'amber' },
 ];
 
 export default function BridgePage() {
@@ -244,7 +245,9 @@ export default function BridgePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{fromChain.icon}</span>
+                    <span className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center font-bold text-xs text-purple-300 font-mono tracking-tight shrink-0">
+                      {fromChain.icon}
+                    </span>
                     <select
                       value={fromChain.id}
                       onChange={(e) => {
@@ -282,7 +285,9 @@ export default function BridgePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{toChain.icon}</span>
+                    <span className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center font-bold text-xs text-purple-300 font-mono tracking-tight shrink-0">
+                      {toChain.icon}
+                    </span>
                     <select
                       value={toChain.id}
                       onChange={(e) => {
@@ -423,7 +428,9 @@ export default function BridgePage() {
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <span>{chain.icon}</span>
+                        <span className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-[10px] text-purple-300 font-mono shrink-0">
+                          {chain.icon}
+                        </span>
                         <span className="font-bold text-xs">{chain.name}</span>
                       </div>
                       <span className="text-[10px] text-slate-500">{chain.category}</span>
@@ -464,7 +471,11 @@ export default function BridgePage() {
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white">{tx.fromChain} ➔ {tx.toChain}</span>
+                        <span className="font-bold text-white flex items-center gap-1.5">
+                          {tx.fromChain}
+                          <ArrowRight size={12} weight="bold" className="text-purple-400" />
+                          {tx.toChain}
+                        </span>
                         <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold text-[10px] rounded-full border border-emerald-500/30">
                           {tx.status}
                         </span>
@@ -559,7 +570,11 @@ export default function BridgePage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Cross-Chain Relaying</h3>
-                  <p className="text-xs text-slate-400">{fromChain.name} ➔ {toChain.name}</p>
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    {fromChain.name}
+                    <ArrowRight size={12} weight="bold" className="text-purple-400" />
+                    {toChain.name}
+                  </p>
                 </div>
               </div>
               {!isBridging && (

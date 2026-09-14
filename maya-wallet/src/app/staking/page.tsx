@@ -14,6 +14,7 @@ import {
 } from '@/services/pallets/staking';
 import {
   ArrowLeft,
+  ArrowRight,
   Lightning,
   TrendUp,
   Info,
@@ -299,9 +300,10 @@ export default function StakingPage() {
             <button
               onClick={handleClaim}
               disabled={isClaiming}
-              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition-colors pt-1 border-t border-teal-500/10"
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 transition-colors pt-1 border-t border-teal-500/10"
             >
-              {isClaiming ? 'Claiming Era Rewards...' : 'Claim Rewards ➔'}
+              <span>{isClaiming ? 'Claiming Era Rewards...' : 'Claim Rewards'}</span>
+              {!isClaiming && <ArrowRight size={12} weight="bold" />}
             </button>
           </motion.div>
         </div>
@@ -495,7 +497,8 @@ export default function StakingPage() {
               <div className="pt-2 border-t border-teal-500/10">
                 <Link href="/governance">
                   <button className="w-full py-2.5 bg-slate-900 hover:bg-teal-950/40 text-teal-300 border border-teal-500/20 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors">
-                    View Validator Council Votes ➔
+                    <span>View Validator Council Votes</span>
+                    <ArrowRight size={12} weight="bold" />
                   </button>
                 </Link>
               </div>

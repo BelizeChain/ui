@@ -19,6 +19,7 @@ import {
   Share,
   Copy,
   ArrowLeft,
+  ArrowRight,
   X,
   Sparkle,
   LockKey,
@@ -329,8 +330,9 @@ export default function BelizeIDPage() {
                     ))}
                   </div>
 
-                  <button className="w-full py-2.5 bg-slate-800/80 group-hover:bg-gradient-to-r group-hover:from-teal-500 group-hover:to-cyan-500 group-hover:text-slate-950 text-slate-300 font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1 border border-slate-700">
-                    Inspect Attestation ➔
+                  <button className="w-full py-2.5 bg-slate-800/80 group-hover:bg-gradient-to-r group-hover:from-teal-500 group-hover:to-cyan-500 group-hover:text-slate-950 text-slate-300 font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 border border-slate-700">
+                    <span>Inspect Attestation</span>
+                    <ArrowRight size={13} weight="bold" />
                   </button>
                 </div>
               ))}

@@ -13,7 +13,7 @@ export interface PostCardProps {
       avatar: string | React.ReactNode;
       district?: string;
     };
-    content: string;
+    content: string | React.ReactNode;
     timestamp: string;
     likes: number;
     comments: number;
@@ -84,25 +84,23 @@ export function PostCard({
     onShare?.();
   };
   const typeBadges = {
-    community: { label: 'Community', icon: Users, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-    governance: { label: 'Governance', icon: Scales, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-    environment: { label: 'Environment', icon: Leaf, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    community: { label: 'District Initiative', icon: Users, color: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+    governance: { label: 'Sovereign Governance', icon: Scales, color: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
+    environment: { label: 'Reef & Ecology', icon: Leaf, color: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
   };
   const TypeIcon = type ? typeBadges[type]?.icon : undefined;
 
   const content_component = (
-    <div className={cn('bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-4 border border-gray-700/50 hover:border-gray-600/50 transition-all', className)}>
+    <div className={cn('bg-slate-900/90 border border-slate-800/80 hover:border-teal-500/40 rounded-2xl p-4 transition-all shadow-lg backdrop-blur-md', className)}>
       <div className="flex items-start space-x-3">
         {/* Avatar */}
-        {author && typeof author.avatar === 'string' ? (
-          <div className="text-3xl">{author.avatar}</div>
-        ) : author ? (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-400 to-emerald-500 flex items-center justify-center text-white font-bold">
+        {author?.avatar && typeof author.avatar !== 'string' ? (
+          <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-teal-400 font-bold shrink-0">
             {author.avatar}
           </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold">
-            ?
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 font-bold text-sm shrink-0">
+            {author?.name ? author.name.charAt(0).toUpperCase() : 'U'}
           </div>
         )}
         
@@ -110,16 +108,16 @@ export function PostCard({
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h3 className="font-semibold text-white">{author?.name || 'Anonymous'}</h3>
+              <h3 className="font-semibold text-white text-sm">{author?.name || 'Anonymous'}</h3>
               {author?.district && (
-                <p className="text-xs text-gray-400 flex items-center">
-                  <MapPin size={12} weight="fill" className="mr-1" />
+                <p className="text-xs text-slate-400 flex items-center mt-0.5">
+                  <MapPin size={12} weight="fill" className="mr-1 text-teal-400" />
                   {author?.district}
                 </p>
               )}
             </div>
             {type && typeBadges[type] && (
-              <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border', typeBadges[type].color)}>
+              <span className={cn('inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border', typeBadges[type].color)}>
                 {TypeIcon && <TypeIcon size={12} weight="fill" aria-hidden="true" />}
                 {typeBadges[type].label}
               </span>
@@ -127,52 +125,52 @@ export function PostCard({
           </div>
 
           {/* Content */}
-          <p className="text-gray-300 text-sm mb-3">{content}</p>
+          <div className="text-slate-300 text-sm mb-3 leading-relaxed">{content}</div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4 text-gray-400">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-1">
+            <div className="flex items-center space-x-4 text-slate-400">
               <div className="flex items-center space-x-1">
                 <button
                   onClick={handleUpvote}
                   className={cn(
-                    'p-1 rounded transition-colors',
-                    voteState === 'up' ? 'text-emerald-500 bg-emerald-500/10' : 'hover:text-emerald-400 hover:bg-emerald-500/5'
+                    'p-1.5 rounded-lg transition-colors',
+                    voteState === 'up' ? 'text-teal-400 bg-teal-500/20' : 'hover:text-teal-300 hover:bg-slate-800'
                   )}
                 >
-                  <ArrowFatUp size={18} weight={voteState === 'up' ? 'fill' : 'regular'} />
+                  <ArrowFatUp size={16} weight={voteState === 'up' ? 'fill' : 'regular'} />
                 </button>
                 <span className={cn(
-                  "text-xs font-bold min-w-[24px] text-center",
-                  voteState === 'up' && 'text-emerald-500',
-                  voteState === 'down' && 'text-red-500'
+                  "text-xs font-bold min-w-[24px] text-center font-mono",
+                  voteState === 'up' && 'text-teal-400',
+                  voteState === 'down' && 'text-rose-400'
                 )}>{upvotes}</span>
                 <button
                   onClick={handleDownvote}
                   className={cn(
-                    'p-1 rounded transition-colors',
-                    voteState === 'down' ? 'text-red-500 bg-red-500/10' : 'hover:text-red-400 hover:bg-red-500/5'
+                    'p-1.5 rounded-lg transition-colors',
+                    voteState === 'down' ? 'text-rose-400 bg-rose-500/20' : 'hover:text-rose-300 hover:bg-slate-800'
                   )}
                 >
-                  <ArrowFatDown size={18} weight={voteState === 'down' ? 'fill' : 'regular'} />
+                  <ArrowFatDown size={16} weight={voteState === 'down' ? 'fill' : 'regular'} />
                 </button>
               </div>
               <button
                 onClick={handleComment}
-                className="flex items-center space-x-1 hover:text-gray-300 transition-colors"
+                className="flex items-center space-x-1.5 hover:text-cyan-300 transition-colors py-1 px-2 rounded-lg hover:bg-slate-800/60"
               >
-                <ChatDots size={18} />
-                <span className="text-xs font-semibold">{comments}</span>
+                <ChatDots size={16} />
+                <span className="text-xs font-semibold font-mono">{comments}</span>
               </button>
               <button
                 onClick={handleShare}
-                className="flex items-center space-x-1 hover:text-gray-300 transition-colors"
+                className="flex items-center space-x-1.5 hover:text-cyan-300 transition-colors py-1 px-2 rounded-lg hover:bg-slate-800/60"
               >
-                <Share size={18} />
-                {shares > 0 && <span className="text-xs font-semibold">{shares}</span>}
+                <Share size={16} />
+                {shares > 0 && <span className="text-xs font-semibold font-mono">{shares}</span>}
               </button>
             </div>
-            <span className="text-xs text-gray-500">{timestamp}</span>
+            <span className="text-xs text-slate-500 font-mono">{timestamp}</span>
           </div>
         </div>
       </div>

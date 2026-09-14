@@ -89,17 +89,27 @@ export async function getAllReports(): Promise<FormattedReport[]> {
           // Ignore
         }
 
+        const rawCommitment = r.commitment;
+        const rawTarget = r.target;
+        const rawEvHash = r.evidenceHash || r.evidence_hash;
+        const rawCategory = r.category;
+        const rawSubmittedAt = r.submittedAt || r.submitted_at;
+        const rawStatus = r.status;
+        const rawBond = r.bond;
+        const rawBondDepositor = r.bondDepositor || r.bond_depositor;
+        const rawReasoningHash = r.reasoningHash || r.reasoning_hash;
+
         reports.push({
           id,
-          commitment: r.commitment.toHex ? r.commitment.toHex() : r.commitment.toString(),
-          target: r.target.toString(),
-          evidenceHash: r.evidence_hash.toHex ? r.evidence_hash.toHex() : r.evidence_hash.toString(),
-          category: parseCategory(r.category.toJSON()),
-          submittedAt: Number(r.submitted_at.toString()),
-          status: parseStatus(r.status.toJSON()),
-          bond: r.bond.toString(),
-          bondDepositor: r.bond_depositor.toString(),
-          reasoningHash: r.reasoning_hash?.isSome ? r.reasoning_hash.unwrap().toHex() : null,
+          commitment: rawCommitment?.toHex ? rawCommitment.toHex() : (rawCommitment?.toString?.() ?? ''),
+          target: rawTarget?.toString?.() ?? '',
+          evidenceHash: rawEvHash?.toHex ? rawEvHash.toHex() : (rawEvHash?.toString?.() ?? ''),
+          category: parseCategory(rawCategory?.toJSON ? rawCategory.toJSON() : rawCategory),
+          submittedAt: Number(rawSubmittedAt?.toString?.() ?? 0),
+          status: parseStatus(rawStatus?.toJSON ? rawStatus.toJSON() : rawStatus),
+          bond: (rawBond?.toString?.() ?? '0'),
+          bondDepositor: rawBondDepositor?.toString?.() ?? '',
+          reasoningHash: rawReasoningHash?.isSome ? rawReasoningHash.unwrap().toHex() : (rawReasoningHash?.toHex ? rawReasoningHash.toHex() : null),
           escrowedReward,
         });
       }

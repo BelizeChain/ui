@@ -42,6 +42,7 @@ import {
   Cube,
   FileZip,
   Waves,
+  Trophy,
 } from 'phosphor-react';
 
 export default function KinichPage() {
@@ -249,25 +250,29 @@ export default function KinichPage() {
         <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto text-xs">
           {(
             [
-              { id: 'compression', label: '🗜️ Quantum Compression (10x)' },
-              { id: 'backends', label: '⚛️ Xanadu & Quantum Hardware' },
-              { id: 'pqc', label: '🛡️ NIST Level 5 PQC Keys' },
-              { id: 'qasm', label: '💻 OpenQASM 2.0 Studio' },
-              { id: 'proofs', label: '🏆 PQW Mining Proofs' },
+              { id: 'compression', label: 'Quantum Compression (10x)', icon: FileZip },
+              { id: 'backends', label: 'Xanadu & Hardware', icon: Atom },
+              { id: 'pqc', label: 'NIST Level 5 PQC Keys', icon: ShieldCheck },
+              { id: 'qasm', label: 'OpenQASM 2.0 Studio', icon: Code },
+              { id: 'proofs', label: 'PQW Mining Proofs', icon: Trophy },
             ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 min-w-[170px] py-2.5 font-bold rounded-xl transition-all ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          ).map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 min-w-[170px] py-2.5 px-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Icon size={16} weight={activeTab === tab.id ? 'bold' : 'regular'} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab 1: Quantum Compression & Surface Code Simulator */}
@@ -449,7 +454,10 @@ export default function KinichPage() {
                         >
                           {backend.provider}
                         </span>
-                        <span className="text-emerald-400 text-[10px] font-semibold">● {backend.status}</span>
+                        <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          {backend.status}
+                        </span>
                       </div>
                       <h4 className="text-base font-bold text-white mt-1.5">{backend.name}</h4>
                     </div>
@@ -478,9 +486,10 @@ export default function KinichPage() {
                     {backend.features.map((feat, idx) => (
                       <span
                         key={idx}
-                        className="px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-md text-[10px] text-slate-300"
+                        className="px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-md text-[10px] text-slate-300 flex items-center gap-1"
                       >
-                        ✓ {feat}
+                        <Check size={11} weight="bold" className="text-emerald-400 shrink-0" />
+                        {feat}
                       </span>
                     ))}
                   </div>
@@ -623,7 +632,10 @@ export default function KinichPage() {
                   </div>
                   <div className="text-right">
                     <span className="text-emerald-400 font-bold block">+{proof.reward}</span>
-                    <span className="text-[10px] text-cyan-300 font-semibold">● {proof.status}</span>
+                    <span className="text-[10px] text-cyan-300 font-semibold flex items-center justify-end gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                      {proof.status}
+                    </span>
                   </div>
                 </div>
               ))}

@@ -26,6 +26,8 @@ import {
   Lightning,
   Drop,
   X,
+  Leaf,
+  Anchor,
 } from 'phosphor-react';
 
 interface RwaAsset {
@@ -357,25 +359,30 @@ export default function RwaPage() {
         <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto text-xs">
           {(
             [
-              { id: 'all', label: 'All Tokenized Assets' },
-              { id: 'real-estate', label: '🏖️ Real Estate Deeds' },
-              { id: 'green-bond', label: '🌱 Sovereign Green Bonds' },
-              { id: 'infrastructure', label: '⚓ Port & Infrastructure' },
-              { id: 'agriculture', label: '🍫 Carbon & Agriculture' },
+              { id: 'all', label: 'All Tokenized Assets', icon: Coins },
+              { id: 'real-estate', label: 'Real Estate Deeds', icon: Buildings },
+              { id: 'green-bond', label: 'Sovereign Green Bonds', icon: Leaf },
+              { id: 'infrastructure', label: 'Port & Infrastructure', icon: Anchor },
+              { id: 'agriculture', label: 'Carbon & Agriculture', icon: TreeEvergreen },
             ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveCategory(tab.id as any)}
-              className={`flex-1 min-w-[150px] py-2.5 font-bold rounded-xl transition-all ${
-                activeCategory === tab.id
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          ).map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeCategory === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveCategory(tab.id as any)}
+                className={`flex-1 min-w-[170px] py-2.5 px-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  isActive
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Icon size={16} weight={isActive ? 'bold' : 'regular'} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Asset Cards Grid */}

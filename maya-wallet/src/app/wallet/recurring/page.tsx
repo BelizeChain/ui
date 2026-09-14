@@ -19,6 +19,7 @@ import {
   WifiHigh,
   Globe,
   CheckCircle,
+  X,
 } from 'phosphor-react';
 
 interface RecurringSubscription {
@@ -250,8 +251,8 @@ export default function RecurringPaymentsPage() {
                 <Plus size={20} className="text-emerald-400" />
                 New Recurring Schedule
               </span>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
-                ✕
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+                <X size={18} />
               </button>
             </div>
 

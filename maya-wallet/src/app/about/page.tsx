@@ -93,8 +93,8 @@ export default function AboutPage() {
       <div className="p-4 space-y-6">
         {/* Hero Section */}
         <GlassCard variant="gradient" blur="lg" className="p-6 text-center">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-700/20 flex items-center justify-center">
-            <span className="text-4xl">🇧🇿</span>
+          <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 font-bold font-mono text-2xl shadow-lg shadow-cyan-500/10">
+            BZ
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">BelizeChain</h2>
           <p className="text-white/90 text-sm mb-4">
@@ -241,7 +241,7 @@ export default function AboutPage() {
         {/* Footer */}
         <div className="text-center space-y-2 pt-4">
           <p className="text-sm text-gray-400 flex items-center justify-center gap-1">Made with <Heart size={14} weight="fill" className="text-red-500" aria-label="love" /> in Belize</p>
-          <p className="text-xs text-gray-400">© 2026 BelizeChain. All rights reserved.</p>
+          <p className="text-xs text-gray-400">BelizeChain Sovereign Network. All rights reserved.</p>
           <p className="text-xs text-gray-400">Powered by Substrate • Polkadot SDK stable2512</p>
         </div>
       </div>

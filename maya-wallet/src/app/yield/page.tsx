@@ -17,6 +17,7 @@ import {
   TreeEvergreen,
   LockKey,
   CheckCircle,
+  Check,
   CurrencyDollar,
   X,
   Plus,
@@ -314,9 +315,10 @@ export default function YieldPage() {
                     {vault.strategies.map((strat, i) => (
                       <span
                         key={i}
-                        className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-[10px] text-slate-300"
+                        className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-[10px] text-slate-300 flex items-center gap-1.5"
                       >
-                        ✓ {strat}
+                        <Check size={11} className="text-emerald-400" weight="bold" />
+                        <span>{strat}</span>
                       </span>
                     ))}
                   </div>

@@ -70,9 +70,9 @@ export function AppHeader() {
                   onClick={() => setShowAccountMenu(false)}
                 />
                 <div className="absolute right-0 top-12 z-50 w-72">
-                  <GlassCard variant="medium" blur="lg">
-                    <div className="p-3 border-b border-gray-200">
-                      <p className="text-xs text-gray-500 mb-2">Your Accounts</p>
+                  <GlassCard variant="dark-medium" blur="xl" className="bg-slate-900/95 border border-slate-700/60 shadow-2xl backdrop-blur-xl">
+                    <div className="p-3 border-b border-slate-800">
+                      <p className="text-xs font-medium text-slate-400 mb-2">Your Accounts</p>
                       {accounts.map((account) => (
                         <button
                           key={account.address}
@@ -80,26 +80,26 @@ export function AppHeader() {
                             selectAccount(account.address);
                             setShowAccountMenu(false);
                           }}
-                          className={`w-full text-left p-3 rounded-lg mb-2 transition-colors ${
+                          className={`w-full text-left p-3 rounded-xl mb-2 transition-colors ${
                             selectedAccount?.address === account.address
-                              ? 'bg-forest-50 border border-forest-200'
-                              : 'hover:bg-gray-50'
+                              ? 'bg-emerald-950/60 border border-emerald-500/40 text-white'
+                              : 'hover:bg-slate-800/60 text-slate-200'
                           }`}
                         >
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-400 to-emerald-500 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
                               <User size={20} weight="fill" className="text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 truncate">
+                              <p className="font-semibold text-slate-100 truncate">
                                 {account.name || 'Account'}
                               </p>
-                              <p className="text-xs text-gray-500 truncate">
+                              <p className="text-xs text-slate-400 font-mono truncate">
                                 {truncateAddress(account.address)}
                               </p>
                             </div>
                             {selectedAccount?.address === account.address && (
-                              <div className="w-2 h-2 rounded-full bg-forest-500" />
+                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
                             )}
                           </div>
                         </button>
@@ -112,7 +112,7 @@ export function AppHeader() {
                           setShowAccountMenu(false);
                           setShowDisconnectConfirm(true);
                         }}
-                        className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all"
                       >
                         <SignOut size={18} weight="bold" />
                         <span className="font-semibold">Disconnect</span>

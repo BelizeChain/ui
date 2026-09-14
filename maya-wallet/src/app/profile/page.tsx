@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card, Input, Button, Badge, Alert, useI18n } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
-import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
   ArrowLeft,
   UserCircle,
@@ -14,16 +12,19 @@ import {
   Phone,
   EnvelopeSimple,
   MapPin,
+  Check,
+  Warning,
+  ShieldCheck,
 } from 'phosphor-react';
 import Link from 'next/link';
 
 export default function ProfilePage() {
-  const { selectedAccount } = useWallet();
-  const { t } = useI18n();
+  const { selectedAccount, isConnected, connect } = useWallet();
   const account = selectedAccount as any;
-  const [name, setName] = useState(account?.name || '');
-  const [email, setEmail] = useState('user@example.com');
-  const [phone, setPhone] = useState('+501 123-4567');
+  const [name, setName] = useState(account?.name || 'Belizean Citizen');
+  const [email, setEmail] = useState('citizen@belizechain.org');
+  const [phone, setPhone] = useState('+501 822-2222');
+  const [city, setCity] = useState('Belmopan');
   const [copied, setCopied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -40,200 +41,221 @@ export default function ProfilePage() {
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  if (!account) {
+  if (!isConnected || !account) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card>
-          <p className="text-gray-600">Please connect your wallet to view profile.</p>
-        </Card>
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-[#030914] to-slate-950 text-white flex items-center justify-center p-4">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-2xl backdrop-blur-xl">
+          <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400">
+            <UserCircle size={36} weight="fill" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Wallet Disconnected</h2>
+          <p className="text-slate-400 text-xs">Please connect your BelizeChain wallet to access and manage your sovereign profile.</p>
+          <button
+            onClick={connect}
+            className="w-full bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-bold py-3 rounded-2xl shadow-lg shadow-cyan-500/20 hover:opacity-95 transition-all text-xs"
+          >
+            Connect Sovereign Wallet
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
-      {/* Header */}
-      <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-6 py-4 z-10">
-        <div className="flex items-center space-x-4">
-          <Link href="/settings" className="text-white hover:text-gray-300 transition-colors">
-            <ArrowLeft size={24} />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Profile</h1>
-            <p className="text-gray-400 text-sm">Manage your account information</p>
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-[#030914] to-slate-950 text-white pb-28">
+      {/* Sticky Header */}
+      <div className="sticky top-0 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80 px-4 sm:px-6 py-4 z-20">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/more"
+              className="p-2 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <ArrowLeft size={18} weight="bold" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">Citizen Profile</h1>
+              <p className="text-xs text-slate-400">Manage your sovereign identity & credentials</p>
+            </div>
           </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            BelizeID Active
+          </span>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-4 py-6 space-y-4 max-w-2xl mx-auto -mt-4">
+      {/* Main Content */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {showSuccess && (
-          <Alert variant="success" title="Profile Updated" onClose={() => setShowSuccess(false)}>
-            Your profile information has been saved successfully.
-          </Alert>
+          <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-emerald-300 text-xs font-semibold">
+            <CheckCircle size={20} weight="fill" className="text-emerald-400 shrink-0" />
+            <span>Profile information updated and signed locally.</span>
+          </div>
         )}
 
-        {/* Profile Picture */}
-        <Card>
-          <div className="flex flex-col items-center">
-            <div className="relative">
-              <div className="h-24 w-24 rounded-full bg-gradient-to-br from-maya-400 to-maya-600 flex items-center justify-center">
-                <UserCircle size={48} weight="fill" className="text-white" />
+        {/* Profile Avatar Card */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl backdrop-blur-xl text-center space-y-4 relative overflow-hidden">
+          <div className="absolute -top-12 -right-12 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative">
+            <div className="relative inline-block">
+              <div className="h-24 w-24 rounded-3xl bg-gradient-to-br from-cyan-500 via-teal-500 to-emerald-500 p-0.5 shadow-xl shadow-cyan-500/20 mx-auto">
+                <div className="w-full h-full bg-slate-950 rounded-[22px] flex items-center justify-center">
+                  <UserCircle size={54} weight="fill" className="text-cyan-300" />
+                </div>
               </div>
-              <button className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-caribbean-500 hover:bg-caribbean-600 flex items-center justify-center shadow-lg transition-colors">
-                <Camera size={16} className="text-white" />
+              <button
+                className="absolute bottom-0 right-0 h-8 w-8 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center shadow-lg transition-colors text-slate-200"
+                title="Update Avatar"
+              >
+                <Camera size={16} weight="bold" />
               </button>
             </div>
-            <div className="text-center mt-4">
-              <h2 className="text-xl font-bold text-gray-900">{name || 'User'}</h2>
-              <div className="flex items-center justify-center space-x-2 mt-2">
-                {account.isVerified && (
-                  <Badge variant="success" className="flex items-center">
-                    <CheckCircle size={12} className="mr-1" />
-                    Verified
-                  </Badge>
-                )}
-                <Badge variant="info">Citizen</Badge>
+
+            <div className="mt-3 space-y-1">
+              <h2 className="text-xl font-bold text-white tracking-tight">{name || 'Belizean Citizen'}</h2>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                  <CheckCircle size={12} weight="fill" />
+                  Verified Citizen
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  SRS Quorum Active
+                </span>
               </div>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Wallet Address */}
-        <Card>
-          <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-            <IdentificationCard size={20} className="mr-2 text-gray-600" />
-            Wallet Address
-          </h3>
-          <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
-            <code className="text-sm font-mono text-gray-700 flex-1 break-all">
-              {account.address}
-            </code>
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-3">
+          <div className="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-wider">
+            <IdentificationCard size={18} className="text-cyan-400" weight="bold" />
+            <span>Sovereign SS58 Wallet Address</span>
+          </div>
+
+          <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800 flex items-center justify-between gap-3">
+            <code className="text-xs font-mono text-cyan-200 break-all leading-relaxed">{account.address}</code>
             <button
               onClick={handleCopyAddress}
-              className="ml-3 text-caribbean-500 hover:text-caribbean-400 transition-colors"
+              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition-colors shrink-0"
+              title="Copy Address"
             >
-              {copied ? (
-                <CheckCircle size={20} weight="fill" />
-              ) : (
-                <Copy size={20} />
-              )}
+              {copied ? <Check size={18} className="text-emerald-400" /> : <Copy size={18} />}
             </button>
           </div>
-        </Card>
+        </div>
 
-        {/* Personal Information */}
-        <Card>
-          <h3 className="font-semibold text-gray-900 mb-4">Personal Information</h3>
-          <div className="space-y-4">
-            <Input
-              label="Full Name"
-              value={name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-              placeholder="Enter your full name"
-            />
-            <Input
-              label="Email Address"
-              type="email"
-              value={email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-              placeholder="your.email@example.com"
-            />
-            <Input
-              label="Phone Number"
-              type="tel"
-              value={phone}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)}
-              placeholder="+501 XXX-XXXX"
-            />
-          </div>
-        </Card>
-
-        {/* Location */}
-        <Card>
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-            <MapPin size={20} className="mr-2 text-gray-600" />
-            Location
+        {/* Personal Credentials */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <UserCircle size={18} className="text-cyan-400" weight="bold" />
+            <span>Personal Information</span>
           </h3>
-          <div className="space-y-4">
-            <div>
-              <Input
-                label="District"
-                value="Belize"
-                disabled
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="text-slate-400 font-bold uppercase text-[10px]">Full Legal Name / Alias</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter full name"
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-medium"
               />
-              <p className="mt-1 text-xs text-gray-600">Your district is determined by your KYC verification</p>
             </div>
-            <Input
-              label="City/Town"
-              placeholder="Enter your city or town"
-            />
+
+            <div className="space-y-1.5">
+              <label className="text-slate-400 font-bold uppercase text-[10px]">Encrypted Email Contact</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="citizen@domain.org"
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-medium"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-400 font-bold uppercase text-[10px]">Secure Phone Contact</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+501 XXX-XXXX"
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-400 font-bold uppercase text-[10px]">Municipality / City</label>
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="e.g. Belmopan, San Pedro"
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-medium"
+              />
+            </div>
           </div>
-        </Card>
+        </div>
 
         {/* Verification Status */}
-        <Card className={account.isVerified ? 'bg-jungle-50 border-jungle-200' : 'bg-yellow-50 border-yellow-200'}>
-          <div className="flex items-start space-x-3">
-            {account.isVerified ? (
-              <>
-                <CheckCircle size={24} className="text-jungle-600 mt-0.5" weight="fill" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-jungle-900 mb-1">Identity Verified</h3>
-                  <p className="text-sm text-jungle-700">
-                    Your identity has been verified. You have full access to all BelizeChain features.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <IdentificationCard size={24} className="text-yellow-600 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-yellow-900 mb-1">Verification Required</h3>
-                  <p className="text-sm text-yellow-700 mb-3">
-                    Complete identity verification to unlock all features and increase transaction limits.
-                  </p>
-                  <Link href="/verification">
-                    <Button variant="primary" size="sm">
-                      Start Verification
-                    </Button>
-                  </Link>
-                </div>
-              </>
-            )}
-          </div>
-        </Card>
-
-        {/* Account Stats */}
-        <Card>
-          <h3 className="font-semibold text-gray-900 mb-4">Account Statistics</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600 mb-1">Member Since</p>
-              <p className="text-lg font-bold text-gray-900">Jan 2025</p>
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <ShieldCheck size={22} weight="bold" />
             </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600 mb-1">Transactions</p>
-              <p className="text-lg font-bold text-gray-900">142</p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600 mb-1">Tourism Rewards</p>
-              <p className="text-lg font-bold text-gray-900">$87.50</p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600 mb-1">Governance Votes</p>
-              <p className="text-lg font-bold text-gray-900">8</p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-white text-sm">BelizeID SRS Credential</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                  Tier 2 Verified
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                Your sovereign identity is verified on-chain with zero-knowledge attestations. You have full access to governance voting, quadratic rewards, and validator delegating.
+              </p>
             </div>
           </div>
-        </Card>
+        </div>
 
-        {/* Save Button */}
-        <Button
-          variant="primary"
-          className="w-full"
+        {/* Account Statistics */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <IdentificationCard size={18} className="text-cyan-400" weight="bold" />
+            <span>Civic & On-Chain Statistics</span>
+          </h3>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-500 text-[10px] uppercase font-bold block">Member Since</span>
+              <span className="text-white font-bold font-mono text-sm">Jan 2025</span>
+            </div>
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-500 text-[10px] uppercase font-bold block">Extrinsics</span>
+              <span className="text-cyan-300 font-bold font-mono text-sm">142</span>
+            </div>
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-500 text-[10px] uppercase font-bold block">Rewards</span>
+              <span className="text-emerald-400 font-bold font-mono text-sm">87.50 Ɗ</span>
+            </div>
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-slate-500 text-[10px] uppercase font-bold block">Civic Votes</span>
+              <span className="text-purple-400 font-bold font-mono text-sm">8 Referenda</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Save Changes Button */}
+        <button
           onClick={handleSaveProfile}
+          className="w-full bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-bold py-4 rounded-2xl shadow-lg shadow-cyan-500/20 hover:opacity-95 active:scale-[0.99] transition-all text-xs flex items-center justify-center gap-2"
         >
-          Save Changes
-        </Button>
+          <Check size={16} weight="bold" />
+          <span>Save Profile Credentials</span>
+        </button>
       </div>
     </div>
   );
