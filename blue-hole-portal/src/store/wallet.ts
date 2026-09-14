@@ -99,7 +99,7 @@ export const useWalletStore = create<WalletState>()(
             error: null,
           });
           
-          console.log(`✅ Connected wallet: ${allAccounts.length} accounts found`);
+          console.log(`[WALLET] Connected wallet: ${allAccounts.length} accounts found`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet';
           set({
@@ -107,7 +107,7 @@ export const useWalletStore = create<WalletState>()(
             isConnecting: false,
             error: errorMessage,
           });
-          console.error('❌ Wallet connection failed:', error);
+          console.error('[WALLET] Wallet connection failed:', error);
         }
       },
       
@@ -125,13 +125,13 @@ export const useWalletStore = create<WalletState>()(
             reserved: '0',
           },
         });
-        console.log('🔌 Wallet disconnected');
+        console.log('[WALLET] Wallet disconnected');
       },
       
       // Select account
       selectAccount: (account: InjectedAccountWithMeta) => {
         set({ selectedAccount: account });
-        console.log(`👤 Selected account: ${account.meta.name || account.address}`);
+        console.log(`[WALLET] Selected account: ${account.meta.name || account.address}`);
         
         // Reset balances when switching accounts
         set({

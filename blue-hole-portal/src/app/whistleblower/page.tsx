@@ -14,6 +14,7 @@ import {
   PlusCircle,
   WarningOctagon,
   EyeSlash,
+  X,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
@@ -372,9 +373,9 @@ export default function WhistleblowerPortalPage() {
               </div>
               <button
                 onClick={() => setSelectedReport(null)}
-                className="text-gray-400 hover:text-white text-lg"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -466,9 +467,9 @@ export default function WhistleblowerPortalPage() {
               </div>
               <button
                 onClick={() => setIsFundingModalOpen(false)}
-                className="text-gray-400 hover:text-white text-lg"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 

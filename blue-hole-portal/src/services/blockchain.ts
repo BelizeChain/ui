@@ -128,17 +128,17 @@ class BlockchainService {
       this.wsProvider = new modules.WsProvider(nodeEndpoint, 1000, {}, 30000);
       
       this.wsProvider.on('connected', () => {
-        console.info('✅ Connected to BelizeChain node');
+        console.info('[BLOCKCHAIN-SERVICE] Connected to BelizeChain node');
         this.reconnectAttempts = 0;
       });
 
       this.wsProvider.on('disconnected', () => {
-        console.warn('⚠️ Disconnected from BelizeChain node');
+        console.warn('[BLOCKCHAIN-SERVICE] Disconnected from BelizeChain node');
         this.handleDisconnect();
       });
 
       this.wsProvider.on('error', (error: any) => {
-        console.error('❌ WebSocket error:', error);
+        console.error('[BLOCKCHAIN-SERVICE] WebSocket error:', error);
       });
 
       this.api = await modules.ApiPromise.create({ 
@@ -178,12 +178,12 @@ class BlockchainService {
    */
   private async handleDisconnect(): Promise<void> {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached');
+      console.error('[BLOCKCHAIN-SERVICE] Max reconnection attempts reached');
       return;
     }
 
     this.reconnectAttempts++;
-    console.info(`🔄 Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+    console.info(`[BLOCKCHAIN-SERVICE] Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
 
     await new Promise((resolve) => setTimeout(resolve, this.reconnectDelay));
 

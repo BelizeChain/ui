@@ -13,6 +13,7 @@ import {
   FileText,
   Bank,
   Sliders,
+  X,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
@@ -386,9 +387,9 @@ export default function JusticePortalPage() {
               </div>
               <button
                 onClick={() => setSelectedDispute(null)}
-                className="text-gray-400 hover:text-white text-lg"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 

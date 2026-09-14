@@ -72,17 +72,23 @@ export async function getAllReports(): Promise<PortalReport[]> {
           // Ignore
         }
 
+        const rObj = r as any;
+        const evidence = rObj.evidenceHash || rObj.evidence_hash;
+        const submitted = rObj.submittedAt || rObj.submitted_at;
+        const bondDep = rObj.bondDepositor || rObj.bond_depositor;
+        const reasoning = rObj.reasoningHash || rObj.reasoning_hash;
+
         reports.push({
           id,
-          commitment: r.commitment.toHex ? r.commitment.toHex() : r.commitment.toString(),
-          target: r.target.toString(),
-          evidenceHash: r.evidence_hash.toHex ? r.evidence_hash.toHex() : r.evidence_hash.toString(),
-          category: parseCategory(r.category.toJSON()),
-          submittedAt: Number(r.submitted_at.toString()),
-          status: parseStatus(r.status.toJSON()),
-          bondDalla: planckToDalla(r.bond.toString()),
-          bondDepositor: r.bond_depositor.toString(),
-          reasoningHash: r.reasoning_hash?.isSome ? r.reasoning_hash.unwrap().toHex() : null,
+          commitment: rObj.commitment?.toHex ? rObj.commitment.toHex() : rObj.commitment?.toString() || '',
+          target: rObj.target?.toString() || '',
+          evidenceHash: evidence?.toHex ? evidence.toHex() : evidence?.toString() || '',
+          category: parseCategory(rObj.category?.toJSON ? rObj.category.toJSON() : rObj.category),
+          submittedAt: Number(submitted?.toString() || 0),
+          status: parseStatus(rObj.status?.toJSON ? rObj.status.toJSON() : rObj.status),
+          bondDalla: planckToDalla(rObj.bond?.toString() || '0'),
+          bondDepositor: bondDep?.toString() || '',
+          reasoningHash: reasoning?.isSome ? reasoning.unwrap().toHex() : reasoning?.toHex ? reasoning.toHex() : null,
           escrowedRewardDalla,
         });
       }

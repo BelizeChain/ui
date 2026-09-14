@@ -73,17 +73,22 @@ export async function getAllDisputes(): Promise<PortalDispute[]> {
       if ((valueOpt as any).isSome) {
         const id = (key.args[0] as any).toNumber();
         const record = (valueOpt as any).unwrap();
+        const rObj = record as any;
+        const evidence = rObj.evidenceHash || rObj.evidence_hash;
+        const opened = rObj.openedAt || rObj.opened_at;
+        const appeal = rObj.appealEvidence || rObj.appeal_evidence;
+
         list.push({
           id,
-          disputant: record.disputant.toString(),
-          target: record.target.toString(),
-          evidenceHash: record.evidence_hash.toHex ? record.evidence_hash.toHex() : record.evidence_hash.toString(),
-          severity: parseSeverity(record.severity.toJSON()),
-          openedAt: Number(record.opened_at.toString()),
-          status: parseStatus(record.status.toJSON()),
-          resolution: parseResolution(record.resolution),
-          bondDalla: planckToDalla(record.bond.toString()),
-          appealEvidence: record.appeal_evidence?.isSome ? record.appeal_evidence.unwrap().toHex() : null,
+          disputant: rObj.disputant?.toString() || '',
+          target: rObj.target?.toString() || '',
+          evidenceHash: evidence?.toHex ? evidence.toHex() : evidence?.toString() || '',
+          severity: parseSeverity(rObj.severity?.toJSON ? rObj.severity.toJSON() : rObj.severity),
+          openedAt: Number(opened?.toString() || 0),
+          status: parseStatus(rObj.status?.toJSON ? rObj.status.toJSON() : rObj.status),
+          resolution: parseResolution(rObj.resolution),
+          bondDalla: planckToDalla(rObj.bond?.toString() || '0'),
+          appealEvidence: appeal?.isSome ? appeal.unwrap().toHex() : appeal?.toHex ? appeal.toHex() : null,
         });
       }
     }

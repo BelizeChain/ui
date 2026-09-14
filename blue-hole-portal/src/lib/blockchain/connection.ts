@@ -148,10 +148,10 @@ class BlockchainConnectionManager {
       this.isConnecting = false;
       this.notifyListeners({ status: 'connected', message: 'Connected to BelizeChain' });
       
-      console.log('✅ Connected to BelizeChain');
-      console.log(`🔗 Chain: ${(await this.api.rpc.system.chain()).toString()}`);
-      console.log(`📦 Node: ${(await this.api.rpc.system.name()).toString()}`);
-      console.log(`🔢 Version: ${(await this.api.rpc.system.version()).toString()}`);
+      console.log('[BLOCKCHAIN] Connected to BelizeChain');
+      console.log(`[BLOCKCHAIN] Chain: ${(await this.api.rpc.system.chain()).toString()}`);
+      console.log(`[BLOCKCHAIN] Node: ${(await this.api.rpc.system.name()).toString()}`);
+      console.log(`[BLOCKCHAIN] Version: ${(await this.api.rpc.system.version()).toString()}`);
       
       return this.api;
     } catch (error) {
@@ -171,17 +171,17 @@ class BlockchainConnectionManager {
     if (!this.api) return;
     
     this.api.on('connected', () => {
-      console.log('🟢 API connected');
+      console.log('[BLOCKCHAIN] API connected');
       this.notifyListeners({ status: 'connected', message: 'Connected' });
     });
     
     this.api.on('disconnected', () => {
-      console.log('🔴 API disconnected');
+      console.log('[BLOCKCHAIN] API disconnected');
       this.notifyListeners({ status: 'disconnected', message: 'Disconnected from node' });
     });
     
     this.api.on('error', (error) => {
-      console.error('❌ API error:', error);
+      console.error('[BLOCKCHAIN] API error:', error);
       this.notifyListeners({ 
         status: 'error', 
         message: error instanceof Error ? error.message : 'Unknown error' 
@@ -189,7 +189,7 @@ class BlockchainConnectionManager {
     });
     
     this.api.on('ready', () => {
-      console.log('✅ API ready');
+      console.log('[BLOCKCHAIN] API ready');
       this.notifyListeners({ status: 'ready', message: 'API ready' });
     });
   }

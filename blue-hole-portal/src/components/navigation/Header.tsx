@@ -82,8 +82,8 @@ export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderPro
           >
             <MagnifyingGlass size={18} className="text-gray-400 group-hover:text-white" weight="bold" />
             <span className="text-sm text-gray-400 group-hover:text-white">Search...</span>
-            <kbd className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700 rounded text-xs text-gray-400">
-              <span>⌘</span>K
+            <kbd className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700/80 border border-gray-600/50 rounded text-[11px] font-mono text-gray-400">
+              Cmd + K
             </kbd>
           </button>
         </div>

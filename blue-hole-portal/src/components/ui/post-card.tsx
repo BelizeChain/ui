@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { GlassCard } from './glass-card';
 import { cn } from '@/lib/utils';
-import { ArrowFatUp, ArrowFatDown, ChatDots, Share, MapPin } from 'phosphor-react';
+import { ArrowFatUp, ArrowFatDown, ChatDots, Share, MapPin, Users, Scales, Leaf } from 'phosphor-react';
 import Link from 'next/link';
 
 export interface PostCardProps {
@@ -84,9 +84,9 @@ export function PostCard({
     onShare?.();
   };
   const typeBadges = {
-    community: { label: '👥 Community', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-    governance: { label: '⚖️ Governance', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-    environment: { label: '🌱 Environment', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    community: { label: 'Community', icon: Users, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    governance: { label: 'Governance', icon: Scales, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    environment: { label: 'Environment', icon: Leaf, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   };
 
   const content_component = (
@@ -94,13 +94,15 @@ export function PostCard({
       <div className="flex items-start space-x-3">
         {/* Avatar */}
         {author && typeof author.avatar === 'string' ? (
-          <div className="text-3xl">{author.avatar}</div>
+          <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-cyan-300 font-bold text-xs shrink-0">
+            {author.avatar.slice(0, 2).toUpperCase()}
+          </div>
         ) : author ? (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-400 to-emerald-500 flex items-center justify-center text-white font-bold">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-400 to-emerald-500 flex items-center justify-center text-white font-bold shrink-0">
             {author.avatar}
           </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold shrink-0">
             ?
           </div>
         )}
@@ -117,11 +119,16 @@ export function PostCard({
                 </p>
               )}
             </div>
-            {type && typeBadges[type] && (
-              <span className={cn('px-2 py-1 rounded-full text-xs font-medium border', typeBadges[type].color)}>
-                {typeBadges[type].label}
-              </span>
-            )}
+            {type && typeBadges[type] && (() => {
+              const badge = typeBadges[type];
+              const BadgeIcon = badge.icon;
+              return (
+                <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1.5', badge.color)}>
+                  <BadgeIcon size={12} weight="bold" />
+                  <span>{badge.label}</span>
+                </span>
+              );
+            })()}
           </div>
 
           {/* Content */}

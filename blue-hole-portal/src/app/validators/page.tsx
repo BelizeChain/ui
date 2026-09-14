@@ -15,6 +15,7 @@ import {
   Clock,
   Spinner,
   ArrowLeft,
+  X,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
@@ -299,11 +300,13 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
           {/* Stats Footer */}
           <div className="flex flex-wrap items-center justify-between pt-3 border-t border-slate-800/80 text-xs text-slate-400">
             <div className="flex items-center gap-4">
-              <span className="text-slate-300">
-                ⚡ <strong className="text-white">{validator.blocksProduced?.toLocaleString() ?? 1240}</strong> blocks authored
+              <span className="text-slate-300 flex items-center gap-1.5">
+                <Lightning size={13} className="text-amber-400" weight="bold" />
+                <span><strong className="text-white">{validator.blocksProduced?.toLocaleString() ?? 1240}</strong> blocks authored</span>
               </span>
-              <span className="text-slate-400">
-                👥 <strong className="text-slate-200">{validator.nominatorsCount}</strong> nominators
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Users size={13} className="text-cyan-400" weight="bold" />
+                <span><strong className="text-slate-200">{validator.nominatorsCount}</strong> nominators</span>
               </span>
             </div>
             <div className="flex items-center gap-2 text-emerald-400 font-medium">
@@ -332,7 +335,7 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
                   onClick={() => setInspectOpen(false)}
                   className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
                 >
-                  ✕
+                  <X size={16} />
                 </button>
               </div>
 
