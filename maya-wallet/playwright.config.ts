@@ -37,7 +37,7 @@ export default defineConfig({
   // Shared settings for all projects
   use: {
     // Base URL for navigation
-    baseURL: 'http://localhost:3001',
+    baseURL: 'http://localhost:3001/wallet',
     
     // Collect trace on failure
     trace: 'on-first-retry',
@@ -94,7 +94,7 @@ export default defineConfig({
   // Run local dev server before tests
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3001',
+    url: 'http://localhost:3001/wallet',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },

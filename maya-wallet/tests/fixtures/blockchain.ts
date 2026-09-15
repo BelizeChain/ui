@@ -107,6 +107,20 @@ export const test = base.extend<BlockchainFixtures>({
       );
     });
   },
+
+  /**
+   * Automatically prepend Next.js basePath (/wallet) for relative root paths
+   */
+  page: async ({ page }, use) => {
+    const origGoto = page.goto.bind(page);
+    page.goto = (async (url: string, options?: any) => {
+      if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('/wallet')) {
+        url = `/wallet${url === '/' ? '' : url}`;
+      }
+      return origGoto(url, options);
+    }) as any;
+    await use(page);
+  },
 });
 
 export { expect } from '@playwright/test';

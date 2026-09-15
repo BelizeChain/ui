@@ -38,7 +38,7 @@ export function MayaShellReadinessPanel({ className = '' }: { className?: string
   const isAllServicesOnline = summary === 'online';
 
   return (
-    <div className={`relative ${className}`}>
+    <div data-testid="shell-readiness-panel" className={`relative ${className}`}>
       {/* Sleek Floating Status Pill */}
       <motion.div
         whileHover={{ scale: 1.01 }}
