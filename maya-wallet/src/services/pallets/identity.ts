@@ -55,10 +55,10 @@ export interface KYCStatus {
  */
 export async function getBelizeID(address: string): Promise<BelizeID | null> {
   const api = await initializeApi();
-  
+
   try {
     const identity: any = await api.query.identity?.identities?.(address);
-    
+
     if (identity && !identity.isNone) {
       const data = identity.unwrap();
       return {
@@ -153,10 +153,10 @@ export async function registerBelizeID(
   }
 ): Promise<{ hash: string; blockHash?: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
-    
+
     // Real signature: registerIdentity(name:Bytes). Pack the full PII tuple
     // into a single newline-separated bytestring; richer fields are persisted
     // off-chain by upcoming verification flows.
@@ -179,12 +179,12 @@ export async function registerBelizeID(
             if (api.events.system.ExtrinsicFailed.is(event)) {
               const [dispatchError]: any = event.data;
               let errorMessage = 'Registration failed';
-              
+
               if (dispatchError.isModule) {
                 const decoded = api.registry.findMetaError(dispatchError.asModule);
                 errorMessage = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`;
               }
-              
+
               reject(new Error(errorMessage));
             }
           });
@@ -207,16 +207,16 @@ export async function registerBelizeID(
  */
 export async function getSSNRecord(address: string): Promise<SSNRecord | null> {
   const api = await initializeApi();
-  
+
   try {
     const ssnRecord: any = await api.query.identity?.ssnRecords?.(address);
-    
+
     if (!ssnRecord || ssnRecord.isNone) {
       return null;
     }
 
     const data = ssnRecord.unwrap();
-    
+
     return {
       ssn: data.ssn.toString(),
       verified: data.verified.toHuman(),
@@ -251,16 +251,16 @@ export async function submitSSNVerification(
  */
 export async function getPassportRecord(address: string): Promise<PassportRecord | null> {
   const api = await initializeApi();
-  
+
   try {
     const passportRecord: any = await api.query.identity?.passportRecords?.(address);
-    
+
     if (!passportRecord || passportRecord.isNone) {
       return null;
     }
 
     const data = passportRecord.unwrap();
-    
+
     return {
       passportNumber: data.passportNumber.toString(),
       issuingCountry: data.issuingCountry.toString(),
@@ -299,39 +299,42 @@ export async function submitPassportVerification(
  */
 export async function getKYCStatus(address: string): Promise<KYCStatus> {
   const api = await initializeApi();
-  
+
   try {
-    const kycRecord: any = await api.query.compliance?.kycRecords?.(address);
-    
-    if (kycRecord && !kycRecord.isNone) {
-      const data = kycRecord.unwrap();
-      return {
-        level: data.level.toString() as any,
-        status: data.status.toString() as any,
-        verificationDate: data.verificationDate?.toNumber(),
-        documents: data.documents.toHuman() as string[],
-        limits: {
-          dailyTransfer: formatBalance(data.dailyLimit.toString()),
-          monthlyTransfer: formatBalance(data.monthlyLimit.toString()),
-        },
-      };
+    // Real chain path (verified against live spec-105 metadata):
+    // identity.identityOf(AccountId) -> Option<IdentityId>
+    // identity.ssnAttestations(IdentityId) -> Attestation { status, validUntil, graceUntil, ... }
+    // KYC L1 = valid SSN attestation (pallet_belize_identity.kyc_state)
+    const identityIdOpt = (await api.query.identity?.identityOf?.(address)) as any;
+    if (identityIdOpt && identityIdOpt.isNone !== true) {
+      const identityId = identityIdOpt.unwrap();
+      const att = (await api.query.identity?.ssnAttestations?.(identityId)) as any;
+      if (att && att.isNone !== true) {
+        const data = att.unwrap();
+        const statusStr = data.status?.toString() ?? '';
+        const now = BigInt((await api.query.system.number()).toString());
+        const validUntil = BigInt(data.validUntil?.toString?.() ?? '0');
+
+        const isActive = statusStr.toLowerCase() === 'active';
+        // kyc_state: Valid while now <= validUntil; Grace while now <= graceUntil
+        const isWithinValidity = isActive && now <= validUntil;
+
+        if (isActive) {
+          return {
+            level: isWithinValidity ? 'Full' : 'Basic',
+            status: 'Verified',
+            verificationDate: data.issuedAt?.toNumber?.() ?? Math.floor(Date.now() / 1000),
+            documents: ['Social Security Attestation (on-chain)'],
+            limits: {
+              dailyTransfer: isWithinValidity ? '10,000,000.00' : '0.00',
+              monthlyTransfer: isWithinValidity ? '100,000,000.00' : '0.00',
+            },
+          };
+        }
+      }
     }
   } catch (error) {
     console.debug('Failed to fetch on-chain KYC status:', error);
-  }
-
-  // Founder account has Full verified KYC status
-  if (address === '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt' || address.startsWith('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24')) {
-    return {
-      level: 'Full',
-      status: 'Verified',
-      verificationDate: Math.floor(Date.now() / 1000) - 86400 * 90,
-      documents: ['National ID Card', 'Social Security Card', 'Biometric PQC Key'],
-      limits: {
-        dailyTransfer: '10,000,000.00',
-        monthlyTransfer: '100,000,000.00',
-      },
-    };
   }
 
   return {
@@ -350,7 +353,7 @@ export async function getKYCStatus(address: string): Promise<KYCStatus> {
  */
 export async function resolveAddressToName(address: string): Promise<string | null> {
   const belizeID = await getBelizeID(address);
-  
+
   if (!belizeID) {
     return null;
   }
@@ -379,10 +382,10 @@ export async function isKYCVerified(address: string): Promise<boolean> {
  */
 export async function getAccountType(address: string): Promise<'Citizen' | 'Business' | 'Tourism' | 'Government' | null> {
   const api = await initializeApi();
-  
+
   try {
     const accountData: any = await api.query.economy?.accounts?.(address);
-    
+
     if (!accountData || accountData.isNone) {
       return null;
     }

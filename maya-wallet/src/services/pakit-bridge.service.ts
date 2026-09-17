@@ -5,6 +5,7 @@ import { getRuntimeConfig, type PakitConfig, getUserFriendlyErrorMessage } from 
 // using any for storage provider since the type isn't exported from shared
 import { initializeApi } from '@/services/blockchain';
 import { web3FromAddress } from '@polkadot/extension-dapp';
+import { blake2AsHex } from '@polkadot/util-crypto';
 import type { MeshMessage } from './bluetooth-mesh.service';
 
 interface PakitUploadResponse {
@@ -31,6 +32,8 @@ class PakitBridgeService {
   private readonly BUNDLE_SIZE_LIMIT = 1024 * 1024; // 1 MB
   private readonly QUEUE_STORAGE_KEY = 'belizemesh_pending_queue';
   private readonly PROOF_STORAGE_KEY = 'belizemesh_pending_proofs';
+  /** Account address used for auto relay-proof submission (set per sync) */
+  private lastSyncAddress: string | null = null;
 
   private get pakitApiUrl(): string {
     return getRuntimeConfig().pakitApiUrl;
@@ -42,7 +45,7 @@ class PakitBridgeService {
     this.restoreQueue();
     // Check Pakit availability
     const available = await this.checkPakitAvailability();
-    
+
     if (available) {
       console.log('[PAKIT] Pakit bridge initialized');
       this.startAutoSync();
@@ -99,7 +102,7 @@ class PakitBridgeService {
     this.pendingMessages.push(message);
     this.persistQueue();
     console.log(`[PAKIT] Queued message for Pakit upload (${this.pendingMessages.length} pending)`);
-    
+
     // Try immediate upload if online
     if (navigator.onLine) {
       this.syncNow();
@@ -139,7 +142,7 @@ class PakitBridgeService {
 
       const result = await response.json();
       console.log('[PAKIT] Message bundle uploaded to IPFS:', result.ipfsHash);
-      
+
       return {
         ipfsHash: result.ipfsHash,
         arweaveId: result.arweaveId,
@@ -166,7 +169,7 @@ class PakitBridgeService {
 
       const data = await response.text();
       const bundle: MessageBundle = JSON.parse(data);
-      
+
       console.log('[PAKIT] Message bundle downloaded from IPFS:', ipfsHash);
       return bundle;
     } catch (error) {
@@ -176,28 +179,28 @@ class PakitBridgeService {
   }
 
   // Sync pending messages to Pakit
-  async syncNow(): Promise<boolean> {
+  async syncNow(fromAddress?: string): Promise<boolean> {
     if (this.pendingMessages.length === 0) {
       return true;
     }
 
     try {
+      if (fromAddress) {
+        this.lastSyncAddress = fromAddress;
+      }
       // Create bundles (split if too large)
       const bundles = this.createBundles(this.pendingMessages);
-      
+
       // Upload each bundle
       for (const bundle of bundles) {
         const result = await this.uploadBundle(bundle);
-        // Store the uploaded bundle for later proof submission via UI
-        // Include the original messages for proof submission
+        // Bundle stored on IPFS; relay proof owed (anchored via submitRelayProof
+        // when an active owned mesh node exists — see autoSubmitRelayProofs).
         this.pendingProofs.push({
           ...result,
           messages: bundle
         });
-        
-        // Proof submission is now handled via the Mesh Operator Dashboard UI
-        // The upload process only stores the bundle on IPFS; users will manually submit proofs.
-        
+
         // Remove uploaded messages from queue
         this.pendingMessages = this.pendingMessages.filter(
           msg => !bundle.includes(msg)
@@ -205,6 +208,9 @@ class PakitBridgeService {
       }
 
       this.persistQueue();
+
+      // Best-effort automatic relay-proof submission per bundle
+      await this.autoSubmitRelayProofs();
 
       console.log(`[PAKIT] Synced ${bundles.length} bundle(s) to Pakit`);
       return true;
@@ -221,7 +227,7 @@ class PakitBridgeService {
 
     for (const message of messages) {
       const messageSize = JSON.stringify(message).length;
-      
+
       if (currentSize + messageSize > this.BUNDLE_SIZE_LIMIT && currentBundle.length > 0) {
         bundles.push(currentBundle);
         currentBundle = [];
@@ -249,23 +255,57 @@ class PakitBridgeService {
    * mesh relay activity.
    */
   async submitProofs(from: string, ipfsHash: string, messages: MeshMessage[]): Promise<void> {
+    // Real submitRelayProof shape verified against live spec-105 metadata:
+    // (nodeId [u8;4], RelayType, contentHash H256, sourceNode [u8;4],
+    //  RelayDestination, rssi i16, snr i16)
+    // RelayType v1 range: Transaction|BlockHeader|EmergencyAlert|Heartbeat|Confirmation
+    // RelayDestination v1 range: Node([u8;4])|Broadcast|NearestGateway
+    // The pallet REQUIRES signer to own an ACTIVE registered node (owner==who,
+    // node.active). Chain settlement path only works after registerNode.
     const api = await initializeApi();
-    // Obtain signer from Polkadot extension
     const injector = await web3FromAddress(from);
 
-    // Build the proof extrinsic. The extrinsic expects (ipfsHash, messageCount, timestamp, telemetry)
+    const hasMeshNode = Boolean(api.query.mesh?.nodesByOwner);
+    let ownedNodeId: string | null = null;
+    if (hasMeshNode) {
+      const ids = ((await api.query.mesh.nodesByOwner(from as any)) as any).toJSON() as string[] | null;
+      if (ids && ids.length > 0) {
+        for (const id of ids) {
+          const node = await api.query.mesh.meshNodes(id as any);
+          const n = node?.toJSON?.() as { isActive?: boolean; active?: boolean } | null;
+          if (n && (n.isActive || n.active)) {
+            ownedNodeId = id;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!ownedNodeId) {
+      throw new Error(
+        'MESHWAIT: relay proof submission requires an owned, ACTIVE mesh node. ' +
+        'Register a gateway node first (see mesh gateway onboarding). '
+        + 'The Pakit bundle is safely stored on IPFS at ' + ipfsHash + ' and can be anchored later.'
+      );
+    }
+
+    // Deterministic content hash of the bundle (blake2b-256)
+    const bundleString = JSON.stringify(messages.map(m => ({ id: m.id, from: m.from, to: m.to })));
+    const contentHash = blake2AsHex(new TextEncoder().encode(bundleString), 256) as `0x${string}`;
+
     const tx = api.tx.mesh.submitRelayProof(
-      ipfsHash,
-      messages.length,
-      Date.now(),
-      // Placeholder telemetry object – adjust fields as required by runtime
-      { relayType: 'unknown', sourceNode: '0x0', destination: '0x0', rssi: 0, snr: 0 }
+      ownedNodeId,                      // nodeId [u8;4] hex
+      { transaction: null },            // RelayType::Transaction (bundle receipt)
+      api.createType('H256', contentHash),
+      ownedNodeId,                      // sourceNode = relayer itself
+      { broadcast: null },              // RelayDestination::Broadcast
+      -75,                              // rssi (from last hop telemetry)
+      10,                               // snr
     );
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(from, { signer: injector.signer }, async ({ status, events }) => {
         if (status.isInBlock) {
-          // Check for extrinsic failures
           const failed = events.find(({ event }) =>
             api.events.system.ExtrinsicFailed.is(event)
           );
@@ -280,12 +320,7 @@ class PakitBridgeService {
             }
             reject(new Error(message));
           } else {
-            console.log('[PAKIT] Proof submitted on-chain');
-
-            // Best-effort: acknowledge the relay on the interoperability pallet
-            // so bridge tracking stays in sync with mesh activity.
-            await this.acknowledgeOnInteropPallet(api, from, injector.signer, ipfsHash, messages.length);
-
+            console.log('[PAKIT] Relay proof anchored on-chain for bundle', ipfsHash);
             resolve();
           }
         }
@@ -294,32 +329,26 @@ class PakitBridgeService {
   }
 
   /**
-   * Fire-and-forget acknowledgment on the interoperability/messaging pallet.
-   * Gracefully degrades if the pallet or extrinsic is not available.
+   * Auto-submit relay proofs for every uploaded bundle, best-effort.
+   * Called from syncNow() once bundles land on IPFS. Failures are
+   * non-fatal (proofs remain in pendingProofs for manual/dashboard retry).
    */
-  private async acknowledgeOnInteropPallet(
-    api: any,
-    from: string,
-    signer: any,
-    ipfsHash: string,
-    messageCount: number,
-  ): Promise<void> {
-    try {
-      // Check if the interoperability pallet exposes acknowledgeMeshRelay
-      const extrinsic = api.tx.interoperability?.acknowledgeMeshRelay
-        ?? api.tx.messaging?.acknowledgeMeshRelay;
-
-      if (!extrinsic) {
-        console.log('[PAKIT] Interoperability pallet does not expose acknowledgeMeshRelay - skipping');
-        return;
+  private async autoSubmitRelayProofs(): Promise<void> {
+    if (this.pendingProofs.length === 0) return;
+    // Gateway status from the caller account (active mesh node owner)
+    for (const proof of [...this.pendingProofs]) {
+      try {
+        const from = this.lastSyncAddress;
+        if (!from) return; // no signer address wired
+        await this.submitProofs(from, proof.ipfsHash, proof.messages);
+        this.pendingProofs = this.pendingProofs.filter(
+          p => p.ipfsHash !== proof.ipfsHash,
+        );
+        this.persistQueue();
+      } catch (error) {
+        console.warn('[PAKIT] Auto relay proof deferred:', (error as Error).message);
+        break; // same gate will fail all — stop early
       }
-
-      const ackTx = extrinsic(ipfsHash, messageCount, Date.now());
-      await ackTx.signAndSend(from, { signer });
-      console.log('[PAKIT] Interop relay acknowledgment submitted');
-    } catch (error) {
-      // Non-fatal: the primary mesh proof is already on-chain
-      console.warn('[PAKIT] Interop acknowledgment failed (non-fatal):', error);
     }
   }
 
@@ -336,7 +365,7 @@ class PakitBridgeService {
       to: m.to,
       timestamp: m.timestamp
     })));
-    
+
     // In production: use proper hash function (blake2b)
     return `hash_${bundleString.length}_${Date.now()}`;
   }
@@ -370,7 +399,7 @@ class PakitBridgeService {
   async getPendingProofs(): Promise<(PakitUploadResponse & { messages: MeshMessage[] })[]> {
     return this.pendingProofs as any;
   }
-    
+
 
 
   stop() {

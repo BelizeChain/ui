@@ -331,7 +331,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
   // Sync pending messages to Pakit
   const syncToPakit = async (): Promise<boolean> => {
-    const success = await pakitBridgeService.syncNow();
+    const success = await pakitBridgeService.syncNow(selectedAccount?.address);
     setPendingSyncCount(await pakitBridgeService.getPendingCount());
     return success;
   };

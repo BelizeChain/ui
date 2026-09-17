@@ -119,19 +119,59 @@ class BlockchainProofService {
   }
 
   /**
-   * Local subscription: the pallet v1 has no alert push subscription; consumers
-   * receive the locally-dispatched event above instead (browser notification
-   * is handled in MessagingContext once a real mesh peer relays the alert).
+   * Subscribe to on-chain emergency alerts.
+   *
+   * Runtime truth (verified against live spec-105 + pallet source):
+   * `pallet_belize_mesh` emits `EmergencyAlertIssued { alert_id, severity,
+   * alert_type, issuer, district }` — a real push subscription. We also keep
+   * the local `emergency-broadcast` CustomEvent bridge so self-submitted
+   * alerts surface immediately in the UI.
    */
   subscribeToEmergencyAlerts(
     callback: (broadcast: EmergencyBroadcast) => void,
   ): () => void {
-    const handler = (event: Event) => {
+    // Bridge local events (self-submitted fan-out)
+    const localHandler = (event: Event) => {
       const detail = (event as CustomEvent).detail as EmergencyBroadcast;
       callback(detail);
     };
-    window.addEventListener('emergency-broadcast', handler as EventListener);
-    return () => window.removeEventListener('emergency-broadcast', handler as EventListener);
+    window.addEventListener('emergency-broadcast', localHandler as EventListener);
+
+    // Real chain subscription (requires api; no-op provider otherwise)
+    let chainUnsub: (() => void) | null = null;
+    (async () => {
+      if (!this.api) return;
+      try {
+        const unsub = await (this.api as any).query.system.events((events: any[]) => {
+            for (const { event } of events as any[]) {
+              const key = `${event.section}.${event.method}`;
+              if (key === 'mesh.EmergencyAlertIssued') {
+                const [alertId, severity, alertType, issuer, district] = event.data;
+                callback({
+                  id: `alert_${alertId?.toString?.() ?? String(event.hash)}`,
+                  level: String(severity ?? '').toLowerCase() as EmergencyBroadcast['level'],
+                  district: String(district ?? '').toLowerCase(),
+                  alertType: String(alertType ?? 'general').toLowerCase() as EmergencyBroadcast['alertType'],
+                  latitude: 0,
+                  longitude: 0,
+                  radiusMeters: 0,
+                  message: `Emergency alert #${alertId?.toString?.() ?? ''} issued by ${issuer?.toString?.() ?? 'authority'} (${alertType}).`,
+                  durationMinutes: 60,
+                  ts: Date.now(),
+                });
+              }
+            }
+          });
+          chainUnsub = unsub as () => void;
+        } catch (e) {
+          console.warn('[PROOF] system.events subscription failed:', e);
+        }
+    })();
+
+    return () => {
+      window.removeEventListener('emergency-broadcast', localHandler as EventListener);
+      chainUnsub?.();
+    };
   }
 
   /** Verifies on-chain that the signer is a registered emergency authority */
