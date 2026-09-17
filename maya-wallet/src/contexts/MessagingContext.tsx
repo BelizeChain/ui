@@ -52,10 +52,46 @@ interface MessagingContextType {
 
 const MessagingContext = createContext<MessagingContextType | undefined>(undefined);
 
+const CONVERSATIONS_STORAGE_KEY = 'belizemesh_conversations';
+const MAX_CONVERSATION_MESSAGES = 200;
+
+function loadConversations(): Conversation[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(CONVERSATIONS_STORAGE_KEY);
+    if (stored) {
+      return (JSON.parse(stored) as Conversation[]).map(c => ({
+        ...c,
+        messages: c.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })),
+        lastMessage: c.lastMessage
+          ? { ...c.lastMessage, timestamp: new Date(c.lastMessage.timestamp) }
+          : undefined,
+      }));
+    }
+  } catch {
+    // Ignore corrupt storage and start fresh
+  }
+  return [];
+}
+
+function saveConversations(conversations: Conversation[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    // Bound storage: keep only the latest messages per conversation
+    const trimmed: Conversation[] = conversations.map(c => ({
+      ...c,
+      messages: c.messages.slice(-MAX_CONVERSATION_MESSAGES),
+    }));
+    localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {
+    // Storage full or unavailable — non-fatal
+  }
+}
+
 export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const { selectedAccount } = useWallet();
   const [mode, setMode] = useState<MessageMode>('auto');
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [emergencyAlerts, setEmergencyAlerts] = useState<EmergencyBroadcast[]>([]);
   const [isMeshAvailable, setIsMeshAvailable] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -63,6 +99,11 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   // Polkadot API connection for blockchain proof / emergency broadcasts.
   // Connects lazily on mount; stays null until ready so dependent actions guard on it.
   const [api, setApi] = useState<ApiPromise | null>(null);
+
+  // Persist conversations whenever they change
+  useEffect(() => {
+    saveConversations(conversations);
+  }, [conversations]);
 
   useEffect(() => {
     let cancelled = false;

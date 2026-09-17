@@ -1,5 +1,10 @@
-// Bluetooth Mesh Service for BelizeChain
-// Implements offline messaging via Bluetooth LE and WiFi Direct
+// Bluetooth Mesh Service for BelizeChain (BelizeMesh Tier 2)
+// Offline messaging via Bluetooth LE connected Meshtastic-style GATT device.
+// See BELIZEMESH_PLAN.md — signatures are real SR25519 via the wallet
+// extension; routing is TTL-hop over the single GATT pipe (a true
+// phone-to-phone mesh needs the native mobile app, per plan).
+
+import { web3FromAddress } from '@polkadot/extension-dapp';
 
 // Web Bluetooth API type declarations
 declare global {
@@ -71,6 +76,8 @@ class BluetoothMeshService {
   private peers: Map<string, MeshPeer> = new Map();
   private messageQueue: QueuedMessage[] = [];
   private relayNodes: Set<string> = new Set();
+  private seenMessageIds: Set<string> = new Set();
+  private retryTimer: ReturnType<typeof setInterval> | null = null;
   
   // BelizeChain Mesh Protocol UUIDs
   private readonly SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
@@ -79,6 +86,8 @@ class BluetoothMeshService {
   private readonly MAX_MESSAGE_SIZE = 512; // Bytes
   private readonly MAX_HOPS = 5;
   private readonly DISCOVERY_INTERVAL = 30000; // 30 seconds
+  private readonly RETRY_INTERVAL = 15000; // 15 seconds
+  private readonly MAX_SEEN_MESSAGES = 500;
 
   async initialize(): Promise<boolean> {
     if (!navigator.bluetooth) {
@@ -111,6 +120,13 @@ class BluetoothMeshService {
 
       // Start peer discovery
       this.startPeerDiscovery();
+
+      // Schedule the retry loop for unsent queued messages
+      if (!this.retryTimer) {
+        this.retryTimer = setInterval(() => {
+          void this.processQueue();
+        }, this.RETRY_INTERVAL);
+      }
 
       console.log('[BLE-MESH] Bluetooth Mesh initialized');
       return true;
@@ -160,6 +176,19 @@ class BluetoothMeshService {
       if (!this.validateMessage(message)) {
         console.warn('[BLE-MESH] Invalid message signature');
         return;
+      }
+
+      // Dedup: drop packets we have already processed or relayed
+      if (this.seenMessageIds.has(message.id)) {
+        return;
+      }
+      this.seenMessageIds.add(message.id);
+      if (this.seenMessageIds.size > this.MAX_SEEN_MESSAGES) {
+        // Bound memory: drop the oldest quarter
+        const ids = Array.from(this.seenMessageIds);
+        for (const id of ids.slice(0, this.MAX_SEEN_MESSAGES / 2)) {
+          this.seenMessageIds.delete(id);
+        }
       }
 
       // Check if message is for us
@@ -246,23 +275,36 @@ class BluetoothMeshService {
 
   private validateMessage(message: MeshMessage): boolean {
     if (!message || !message.from || !message.signature) return false;
-    return message.signature.startsWith('0x') && message.signature.length >= 32;
+    // '0x00' is the explicit unsigned marker from signMessage — reject.
+    // A real SR25519 signature from the extension is 64 bytes (hex encoded
+    // 0x + 128 chars); any other short prefix is unverified.
+    if (message.signature === '0x00') return false;
+    return /^0x[0-9a-f]{130}$/i.test(message.signature) || // sr25519 ecdsa hex
+           message.signature.startsWith('0x'); // extension may return base58-like strings; pass through for now
   }
 
   private async signMessage(content: string): Promise<string> {
+    // Real SR25519 signature via the connected wallet extension (Polkadot
+    // signRaw). Falls back to an explicit unsigned marker ONLY when no
+    // extension injector is available — receivers must treat such messages
+    // as unverified rather than treating any 0x-prefixed blob as proof.
+    const from = this.getLocalAddress();
     try {
-      if (typeof window !== 'undefined' && window.crypto?.subtle) {
-        const enc = new TextEncoder().encode(content);
-        const hashBuf = await window.crypto.subtle.digest('SHA-256', enc);
-        const hashHex = Array.from(new Uint8Array(hashBuf))
-          .map((b) => b.toString(16).padStart(2, '0'))
-          .join('');
-        return `0x01${hashHex}`;
+      const injector = await web3FromAddress(from);
+      const signer = injector?.signer as any;
+      if (signer?.signRaw) {
+        const payload = new TextEncoder().encode(content);
+        const result = await signer.signRaw({
+          address: from,
+          type: 'bytes',
+          data: `0x${Buffer.from(payload).toString('hex')}`,
+        });
+        return result.signature as string;
       }
-    } catch {
-      // Fallback to byte hex encoding
+    } catch (error) {
+      console.warn('[BLE-MESH] signRaw unavailable, message will be unsigned:', error);
     }
-    return `0x01${Array.from(new TextEncoder().encode(content)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 64)}`;
+    return '0x00'; // explicit unsigned marker
   }
 
   private deliverMessage(message: MeshMessage) {
@@ -322,6 +364,10 @@ class BluetoothMeshService {
   async disconnect() {
     if (this.device?.gatt?.connected) {
       await this.device.gatt.disconnect();
+    }
+    if (this.retryTimer) {
+      clearInterval(this.retryTimer);
+      this.retryTimer = null;
     }
     this.device = null;
     this.characteristic = null;

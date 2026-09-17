@@ -29,6 +29,8 @@ class PakitBridgeService {
   private syncInterval: NodeJS.Timeout | null = null;
   private readonly SYNC_INTERVAL = 60000; // 1 minute
   private readonly BUNDLE_SIZE_LIMIT = 1024 * 1024; // 1 MB
+  private readonly QUEUE_STORAGE_KEY = 'belizemesh_pending_queue';
+  private readonly PROOF_STORAGE_KEY = 'belizemesh_pending_proofs';
 
   private get pakitApiUrl(): string {
     return getRuntimeConfig().pakitApiUrl;
@@ -36,6 +38,8 @@ class PakitBridgeService {
 
   async initialize(provider: any): Promise<void> {
     this.storageProvider = provider;
+    // Restore any queue that survived a previous session
+    this.restoreQueue();
     // Check Pakit availability
     const available = await this.checkPakitAvailability();
     
@@ -44,6 +48,37 @@ class PakitBridgeService {
       this.startAutoSync();
     } else {
       console.warn('[PAKIT] Pakit service unavailable, messages will queue');
+    }
+  }
+
+  private restoreQueue() {
+    if (typeof window === 'undefined') return;
+    try {
+      const storedQueue = localStorage.getItem(this.QUEUE_STORAGE_KEY);
+      if (storedQueue) {
+        const parsed = JSON.parse(storedQueue) as MeshMessage[];
+        // timestamps must become Date objects again
+        this.pendingMessages = parsed.map(m => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        }));
+      }
+      const storedProofs = localStorage.getItem(this.PROOF_STORAGE_KEY);
+      if (storedProofs) {
+        this.pendingProofs = JSON.parse(storedProofs);
+      }
+    } catch (error) {
+      console.warn('[PAKIT] Failed to restore queue:', error);
+    }
+  }
+
+  private persistQueue() {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(this.pendingMessages));
+      localStorage.setItem(this.PROOF_STORAGE_KEY, JSON.stringify(this.pendingProofs));
+    } catch (error) {
+      console.warn('[PAKIT] Failed to persist queue:', error);
     }
   }
 
@@ -62,6 +97,7 @@ class PakitBridgeService {
   // Queue mesh message for upload
   queueMessage(message: MeshMessage) {
     this.pendingMessages.push(message);
+    this.persistQueue();
     console.log(`[PAKIT] Queued message for Pakit upload (${this.pendingMessages.length} pending)`);
     
     // Try immediate upload if online
@@ -167,6 +203,8 @@ class PakitBridgeService {
           msg => !bundle.includes(msg)
         );
       }
+
+      this.persistQueue();
 
       console.log(`[PAKIT] Synced ${bundles.length} bundle(s) to Pakit`);
       return true;
