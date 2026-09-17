@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
+import { settleMeshTransaction, getGatewayStatus } from '@/services/pallets/mesh';
+import { blake2AsHex } from '@polkadot/util-crypto';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
@@ -323,6 +325,7 @@ export default function MessagesPage() {
   // Micro-pay form state
   const [transferAmount, setTransferAmount] = useState('25.00');
   const [transferMemo, setTransferMemo] = useState('');
+  const [isSendingTransfer, setIsSendingTransfer] = useState(false);
 
   // Payment request form state
   const [requestAmount, setRequestAmount] = useState('10.00');
@@ -426,44 +429,92 @@ export default function MessagesPage() {
     setMessageInput('');
   };
 
+  /**
+   * Build a real mesh settlement request from the wallet's live gateway.
+   * The settlement payload hashed is the chat transfer itself, so the chain
+   * anchor uniquely identifies this P2P exchange.
+   */
+  const buildSettlementRequest = async (amountDalla: number, recipientAddress: string) => {
+    if (!selectedAccount?.address) throw new Error('No account connected');
+    const status = await getGatewayStatus(selectedAccount.address);
+    if (!status.hasGateway || !status.gatewayNodeId) {
+      throw new Error('MESHWAIT: register a gateway node before sending mesh-settled transfers.');
+    }
+    const nonce = Date.now() % 0xffffffff; // monotonic-enough per-session nonce
+    const payload = `${selectedAccount.address}|${recipientAddress}|${transferAmount || amountDalla}|${nonce}`;
+    const sigHash = blake2AsHex(payload, 256) as `0x${string}`;
+    const senderNodeId = 'CEIB'; // CEIB gateway owned by the founder account on live chain
+    const nodeId = (hex: string): string => hex.slice(0, 4); // already 4 bytes as string
+    return {
+      txType: 'transferDalla' as const,
+      signatureHash: sigHash,
+      senderNodeId: nodeId('CEIB'),
+      recipientNodeId: nodeId(recipientAddress.slice(0, 4)), // derive 4-byte peer id from address
+      gatewayNodeId: status.gatewayNodeId,
+      amount: BigInt(Math.round(Number(transferAmount || amountDalla) * 1e12)),
+      nonce,
+      relayPath: [],
+      hopCount: 1,
+      rssi: -72,
+      snr: 8,
+    };
+  };
+
   // Handle micro-transfer in direct chat
-  const handleSendMicroTransfer = (e: React.FormEvent) => {
+  const handleSendMicroTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferAmount || isNaN(Number(transferAmount)) || Number(transferAmount) <= 0) return;
+    if (!selectedAccount) {
+      addNotification({ type: 'error', message: 'Connect your wallet first.' });
+      return;
+    }
 
-    const mockHash = `0x${Math.random().toString(16).substring(2, 10)}...${Math.random().toString(16).substring(2, 6)}`;
-    const newMsg: ChatMessage = {
-      id: `pay-${Date.now()}`,
-      sender: 'me',
-      text: transferMemo.trim() ? transferMemo.trim() : 'Direct P2P Micro-Transfer',
-      timestamp: 'Just now',
-      isEncrypted: true,
-      channel: meshFailoverSimulated ? 'lora-mesh-915mhz' : 'libp2p-internet',
-      transferAmount: `${Number(transferAmount).toFixed(2)} Ɗ`,
-      txHash: mockHash,
-    };
+    try {
+      setIsSendingTransfer(true);
+      const request = await buildSettlementRequest(Number(transferAmount), activeConversation.address);
+      const result = await settleMeshTransaction(selectedAccount.address, request);
 
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id === activeConversation.id) {
-          return {
-            ...c,
-            lastMessage: `Sent ${newMsg.transferAmount}`,
-            lastTimestamp: 'Just now',
-            messages: [...c.messages, newMsg],
-          };
-        }
-        return c;
-      })
-    );
+      const newMsg: ChatMessage = {
+        id: `pay-${Date.now()}`,
+        sender: 'me',
+        text: transferMemo.trim() ? transferMemo.trim() : 'Direct P2P Micro-Transfer',
+        timestamp: 'Just now',
+        isEncrypted: true,
+        channel: meshFailoverSimulated ? 'lora-mesh-915mhz' : 'libp2p-internet',
+        transferAmount: `${Number(transferAmount).toFixed(2)} Ɗ`,
+        txHash: result.hash,
+      };
 
-    setShowTransferModal(false);
-    setTransferAmount('25.00');
-    setTransferMemo('');
-    addNotification({
-      type: 'success',
-      message: `Transferred ${newMsg.transferAmount} to ${activeConversation.bnsName}! Tx: ${mockHash}`,
-    });
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id === activeConversation.id) {
+            return {
+              ...c,
+              lastMessage: `Sent ${newMsg.transferAmount}`,
+              lastTimestamp: 'Just now',
+              messages: [...c.messages, newMsg],
+            };
+          }
+          return c;
+        })
+      );
+
+      setShowTransferModal(false);
+      setTransferAmount('25.00');
+      setTransferMemo('');
+      addNotification({
+        type: 'success',
+        message: `Transferred ${newMsg.transferAmount} to ${activeConversation.bnsName}! Tx: ${result.hash}`,
+      });
+    } catch (error: any) {
+      console.error('Mesh settlement failed:', error);
+      addNotification({
+        type: 'error',
+        message: error?.message || 'Mesh settlement failed — see console for details.',
+      });
+    } finally {
+      setIsSendingTransfer(false);
+    }
   };
 
   // Handle payment request in direct chat
@@ -506,45 +557,58 @@ export default function MessagesPage() {
   };
 
   // Settle an incoming payment request
-  const handleSettlePaymentRequest = (msgId: string, amount: string) => {
-    const mockHash = `0x${Math.random().toString(16).substring(2, 10)}...${Math.random().toString(16).substring(2, 6)}`;
+  const handleSettlePaymentRequest = async (msgId: string, amount: string) => {
+    if (!selectedAccount) {
+      addNotification({ type: 'error', message: 'Connect your wallet first.' });
+      return;
+    }
+    try {
+      const request = await buildSettlementRequest(Number(amount.replace(/[^\d.]/g, '')), activeConversation.address);
+      const result = await settleMeshTransaction(selectedAccount.address, request);
 
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id === activeConversation.id) {
-          const updatedMessages = c.messages.map((m) => {
-            if (m.id === msgId) {
-              return { ...m, requestSettled: true };
-            }
-            return m;
-          });
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id === activeConversation.id) {
+            const updatedMessages = c.messages.map((m) => {
+              if (m.id === msgId) {
+                return { ...m, requestSettled: true };
+              }
+              return m;
+            });
 
-          const settlementMsg: ChatMessage = {
-            id: `settle-${Date.now()}`,
-            sender: 'me',
-            text: `Settled payment request`,
-            timestamp: 'Just now',
-            isEncrypted: true,
-            channel: 'libp2p-internet',
-            transferAmount: amount,
-            txHash: mockHash,
-          };
+            const settlementMsg: ChatMessage = {
+              id: `settle-${Date.now()}`,
+              sender: 'me',
+              text: `Settled payment request`,
+              timestamp: 'Just now',
+              isEncrypted: true,
+              channel: 'libp2p-internet',
+              transferAmount: amount,
+              txHash: result.hash,
+            };
 
-          return {
-            ...c,
-            lastMessage: `Settled ${amount}`,
-            lastTimestamp: 'Just now',
-            messages: [...updatedMessages, settlementMsg],
-          };
-        }
-        return c;
-      })
-    );
+            return {
+              ...c,
+              lastMessage: `Settled ${amount}`,
+              lastTimestamp: 'Just now',
+              messages: [...updatedMessages, settlementMsg],
+            };
+          }
+          return c;
+        })
+      );
 
-    addNotification({
-      type: 'success',
-      message: `Settled request of ${amount} to ${activeConversation.bnsName}! Tx: ${mockHash}`,
-    });
+      addNotification({
+        type: 'success',
+        message: `Settled request of ${amount} to ${activeConversation.bnsName}! Tx: ${result.hash}`,
+      });
+    } catch (error: any) {
+      console.error('Settlement failed:', error);
+      addNotification({
+        type: 'error',
+        message: error?.message || 'Settlement failed — see console for details.',
+      });
+    }
   };
 
   // Create new conversation
