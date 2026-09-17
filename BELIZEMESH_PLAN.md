@@ -111,3 +111,9 @@ Remaining from Phase 2 list:
 - submitRelayProof wiring for Pakit bundle proofs (UI touch) — exists in
   pakit-bridge but proof submission still manual/dashboard-only
 - Emergency alert runtime subscription (pallet has no push subscription yet)
+
+## Status update (commit 9ace944)
+- Gateway onboarding flow: done — real KYC gate from `identity.identityOf`/`ssnAttestations` via `mesh-gateway-onboarding.ts`, validated against live spec-105 metadata (`minKycForRegistration=1`).
+- Auto relay proofs: done — `syncNow()` auto-submits real `submitRelayProof` per uploaded bundle (RelayType Transaction, RelayDestination Broadcast, blake2b contentHash), gated on owned+active node from `meshNodes`.
+- Emergency alert push: done — real `mesh.EmergencyAlertIssued` subscription via `system.events` in `blockchain-proof.service.ts`, decoded into `EmergencyBroadcast` shape consumed by `MessagingContext`.
+- Phase 3 LoRa end-to-end testing deferred: user has no Meshtastic/Heltec board; Web Bluetooth plumbing on both ends stays dormant until hardware is available.
