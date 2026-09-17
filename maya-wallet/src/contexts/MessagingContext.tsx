@@ -9,19 +9,8 @@ import { getDisplayName } from '@/services/pallets/identity';
 import { initializeApi } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
 
-// Lazy load XMTP service to avoid SSR WASM issues
-let xmtpService: any = null;
-let xmtpServiceLoading = false;
-
-if (typeof window !== 'undefined' && !xmtpServiceLoading) {
-  xmtpServiceLoading = true;
-  import('@/services/xmtp.service').then((mod) => {
-    xmtpService = mod.xmtpService;
-    console.log('[XMTP] Service loaded dynamically');
-  }).catch((err) => {
-    console.warn('[XMTP] Service failed to load:', err);
-  });
-}
+// Lazy load mesh services to avoid SSR issues
+let bluetoothMeshReady = false;
 
 type MessageMode = 'online' | 'mesh' | 'auto';
 
@@ -32,7 +21,7 @@ interface Message {
   recipient: string;
   timestamp: Date;
   status: 'sent' | 'delivered' | 'read';
-  via: 'xmtp' | 'mesh';
+  via: 'mesh' | 'chain';
   proofHash?: string;
 }
 
@@ -49,7 +38,6 @@ interface MessagingContextType {
   mode: MessageMode;
   conversations: Conversation[];
   emergencyAlerts: EmergencyBroadcast[];
-  isXMTPConnected: boolean;
   isMeshAvailable: boolean;
   pendingSyncCount: number;
 
@@ -57,10 +45,9 @@ interface MessagingContextType {
   setMode: (mode: MessageMode) => void;
   sendMessage: (to: string, content: string) => Promise<boolean>;
   getConversation: (peerAddress: string) => Conversation | undefined;
-  initializeXMTP: () => Promise<boolean>;
   initializeMesh: () => Promise<boolean>;
   syncToPakit: () => Promise<boolean>;
-  submitEmergencyBroadcast: (broadcast: Omit<EmergencyBroadcast, 'id' | 'timestamp'>) => Promise<string>;
+  submitEmergencyBroadcast: (broadcast: Omit<EmergencyBroadcast, 'id' | 'ts'>) => Promise<string>;
 }
 
 const MessagingContext = createContext<MessagingContextType | undefined>(undefined);
@@ -70,7 +57,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<MessageMode>('auto');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [emergencyAlerts, setEmergencyAlerts] = useState<EmergencyBroadcast[]>([]);
-  const [isXMTPConnected, setIsXMTPConnected] = useState(false);
   const [isMeshAvailable, setIsMeshAvailable] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
@@ -92,32 +78,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Initialize XMTP
-  const initializeXMTP = useCallback(async () => {
-    try {
-      if (!selectedAccount) {
-        console.warn('No account selected');
-        return false;
-      }
-
-      // XMTP requires an Ethereum-compatible private key (or EIP-191 signer) to
-      // derive a per-user messaging identity. Polkadot browser-extension accounts
-      // never expose raw private keys, and no key-derivation/signing bridge is
-      // wired yet. Initializing with a placeholder key would give EVERY user the
-      // same XMTP identity, so the feature is intentionally gated off until a real
-      // per-account signer is available. Mesh messaging and emergency broadcasts
-      // remain fully functional.
-      console.warn(
-        'XMTP messaging is unavailable: no secure per-account key derivation from the Polkadot signer yet.',
-      );
-      setIsXMTPConnected(false);
-      return false;
-    } catch (error) {
-      console.error('XMTP initialization failed:', error);
-      return false;
-    }
-  }, [selectedAccount]);
-
   // Initialize Bluetooth Mesh
   const initializeMesh = useCallback(async () => {
     try {
@@ -127,7 +87,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       if (success) {
         // Listen for mesh messages
         window.addEventListener('mesh-message', handleIncomingMeshMessage);
-        
+
         // Start Pakit bridge
         await pakitBridgeService.initialize(null);
       }
@@ -138,86 +98,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   }, []);
-
-  // Load XMTP conversations
-  const loadXMTPConversations = async () => {
-    try {
-      const xmtpConvos = await xmtpService.getConversations();
-      
-      const mappedConvos: Conversation[] = await Promise.all(
-        xmtpConvos.map(async (conv: any) => {
-          const messages = await xmtpService.getMessages(conv.peerAddress, 50);
-
-          // Resolve a human-readable name from the Identity pallet (falls back
-          // to undefined -> UI shows shortened address).
-          const peerName = await getDisplayName(conv.peerAddress);
-
-          return {
-            peerAddress: conv.peerAddress,
-            peerName,
-            lastMessage: messages.length > 0 ? {
-              id: messages[0].id,
-              content: typeof messages[0].content === 'string' 
-                ? messages[0].content 
-                : messages[0].content.text,
-              sender: messages[0].senderAddress,
-              recipient: conv.peerAddress,
-              timestamp: messages[0].sent,
-              status: 'delivered',
-              via: 'xmtp'
-            } : undefined,
-            unreadCount: 0,
-            messages: messages.map((m: any) => ({
-              id: m.id,
-              content: typeof m.content === 'string' ? m.content : m.content.text,
-              sender: m.senderAddress,
-              recipient: conv.peerAddress,
-              timestamp: m.sent,
-              status: 'delivered',
-              via: 'xmtp'
-            }))
-          };
-        })
-      );
-
-      setConversations(mappedConvos);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    }
-  };
-
-  // Handle incoming XMTP message
-  const handleIncomingXMTPMessage = (message: any) => {
-    const newMessage: Message = {
-      id: message.id,
-      content: typeof message.content === 'string' ? message.content : message.content.text,
-      sender: message.senderAddress,
-      recipient: xmtpService.getAddress() || '',
-      timestamp: message.sent,
-      status: 'delivered',
-      via: 'xmtp'
-    };
-
-    // Update conversations
-    setConversations(prev => {
-      const convIndex = prev.findIndex(c => c.peerAddress === message.senderAddress);
-      if (convIndex >= 0) {
-        const updated = [...prev];
-        updated[convIndex].messages.push(newMessage);
-        updated[convIndex].lastMessage = newMessage;
-        updated[convIndex].unreadCount++;
-        return updated;
-      } else {
-        // New conversation
-        return [...prev, {
-          peerAddress: message.senderAddress,
-          lastMessage: newMessage,
-          unreadCount: 1,
-          messages: [newMessage]
-        }];
-      }
-    });
-  };
 
   // Handle incoming mesh message
   const handleIncomingMeshMessage = async (event: Event) => {
@@ -262,13 +142,14 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = async (to: string, content: string): Promise<boolean> => {
     try {
       let success = false;
-      let viaMethod: 'xmtp' | 'mesh' = 'xmtp';
+      const viaMethod: Message['via'] = 'mesh';
 
-      if (mode === 'mesh' || (mode === 'auto' && !navigator.onLine)) {
-        // Send via Bluetooth mesh
+      try {
+        // BelizeMesh v1 transport: Bluetooth mesh (with Pakit/IPFS sync for
+        // store-and-forward). Chain-settlement path lands with the Mesh pallet
+        // wiring in the next slice.
         success = await bluetoothMeshService.sendMessage(to, content);
-        viaMethod = 'mesh';
-        
+
         if (success) {
           pakitBridgeService.queueMessage({
             id: `mesh_${Date.now()}`,
@@ -281,11 +162,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
             route: []
           });
         }
-      } else {
-        // Send via XMTP
-        const message = await xmtpService.sendMessage(to, content);
-        success = !!message;
-        viaMethod = 'xmtp';
+      } catch (transportError) {
+        console.error('[BelizeMesh] Mesh send failed:', transportError);
+        return false;
       }
 
       if (success) {
@@ -334,24 +213,16 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
   // Submit emergency broadcast (requires authority)
   const submitEmergencyBroadcast = async (
-    broadcast: Omit<EmergencyBroadcast, 'id' | 'timestamp'>
+    broadcast: Omit<EmergencyBroadcast, 'id' | 'ts'>
   ): Promise<string> => {
     if (!api || !selectedAccount) {
       throw new Error('Not connected to blockchain');
     }
 
-    const fullBroadcast: EmergencyBroadcast = {
-      ...broadcast,
-      id: `alert_${Date.now()}`,
-      timestamp: Date.now()
-    };
-
-    const hash = await blockchainProofService.submitEmergencyBroadcast(
-      fullBroadcast,
+    return blockchainProofService.submitEmergencyBroadcast(
+      { ...broadcast, durationMinutes: 60 },
       selectedAccount
     );
-
-    return hash;
   };
 
   // Get conversation by peer address
@@ -367,7 +238,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       // Subscribe to emergency broadcasts
       const unsubscribe = blockchainProofService.subscribeToEmergencyAlerts((broadcast) => {
         setEmergencyAlerts(prev => [...prev, broadcast]);
-        
+
         // Show notification
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Emergency Broadcast Alert', {
@@ -381,24 +252,22 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [api]);
 
-  // Auto-initialize on mount
+  // Auto-initialize mesh on mount
   useEffect(() => {
     if (selectedAccount) {
-      initializeXMTP();
+      initializeMesh();
     }
-  }, [selectedAccount, initializeXMTP]);
+  }, [selectedAccount]);  // initializeMesh is stable (no deps)
 
   const value: MessagingContextType = {
     mode,
     conversations,
     emergencyAlerts,
-    isXMTPConnected,
     isMeshAvailable,
     pendingSyncCount,
     setMode,
     sendMessage,
     getConversation,
-    initializeXMTP,
     initializeMesh,
     syncToPakit,
     submitEmergencyBroadcast

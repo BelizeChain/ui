@@ -1,247 +1,156 @@
-// Blockchain Messaging Proof Service
-// Anchors message proofs on BelizeChain for governance and emergency broadcasts
+// BelizeMesh Emergency Broadcast Service
+// Real chain integration for emergency alerts via the Mesh pallet.
+//
+// Truth table of the previous implementation (all removed):
+// - `interoperability.submitMessageProof` — extrinsic never existed
+// - `community.submitEmergencyAlert` — extrinsic never existed
+// - `governance.linkProposalMessage` — extrinsic never existed
+// The only on-chain truth is `pallet_belize_mesh.issue_emergency_alert`
+// (verified in belizechain/pallets/mesh/src/lib.rs).
 
 import { ApiPromise } from '@polkadot/api';
 
-interface MessageProof {
-  ipfsHash: string;
-  bundleHash: string;
-  messageCount: number;
-  timestamp: number;
-  district?: string;
-  proofType: 'mesh-bundle' | 'governance-proposal' | 'emergency-broadcast';
-}
-
-interface GovernanceMessage {
-  proposalId: number;
-  messageHash: string;
-  ipfsHash: string;
-  author: string;
-  timestamp: number;
-}
-
 export interface EmergencyBroadcast {
   id: string;
-  level: 'info' | 'warning' | 'critical';
+  /** AlertSeverity variants of pallet_belize_mesh */
+  level: 'advisory' | 'watch' | 'warning' | 'emergency' | 'catastrophic';
+  /** Belize district name (BelizeDistrict pallet enum) */
   district: string;
+  /** Emergency type (EmergencyType pallet enum) */
+  alertType: EmergencyTypeKey;
+  /** Decimal degrees */
+  latitude: number;
+  longitude: number;
+  /** Broadcast radius in meters */
+  radiusMeters: number;
+  /** ≤128 bytes; longer strings are rejected by the pallet (MessageTooLong) */
   message: string;
-  ipfsHash: string;
-  authoritySignature: string;
-  timestamp: number;
-  expiresAt: number;
+  /** Minutes; converted to blocks client-side */
+  durationMinutes?: number;
+  ts: number;
 }
+
+type EmergencyTypeKey =
+  | 'hurricane' | 'tropicalStorm' | 'flooding' | 'earthquake' | 'tsunami'
+  | 'wildfire' | 'severeWeather' | 'publicSafety' | 'infrastructureFailure'
+  | 'medicalEmergency' | 'searchAndRescue' | 'general';
+
+const DISTRICT_TO_ENUM: Record<string, string> = {
+  belize: 'Belize',
+  cayo: 'Cayo',
+  orangewalk: 'OrangeWalk',
+  corozal: 'Corozal',
+  stanncreek: 'StannCreek',
+  toledo: 'Toledo',
+};
+
+const BLOCKS_PER_MINUTE = 10; // ~6s blocks on testnet; refine after chain tuning
 
 class BlockchainProofService {
   private api: ApiPromise | null = null;
 
   async initialize(api: ApiPromise) {
     this.api = api;
-    console.log('[PROOF] Blockchain proof service initialized');
+    console.log('[PROOF] BelizeMesh proof service initialized (pallet_belize_mesh)');
   }
 
-  // Submit message proof to chain
-  async submitMessageProof(
-    proof: MessageProof,
-    account: any
-  ): Promise<string> {
-    if (!this.api) throw new Error('API not initialized');
-
-    try {
-      // Submit to Interoperability pallet (repurposed for messaging)
-      // In production: create dedicated pallet_messaging
-      const extrinsic = this.api.tx.interoperability.submitMessageProof(
-        proof.ipfsHash,
-        proof.bundleHash,
-        proof.messageCount,
-        proof.district || 'Unknown'
-      );
-
-      const hash = await extrinsic.signAndSend(account);
-      console.log('[PROOF] Message proof submitted:', hash.toHex());
-      return hash.toHex();
-    } catch (error) {
-      console.error('[PROOF] Failed to submit message proof:', error);
-      throw error;
-    }
-  }
-
-  // Link governance proposal to message
-  async linkGovernanceMessage(
-    proposalId: number,
-    ipfsHash: string,
-    account: any
-  ): Promise<string> {
-    if (!this.api) throw new Error('API not initialized');
-
-    try {
-      const governanceMessage: GovernanceMessage = {
-        proposalId,
-        messageHash: this.hashMessage(ipfsHash),
-        ipfsHash,
-        author: account.address,
-        timestamp: Date.now()
-      };
-
-      // Submit to Governance pallet
-      const extrinsic = this.api.tx.governance.linkProposalMessage(
-        proposalId,
-        ipfsHash,
-        governanceMessage.messageHash
-      );
-
-      const hash = await extrinsic.signAndSend(account);
-      console.log('[PROOF] Governance message linked:', hash.toHex());
-      return hash.toHex();
-    } catch (error) {
-      console.error('[PROOF] Failed to link governance message:', error);
-      throw error;
-    }
-  }
-
-  // Submit emergency broadcast (requires authority)
+  /**
+   * Submit an emergency alert through the mesh pallet.
+   *
+   * Chain-side prerequisites (runtime truth):
+   * - signer must be registered as an emergency authority via the Identity
+   *   pallet's is_emergency_authority check
+   * - mesh emergency system must be active (config.emergency_system_active)
+   * - message ≤ 128 bytes
+   */
   async submitEmergencyBroadcast(
-    broadcast: EmergencyBroadcast,
+    broadcast: Omit<EmergencyBroadcast, 'id' | 'ts'>,
     account: any
   ): Promise<string> {
     if (!this.api) throw new Error('API not initialized');
 
-    try {
-      // Verify authority (must be government account or validator)
-      const isAuthorized = await this.verifyBroadcastAuthority(account.address);
-      if (!isAuthorized) {
-        throw new Error('Not authorized to submit emergency broadcasts');
-      }
+    const mesh = this.api.tx.mesh as any;
+    if (!mesh?.issueEmergencyAlert) {
+      throw new Error('pallet_belize_mesh.issueEmergencyAlert not available on this runtime');
+    }
 
-      // Submit to Community pallet (emergency alerts)
-      const extrinsic = this.api.tx.community.submitEmergencyAlert(
-        broadcast.district,
-        broadcast.level,
-        broadcast.message,
-        broadcast.ipfsHash,
-        broadcast.expiresAt
+    const districtEnum = DISTRICT_TO_ENUM[broadcast.district.toLowerCase()];
+    if (!districtEnum) {
+      throw new Error(`Unknown Belize district: ${broadcast.district}`);
+    }
+
+    // The pallet caps message at 128 bytes — guard before submission.
+    const messageBytes = new TextEncoder().encode(broadcast.message);
+    if (messageBytes.byteLength > 128) {
+      throw new Error('Emergency message exceeds 128-byte limit (MessageTooLong)');
+    }
+
+    const durationBlocks = Math.max(
+      1,
+      Math.round((broadcast.durationMinutes ?? 60) * BLOCKS_PER_MINUTE),
+    );
+
+    try {
+      const extrinsic = mesh.issueEmergencyAlert(
+        { [broadcast.level]: null },           // AlertSeverity
+        { [broadcast.alertType]: null },       // EmergencyType
+        Math.round(broadcast.latitude),
+        Math.round(broadcast.longitude),
+        broadcast.radiusMeters,
+        Array.from(messageBytes),              // Vec<u8> UTF-8
+        durationBlocks,
+        { [districtEnum]: null },              // BelizeDistrict
       );
 
       const hash = await extrinsic.signAndSend(account);
-      console.log('[PROOF] Emergency broadcast submitted:', hash.toHex());
-      
-      // Trigger mesh broadcast to offline nodes
-      this.broadcastViaAllChannels(broadcast);
-      
+      console.log('[PROOF] Emergency alert submitted via Mesh pallet:', hash.toHex());
+
+      // Fan out locally for UI + browser notification
+      const event = new CustomEvent('emergency-broadcast', {
+        detail: { ...broadcast, id: hash.toHex(), ts: Date.now() },
+      });
+      window.dispatchEvent(event);
+
       return hash.toHex();
     } catch (error) {
-      console.error('[PROOF] Failed to submit emergency broadcast:', error);
+      console.error('[PROOF] Failed to submit emergency alert:', error);
       throw error;
     }
   }
 
-  // Verify message proof on chain
-  async verifyMessageProof(ipfsHash: string): Promise<boolean> {
-    if (!this.api) throw new Error('API not initialized');
-
-    try {
-      // Query chain storage for proof
-      const proof = await this.api.query.interoperability.messageProofs(ipfsHash);
-      const proofData = proof as any;
-      return proofData.isSome;
-    } catch (error) {
-      console.error('[PROOF] Failed to verify message proof:', error);
-      return false;
-    }
-  }
-
-  // Get governance proposal messages
-  async getGovernanceMessages(proposalId: number): Promise<GovernanceMessage[]> {
-    if (!this.api) throw new Error('API not initialized');
-
-    try {
-      const messages = await this.api.query.governance.proposalMessages(proposalId);
-      return messages.toJSON() as any;
-    } catch (error) {
-      console.error('[PROOF] Failed to get governance messages:', error);
-      return [];
-    }
-  }
-
-  // Get active emergency broadcasts for district
-  async getEmergencyBroadcasts(district?: string): Promise<EmergencyBroadcast[]> {
-    if (!this.api) throw new Error('API not initialized');
-
-    try {
-      const broadcasts = district
-        ? await this.api.query.community?.districtAlerts?.(district)
-        : await this.api.query.community?.activeAlerts?.();
-      
-      return (broadcasts.toJSON() as any).filter((b: EmergencyBroadcast) => 
-        b.expiresAt > Date.now()
-      );
-    } catch (error) {
-      console.error('[PROOF] Failed to get emergency broadcasts:', error);
-      return [];
-    }
-  }
-
-  // Subscribe to emergency broadcasts
+  /**
+   * Local subscription: the pallet v1 has no alert push subscription; consumers
+   * receive the locally-dispatched event above instead (browser notification
+   * is handled in MessagingContext once a real mesh peer relays the alert).
+   */
   subscribeToEmergencyAlerts(
     callback: (broadcast: EmergencyBroadcast) => void,
-    district?: string
   ): () => void {
-    if (!this.api) throw new Error('API not initialized');
-
-    let unsubscribe: (() => void) | undefined;
-
-    (async () => {
-      if (!this.api!.query.community?.activeAlerts) return;
-      const unsub = await this.api!.query.community.activeAlerts((alerts: any) => {
-        const broadcasts = alerts.toJSON() as EmergencyBroadcast[];
-        broadcasts
-          .filter(b => !district || b.district === district)
-          .forEach(callback);
-      });
-      unsubscribe = unsub as any;
-    })();
-
-    return () => unsubscribe?.();
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as EmergencyBroadcast;
+      callback(detail);
+    };
+    window.addEventListener('emergency-broadcast', handler as EventListener);
+    return () => window.removeEventListener('emergency-broadcast', handler as EventListener);
   }
 
-  private async verifyBroadcastAuthority(address: string): Promise<boolean> {
+  /** Verifies on-chain that the signer is a registered emergency authority */
+  async verifyEmergencyAuthority(address: string): Promise<boolean> {
     if (!this.api) return false;
-
     try {
-      // Check if address is government account or validator
-      const isValidator = await this.api.query.staking?.validators?.(address);
-      const validatorData = isValidator as any;
       const identity = await this.api.query.identity?.identityOf?.(address);
       const identityData = identity as any;
-      
-      return validatorData.isSome || 
-             (identityData.isSome && (identityData.unwrap() as any).info.additional.some(
-               (item: any) => item[0].toString() === 'accountType' && item[1].toString() === 'Government'
-             ));
+      if (!identityData?.isSome) return false;
+      return (identityData.unwrap() as any).info.additional.some(
+        (item: [any, any]) =>
+          item[0].toString().toLowerCase() === 'accounttype' &&
+          item[1].toString().toLowerCase() === 'government',
+      );
     } catch (error) {
       console.error('[PROOF] Authority verification failed:', error);
       return false;
     }
   }
-
-  private async broadcastViaAllChannels(broadcast: EmergencyBroadcast) {
-    // Broadcast through multiple channels
-    console.log('[PROOF] Broadcasting emergency alert through all channels');
-    
-    // 1. XMTP broadcast to all conversations
-    // 2. Bluetooth mesh broadcast
-    // 3. SMS gateway (if available)
-    // 4. Push notifications
-    
-    // Trigger custom event for UI
-    const event = new CustomEvent('emergency-broadcast', { detail: broadcast });
-    window.dispatchEvent(event);
-  }
-
-  private hashMessage(content: string): string {
-    // In production: use blake2b hash
-    return `0x${content.slice(0, 64)}`;
-  }
 }
 
 export const blockchainProofService = new BlockchainProofService();
-export type { MessageProof, GovernanceMessage };
