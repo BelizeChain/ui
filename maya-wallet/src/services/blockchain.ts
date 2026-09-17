@@ -19,7 +19,7 @@ export async function initializeApi(): Promise<ApiPromise> {
   try {
     wsProvider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
     api = await ApiPromise.create({ provider: wsProvider });
-    
+
     const chain = await api.rpc.system.chain();
     const version = await api.rpc.system.version();
     const nodeName = await api.rpc.system.name();
@@ -55,17 +55,17 @@ export async function disconnectApi(): Promise<void> {
  */
 export async function fetchBalance(address: string): Promise<Balance> {
   const apiInstance = await initializeApi();
-  
+
   try {
     // Get account data
     const accountInfo: any = await apiInstance.query.system.account(address);
     const balances = accountInfo.data;
-    
+
     // Convert from Planck (smallest unit) to DALLA (12 decimals)
     const free = formatBalance(balances.free.toString());
     const reserved = formatBalance(balances.reserved.toString());
     const total = (parseFloat(free) + parseFloat(reserved)).toFixed(2);
-    
+
     // Get bBZD balance from economy pallet (if available)
     let bBZD = '0.00';
     try {
@@ -115,7 +115,7 @@ export async function submitTransfer(
   currency: 'dalla' | 'bBZD' = 'dalla'
 ): Promise<{ hash: string; blockHash?: string }> {
   const apiInstance = await initializeApi();
-  
+
   try {
     // Get the signer from the extension
     let injector;
@@ -132,10 +132,10 @@ export async function submitTransfer(
         throw e;
       }
     }
-    
+
     // Convert amount to Planck using BigInt
     const amountInPlanck = toPlanckString(amount, 12);
-    
+
     let tx;
     if (currency === 'dalla') {
       // Native token transfer (prefer transferKeepAlive)
@@ -154,23 +154,25 @@ export async function submitTransfer(
       tx.signAndSend(from, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           console.log(`Transaction included in block: ${status.asInBlock}`);
-          
-          // Check for errors
+
+          // Check for errors — a failed extrinsic must reject, never resolve
+          let failureErrorMessage: string | null = null;
           events.forEach(({ event }) => {
             if (apiInstance.events.system.ExtrinsicFailed.is(event)) {
               const [dispatchError]: any = event.data;
-              let errorMessage = 'Transaction failed';
-              
-                if (dispatchError.isModule) {
-                  const decoded = apiInstance.registry.findMetaError(dispatchError.asModule);
-                  errorMessage = getUserFriendlyErrorMessage(decoded);
-                } else {
-                  errorMessage = getUserFriendlyErrorMessage(dispatchError.toString());
-                }
-                
-                reject(new Error(errorMessage));
+              if (dispatchError.isModule) {
+                const decoded = apiInstance.registry.findMetaError(dispatchError.asModule);
+                failureErrorMessage = getUserFriendlyErrorMessage(decoded);
+              } else {
+                failureErrorMessage = getUserFriendlyErrorMessage(dispatchError.toString());
               }
+            }
           });
+
+          if (failureErrorMessage) {
+            reject(new Error(failureErrorMessage));
+            return;
+          }
 
           resolve({
             hash: txHash.toString(),
@@ -208,39 +210,39 @@ export interface Transaction {
  */
 export async function fetchTransactionHistory(address: string, limit: number = 50): Promise<Transaction[]> {
   const apiInstance = await initializeApi();
-  
+
   try {
     const transactions: Transaction[] = [];
-    
+
     // Get current block number
     const currentHeader = await apiInstance.rpc.chain.getHeader();
     const currentBlock = currentHeader.number.toNumber();
-    
+
     // Query last N blocks (adjust based on average block time)
     // BelizeChain: ~6 second blocks, so 600 blocks = ~1 hour
     const blocksToQuery = Math.min(600, currentBlock);
     const startBlock = Math.max(0, currentBlock - blocksToQuery);
-    
+
     // Query blocks in reverse order (newest first)
     for (let blockNum = currentBlock; blockNum >= startBlock && transactions.length < limit; blockNum--) {
       try {
         const blockHash = await apiInstance.rpc.chain.getBlockHash(blockNum);
         const signedBlock = await apiInstance.rpc.chain.getBlock(blockHash);
         const apiAt = await apiInstance.at(blockHash);
-        
+
         // Get timestamp from block
         const timestamp: any = await apiAt.query.timestamp.now();
         const timestampMs = timestamp.toNumber ? timestamp.toNumber() : Date.now();
-        
+
         // Process extrinsics
         signedBlock.block.extrinsics.forEach((extrinsic, index) => {
           const { method: { method, section } } = extrinsic;
-          
+
           // Check for transfer transactions
           if (section === 'balances' && method === 'transfer') {
             const [to, amount] = extrinsic.args;
             const from = extrinsic.signer.toString();
-            
+
             if (from === address || to.toString() === address) {
               transactions.push({
                 hash: extrinsic.hash.toString(),
@@ -257,7 +259,7 @@ export async function fetchTransactionHistory(address: string, limit: number = 5
           } else if (section === 'economy' && method === 'transferBbzd') {
             const [to, amount] = extrinsic.args;
             const from = extrinsic.signer.toString();
-            
+
             if (from === address || to.toString() === address) {
               transactions.push({
                 hash: extrinsic.hash.toString(),
@@ -278,7 +280,7 @@ export async function fetchTransactionHistory(address: string, limit: number = 5
         // Continue with next block
       }
     }
-    
+
     return transactions.slice(0, limit);
   } catch (error) {
     console.error('Failed to fetch transaction history:', error);
@@ -297,10 +299,10 @@ export async function estimateFee(
   currency: 'dalla' | 'bBZD' = 'dalla'
 ): Promise<string> {
   const apiInstance = await initializeApi();
-  
+
   try {
     const amountInPlanck = toPlanckString(amount || '0', 12);
-    
+
     let tx;
     if (currency === 'dalla') {
       tx = apiInstance.tx.balances.transferKeepAlive
@@ -328,13 +330,13 @@ export async function subscribeToBalance(
   callback: (balance: Balance) => void
 ): Promise<() => void> {
   const apiInstance = await initializeApi();
-  
+
   const unsubscribe: any = await apiInstance.query.system.account(address, async (accountInfo: any) => {
     const balances = accountInfo.data;
     const free = formatBalance(balances.free.toString());
     const reserved = formatBalance(balances.reserved.toString());
     const total = (parseFloat(free) + parseFloat(reserved)).toFixed(2);
-    
+
     // Query bBZD balance from economy pallet
     let bBZD = '0.00';
     try {
@@ -346,7 +348,7 @@ export async function subscribeToBalance(
       // bBZD pallet not available or no balance
       console.debug('bBZD balance query failed:', error);
     }
-    
+
     callback({
       dalla: free,
       bBZD,
@@ -384,7 +386,7 @@ export async function subscribeToTransactions(
   callback: (transaction: Transaction) => void
 ): Promise<() => void> {
   const apiInstance = await initializeApi();
-  
+
   // Subscribe to new blocks and filter for transactions
   const unsubscribe = await apiInstance.rpc.chain.subscribeNewHeads(async (header) => {
     try {
@@ -392,19 +394,19 @@ export async function subscribeToTransactions(
       const blockNumber = header.number.toNumber();
       const signedBlock = await apiInstance.rpc.chain.getBlock(blockHash);
       const apiAt = await apiInstance.at(blockHash);
-      
+
       // Get timestamp
       const timestamp: any = await apiAt.query.timestamp.now();
       const timestampMs = timestamp.toNumber ? timestamp.toNumber() : Date.now();
-      
+
       // Process extrinsics
       signedBlock.block.extrinsics.forEach((extrinsic) => {
         const { method: { method, section } } = extrinsic;
-        
+
         if (section === 'balances' && method === 'transfer') {
           const [to, amount] = extrinsic.args;
           const from = extrinsic.signer.toString();
-          
+
           if (from === address || to.toString() === address) {
             callback({
               hash: extrinsic.hash.toString(),
@@ -421,7 +423,7 @@ export async function subscribeToTransactions(
         } else if (section === 'economy' && method === 'transferBbzd') {
           const [to, amount] = extrinsic.args;
           const from = extrinsic.signer.toString();
-          
+
           if (from === address || to.toString() === address) {
             callback({
               hash: extrinsic.hash.toString(),

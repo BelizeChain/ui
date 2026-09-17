@@ -3,7 +3,6 @@
 import React from 'react';
 import { ReactQueryProvider } from '@/lib/react-query-provider';
 import { TransactionProvider } from '@/components/TransactionToasts';
-import { ApolloProvider } from './apollo-provider';
 
 if (typeof window !== 'undefined') {
   const originalError = console.error;
@@ -17,12 +16,10 @@ if (typeof window !== 'undefined') {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ApolloProvider>
-      <ReactQueryProvider>
-        <TransactionProvider>
-          {children}
-        </TransactionProvider>
-      </ReactQueryProvider>
-    </ApolloProvider>
+    <ReactQueryProvider>
+      <TransactionProvider>
+        {children}
+      </TransactionProvider>
+    </ReactQueryProvider>
   );
 }

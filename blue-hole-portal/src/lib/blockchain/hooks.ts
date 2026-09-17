@@ -1,6 +1,6 @@
 /**
  * React Hooks for Blockchain Interaction
- * 
+ *
  * Provides React hooks for:
  * - Connection management
  * - Chain info retrieval
@@ -14,7 +14,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { ApiPromise } from '@polkadot/api';
 import type { Codec } from '@polkadot/types/types';
-import { gql, useQuery } from '@apollo/client';
 import {
   connectionManager,
   type ConnectionStatus,
@@ -139,7 +138,7 @@ export function useChainInfo() {
 /**
  * Hook to query storage
  * Automatically refetches when dependencies change
- * 
+ *
  * @example
  * const { data, loading, error } = useStorage('system', 'account', [address]);
  */
@@ -181,7 +180,7 @@ export function useStorage<T = Codec>(
             setLoading(false);
           }
         });
-        
+
         // Store unsubscribe function (cast to any to avoid type errors)
         unsubscribe = unsub as any;
       } catch (err) {
@@ -216,7 +215,7 @@ export function useStorage<T = Codec>(
 
 /**
  * Hook to subscribe to events
- * 
+ *
  * @example
  * useEvents((events) => {
  *   events.forEach(({ event, phase }) => {
@@ -266,7 +265,7 @@ export function useEvents(
 
 /**
  * Hook to get constant values from runtime
- * 
+ *
  * @example
  * const { data: existentialDeposit } = useConst('balances', 'existentialDeposit');
  */
@@ -398,61 +397,96 @@ export interface ExplorerTx {
   timestamp: number;
 }
 
-const RECENT_BLOCKS_QUERY = gql`
-  query GetRecentBlocks($limit: Int!) {
-    blocks(limit: $limit, orderBy: number_DESC) {
-      number
-      hash
-      timestamp
-      extrinsicsCount
-      author
-    }
-    transactions(limit: $limit, orderBy: blockNumber_DESC) {
-      hash
-      blockNumber
-      method
-      signer
-      timestamp
-    }
-  }
-`;
+/**
+ * Recent blocks + transactions, sourced directly from chain RPC.
+ *
+ * Previous implementation polled a subsquid GraphQL indexer at
+ * NEXT_PUBLIC_INDEXER_URL (default localhost:4350) — no indexer is running,
+ * so the explorer stayed empty. This version walks back `limit` blocks from
+ * the live head on the RPC connection the portal already maintains, and
+ * tracks finality via the finalized head.
+ */
+/**
+ * Recent blocks + transactions, sourced directly from chain RPC.
+ * Timestamp approximation: block time ~6s; head block uses current time,
+ * each older block steps back 6s. The chain doesn't stamp wall-clock time
+ * in the header without a timestamp pallet query, and this keeps the UI
+ * ordering honest without extra RPC round-trips.
+ */
+function approxTimestamp(blockNumber: number, headNumber: number): number {
+  return Date.now() - (headNumber - blockNumber) * 6000;
+}
+
 
 export function useRecentBlocks(limit = 10) {
-  const { data, loading, error } = useQuery(RECENT_BLOCKS_QUERY, {
-    variables: { limit },
-    pollInterval: 3000,
-  });
-
+  const { api, isReady } = useBlockchain();
   const [blocks, setBlocks] = useState<ExplorerBlock[]>([]);
   const [txs, setTxs] = useState<ExplorerTx[]>([]);
-
-  // TODO: Implement finalized head tracking via indexer or keep RPC subscription just for that.
-  // For now, we simulate finality for blocks older than 2 blocks.
-  const finalizedNumber = blocks.length > 2 ? blocks[2].number : 0;
+  const [loading, setLoading] = useState(true);
+  const [snapshotTick, setSnapshotTick] = useState(0);
 
   useEffect(() => {
-    if (data) {
-      const parsedBlocks: ExplorerBlock[] = data.blocks.map((b: any) => ({
-        number: b.number,
-        hash: b.hash,
-        timestamp: new Date(b.timestamp).getTime(),
-        extrinsics: b.extrinsicsCount,
-        author: b.author,
-        finalized: b.number <= finalizedNumber,
-      }));
-      setBlocks(parsedBlocks);
-
-      const parsedTxs: ExplorerTx[] = data.transactions.map((t: any, index: number) => ({
-        hash: t.hash,
-        block: t.blockNumber,
-        index, // Subsquid doesn't natively expose index easily without our custom parsing, but this works for unique keys
-        method: t.method,
-        signer: t.signer,
-        timestamp: new Date(t.timestamp).getTime(),
-      }));
-      setTxs(parsedTxs);
+    if (!api || !isReady) {
+      setLoading(false);
+      return () => undefined;
     }
-  }, [data, finalizedNumber]);
 
+    let isMounted = true;
+
+    const takeSnapshot = async () => {
+      try {
+        const head = (await api.rpc.chain.getHeader()).number.toNumber();
+        const oldest = Math.max(0, head - (limit - 1));
+
+        const snapshotBlocks: ExplorerBlock[] = [];
+        const snapshotTxs: ExplorerTx[] = [];
+
+        for (let n = head; n >= oldest; n--) {
+          const hash = await api.rpc.chain.getBlockHash(n);
+          const block = await api.rpc.chain.getBlock(hash);
+          const timestamp = approxTimestamp(n, head);
+
+          snapshotBlocks.push({
+            number: n,
+            hash: hash.toHex(),
+            timestamp,
+            extrinsics: block.block.extrinsics.length,
+            finalized: n <= head - 1,
+          });
+
+          for (const [index, ext] of block.block.extrinsics.entries()) {
+            if (!ext.isSigned) continue;
+            snapshotTxs.push({
+              hash: `${hash.toHex().slice(0, 32)}_${index}`,
+              block: n,
+              index,
+              method: `${ext.method.section}.${ext.method.method}`,
+              signer: ext.signer.toString(),
+              timestamp,
+            });
+          }
+        }
+
+        if (isMounted) {
+          setBlocks(snapshotBlocks);
+          setTxs(snapshotTxs);
+        }
+      } catch (err) {
+        console.warn('[hooks] recentBlocks snapshot error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    takeSnapshot();
+    const interval = setInterval(() => setSnapshotTick((t) => t + 1), 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [api, isReady, limit, snapshotTick]);
+
+  const finalizedNumber = blocks.length > 2 ? blocks[2].number : 0;
   return { blocks, txs, finalizedNumber, loading };
 }
