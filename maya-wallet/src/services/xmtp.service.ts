@@ -1,19 +1,23 @@
 // XMTP Client Service for BelizeChain
 // Handles Web3 wallet-to-wallet messaging over XMTP network
+//
+// Uses @xmtp/browser-sdk (the maintained WASM-based XMTP web SDK) in place of
+// the deprecated @xmtp/xmtp-js line, whose elliptic/ws dependency chain carried
+// open security advisories.
+//
+// NOTE: initialization stays intentionally gated upstream in MessagingContext
+// (no secure per-account key derivation from the Polkadot signer yet). Until
+// that bridge ships, no production call reaches initialize().
 
 // Dynamic imports to prevent SSR WASM issues
-let Client: any;
-let Wallet: any;
+let ClientModule: typeof import('@xmtp/browser-sdk') | null = null;
 let DecodedMessage: any;
 
-// Lazy load XMTP and Ethers only on client side
+// Lazy load XMTP browser SDK only on client side
 if (typeof window !== 'undefined') {
-  import('@xmtp/xmtp-js').then((mod) => {
-    Client = mod.Client;
-    DecodedMessage = mod.DecodedMessage;
-  });
-  import('ethers').then((mod) => {
-    Wallet = mod.Wallet;
+  import('@xmtp/browser-sdk').then((mod) => {
+    ClientModule = mod;
+    DecodedMessage = null;
   });
 }
 
@@ -37,10 +41,10 @@ class XMTPService {
   async initialize(privateKey: string, config: XMTPConfig = { env: 'production', persistConversations: true }) {
     try {
       // Wait for dynamic imports to complete
-      if (!Client || !Wallet) {
+      if (!ClientModule) {
         await new Promise((resolve) => {
           const check = setInterval(() => {
-            if (Client && Wallet) {
+            if (ClientModule) {
               clearInterval(check);
               resolve(true);
             }
@@ -53,21 +57,33 @@ class XMTPService {
         });
       }
 
-      if (!Client || !Wallet) {
-        throw new Error('XMTP or Ethers libraries not loaded');
+      if (!ClientModule) {
+        throw new Error('XMTP browser SDK not loaded');
       }
 
-      // Create ethers wallet from private key (BelizeChain uses Polkadot, but XMTP needs Ethereum-compatible signatures)
-      // In production, we'll convert Polkadot keypair to Ethereum-compatible format
-      const wallet = new Wallet(privateKey);
-      
-      // Initialize XMTP client
-      this.client = await Client.create(wallet, {
-        env: config.env,
-        persistConversations: config.persistConversations
-      });
+      // Browser SDK derives identity from an EOA signer backed by a hex key.
+      // Kept as a best-effort bridge; the wallet layer must provide a usable
+      // signer path before this can fire in production.
+      const signer = ClientModule.createEOASigner(privateKey as `0x${string}`);
 
-      console.log('[XMTP] Client initialized for address:', wallet.address);
+      // Initialize XMTP client.
+      // `env` is accepted at runtime but dropped from the public `create`
+      // options type because ClientOptions is a union (NetworkOptions |
+      // backend) — Omit over the union hides branch-only keys. Cast keeps the
+      // runtime-valid `env` until the SDK widens the type.
+      type NetworkedOptions = Omit<
+        import('@xmtp/browser-sdk').ClientOptions,
+        'codecs' | 'backend'
+      > & { env?: import('@xmtp/browser-sdk').XmtpEnv };
+
+      const createOptions = {
+        env: config.env,
+      } as NetworkedOptions;
+
+      this.client = await ClientModule.Client.create(signer, createOptions);
+
+      const state = await this.client.inboxState();
+      console.log('[XMTP] Client initialized for inbox:', state.inboxId);
       return this.client;
     } catch (error) {
       console.error('[XMTP] Initialization failed:', error);
@@ -77,9 +93,9 @@ class XMTPService {
 
   async getConversations(): Promise<any[]> {
     if (!this.client) throw new Error('XMTP client not initialized');
-    
+
     const conversations = await this.client.conversations.list();
-    
+
     // Cache conversations
     conversations.forEach((conv: any) => {
       this.conversations.set(conv.peerAddress, conv);
@@ -97,31 +113,34 @@ class XMTPService {
     }
 
     // Check if conversation exists
+    // Check if conversation exists
     const existingConvs = await this.client.conversations.list();
-    const existing = existingConvs.find((c: any) => c.peerAddress === peerAddress);
-    
+    const existing = existingConvs.find(
+      (c: any) => (c.peerInboxId ?? c.peerAddress) === peerAddress,
+    );
+
     if (existing) {
       this.conversations.set(peerAddress, existing);
       return existing;
     }
 
-    // Create new conversation
-    const newConversation = await this.client.conversations.newConversation(peerAddress);
+    // Create new direct message
+    const newConversation = await this.client.conversations.newDm(peerAddress);
     this.conversations.set(peerAddress, newConversation);
     return newConversation;
   }
 
   async sendMessage(
-    peerAddress: string, 
-    content: string, 
+    peerAddress: string,
+    content: string,
     metadata?: MessageMetadata
   ): Promise<any> {
     if (!this.client) throw new Error('XMTP client not initialized');
 
     const conversation = await this.getOrCreateConversation(peerAddress);
-    
+
     // Attach metadata
-    const messageContent = metadata 
+    const messageContent = metadata
       ? { text: content, metadata }
       : content;
 
@@ -144,13 +163,13 @@ class XMTPService {
     if (!this.client) throw new Error('XMTP client not initialized');
 
     const conversation = await this.getOrCreateConversation(peerAddress);
-    
+
     // Store listener for cleanup
     this.messageListeners.set(peerAddress, onMessage);
 
     // Start streaming
     const stream = await conversation.streamMessages();
-    
+
     (async () => {
       for await (const message of stream) {
         onMessage(message);
@@ -167,7 +186,7 @@ class XMTPService {
     if (!this.client) throw new Error('XMTP client not initialized');
 
     const stream = await this.client.conversations.streamAllMessages();
-    
+
     (async () => {
       for await (const message of stream) {
         onMessage(message);
@@ -179,10 +198,11 @@ class XMTPService {
     };
   }
 
-  // Check if address can receive XMTP messages
-  async canMessage(peerAddress: string): Promise<boolean> {
+  // Check if an identifier (inboxId or address) can receive XMTP messages
+  async canMessage(identifier: string): Promise<boolean> {
     if (!this.client) return false;
-    return await this.client.canMessage(peerAddress);
+    const result = await this.client.canMessage([identifier]);
+    return Boolean(result);
   }
 
   // Disconnect and cleanup
