@@ -69,3 +69,16 @@ Pakit/IPFS storage, and real Web Bluetooth LoRa pipes.
 - ✅ `next build` succeeds (73 static pages) in maya-wallet
 - ✅ blue-hole-portal build clean
 - ✅ `npm audit` = 0 vulnerabilities (all Dependabot alerts cleared ecosystem-wide)
+
+## Phase 2 status (DONE — commit 8bfc736, 2026-09-17)
+- ✅ Real SR25519 signatures (signRaw via wallet extension; explicit 0x00
+  unsigned marker rejected by validateMessage)
+- ✅ Conversations persisted to localStorage (200 msgs/conversation bound)
+- ✅ Pakit offline queue + proofs persisted and restored across reloads
+- ✅ processQueue() retry loop scheduled every 15s from initialize()
+- ✅ Incoming dedup cache (bounded 500 ids)
+
+Remaining from Phase 2 list:
+- Chain settlement for online mode via submit_mesh_transaction (item 4 —
+  needs review of enum encodings against live node before wiring)
+- `via` label/channel UI alignment in messages/page.tsx (item 5)
