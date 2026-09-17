@@ -1,10 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { blake2AsHex } from '@polkadot/util-crypto';
 import type { ApiPromise } from '@polkadot/api';
 import { bluetoothMeshService, type MeshMessage } from '@/services/bluetooth-mesh.service';
 import { pakitBridgeService } from '@/services/pakit-bridge.service';
 import { blockchainProofService, type EmergencyBroadcast } from '@/services/blockchain-proof.service';
+import { getGatewayStatus, settleMeshTransaction, type MeshGatewayStatus, type MeshSettlementRequest } from '@/services/pallets/mesh';
 import { getDisplayName } from '@/services/pallets/identity';
 import { initializeApi } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
@@ -40,6 +42,8 @@ interface MessagingContextType {
   emergencyAlerts: EmergencyBroadcast[];
   isMeshAvailable: boolean;
   pendingSyncCount: number;
+  /** Whether the selected account owns an active gateway node */
+  gatewayStatus: MeshGatewayStatus | null;
 
   // Actions
   setMode: (mode: MessageMode) => void;
@@ -54,6 +58,30 @@ const MessagingContext = createContext<MessagingContextType | undefined>(undefin
 
 const CONVERSATIONS_STORAGE_KEY = 'belizemesh_conversations';
 const MAX_CONVERSATION_MESSAGES = 200;
+
+/**
+ * Deterministic 32-byte settlement anchor for a mesh message:
+ * blake2b-256 of "sender|recipient|content", encoded via Substrate blake2AsHex.
+ */
+function toSettlementHash(content: string, sender: string, recipient: string): `0x${string}` {
+  const encoder = new TextEncoder();
+  const payload = encoder.encode(`${sender}|${recipient}|${content}`);
+  // blake2b-256 from @polkadot/util-crypto (already a dependency of the
+  // extension stack)
+  return blake2AsHex(payload, 256) as `0x${string}`;
+}
+
+/**
+ * Derive a deterministic [u8;4] mesh node id from an SS58 address (first 4
+ * bytes of the blake2b-256 hash). Consistent per-account, collision risk
+ * acceptable for v1; registerMeshNode reuses the same derivation.
+ */
+function toNodeIdBytes(address: string): string {
+  const encoder = new TextEncoder();
+  const hashed = blake2AsHex(encoder.encode(address), 256);
+  return hashed.slice(0, 10); // "0x" + 4 bytes hex
+}
+
 
 function loadConversations(): Conversation[] {
   if (typeof window === 'undefined') return [];
@@ -95,6 +123,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [emergencyAlerts, setEmergencyAlerts] = useState<EmergencyBroadcast[]>([]);
   const [isMeshAvailable, setIsMeshAvailable] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [gatewayStatus, setGatewayStatus] = useState<MeshGatewayStatus | null>(null);
 
   // Polkadot API connection for blockchain proof / emergency broadcasts.
   // Connects lazily on mount; stays null until ready so dependent actions guard on it.
@@ -183,12 +212,67 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = async (to: string, content: string): Promise<boolean> => {
     try {
       let success = false;
-      const viaMethod: Message['via'] = 'mesh';
+      let viaMethod: Message['via'] = 'mesh';
 
       try {
-        // BelizeMesh v1 transport: Bluetooth mesh (with Pakit/IPFS sync for
-        // store-and-forward). Chain-settlement path lands with the Mesh pallet
-        // wiring in the next slice.
+        // BelizeMesh v1 transport routing:
+        // - online mode with a registered gateway node -> settle on-chain via
+        //   pallet_belize_mesh (identityPing receipt; financial txs settle
+        //   separately). The pallet requires the signer to own an ACTIVE
+        //   GATEWAY node (verified against spec 105) — fail fast with an
+        //   actionable hint otherwise.
+        // - otherwise: Bluetooth mesh + Pakit/IPFS store-and-forward.
+        const wantsChainSettlement =
+          mode === 'online' ||
+          (mode === 'auto' && navigator.onLine && gatewayStatus?.hasGateway === true);
+
+        if (wantsChainSettlement && api && selectedAccount && gatewayStatus?.hasGateway) {
+          const settlement: MeshSettlementRequest = {
+            txType: 'identityPing',
+            signatureHash: toSettlementHash(content, selectedAccount.address, to),
+            senderNodeId: toNodeIdBytes(selectedAccount.address),
+            recipientNodeId: toNodeIdBytes(to),
+            gatewayNodeId: toNodeIdBytes(gatewayStatus.gatewayNodeId ?? ''),
+            nonce: Math.floor(Date.now() / 1000) % 0xffffffff,
+            relayPath: [],
+            hopCount: 0,
+            rssi: -75,
+            snr: 10,
+          };
+
+          const receipt = await settleMeshTransaction(selectedAccount.address, settlement);
+          success = receipt.hash.startsWith('0x');
+          viaMethod = 'chain';
+          setConversations(prev => {
+            const convIndex = prev.findIndex(c => c.peerAddress === to);
+            const newMessage: Message = {
+              id: `msg_${Date.now()}`,
+              content: content,
+              sender: selectedAccount?.address || '',
+              recipient: to,
+              timestamp: new Date(),
+              status: 'delivered',
+              via: 'chain',
+              proofHash: receipt.hash,
+            };
+            if (convIndex >= 0) {
+              const updated = [...prev];
+              updated[convIndex].messages.push(newMessage);
+              updated[convIndex].lastMessage = newMessage;
+              return updated;
+            } else {
+              return [...prev, {
+                peerAddress: to,
+                lastMessage: newMessage,
+                unreadCount: 0,
+                messages: [newMessage]
+              }];
+            }
+          });
+          return success;
+        }
+
+        // BLE mesh + Pakit backup
         success = await bluetoothMeshService.sendMessage(to, content);
 
         if (success) {
@@ -297,6 +381,12 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (selectedAccount) {
       initializeMesh();
+      // Refresh gateway node status (ownerOf?) from chain
+      getGatewayStatus(selectedAccount.address)
+        .then(setGatewayStatus)
+        .catch((err) => console.warn('[BelizeMesh] gateway status fetch failed:', err));
+    } else {
+      setGatewayStatus(null);
     }
   }, [selectedAccount]);  // initializeMesh is stable (no deps)
 
@@ -306,6 +396,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     emergencyAlerts,
     isMeshAvailable,
     pendingSyncCount,
+    gatewayStatus,
     setMode,
     sendMessage,
     getConversation,

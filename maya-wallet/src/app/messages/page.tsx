@@ -36,12 +36,19 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   isEncrypted: boolean;
+  /** BelizeMesh v1 channels. 'libp2p' = online Pakit/IPFS sync; 'lora-mesh' = BLE/LoRa GATT pipe */
   channel: 'libp2p-internet' | 'lora-mesh-915mhz';
   transferAmount?: string;
   txHash?: string;
   requestAmount?: string;
   requestSettled?: boolean;
 }
+
+// Honest channel notice (BelizeMesh v1): direct chat on this page is a demo
+// view — real send flows through /messages/compose (MessagingContext), which
+// routes BLE mesh + Pakit sync and on-chain settlement. Compose page wired
+// 2026-09-17.
+const MESSAGES_PAGE_DEMO_NOTICE = true;
 
 interface PeerConversation {
   id: string;
@@ -364,6 +371,9 @@ export default function MessagesPage() {
     e.preventDefault();
     if (!messageInput.trim()) return;
 
+    // NOTE (BelizeMesh v1 truth): this page's send path stays a visual demo —
+    // it does not transport. Real transport lives in MessagingContext
+    // (bluetoothMeshService + Pakit), reachable via /messages/compose.
     const channelType = meshFailoverSimulated ? 'lora-mesh-915mhz' : 'libp2p-internet';
     const newMsg: ChatMessage = {
       id: `m-${Date.now()}`,
@@ -372,6 +382,7 @@ export default function MessagesPage() {
       timestamp: 'Just now',
       isEncrypted: activeTab === 'direct',
       channel: channelType,
+      requestSettled: true,
     };
 
     if (activeTab === 'direct') {
@@ -390,7 +401,7 @@ export default function MessagesPage() {
       );
       addNotification({
         type: 'success',
-        message: `Message encrypted (${meshFailoverSimulated ? 'LoRa 915MHz Mesh' : 'Noise E2EE libp2p'}) & transmitted.`,
+        message: `Message queued locally (BelizeMesh demo view). Send through Compose for real BLE/LoRa + Pakit transport.`,
       });
     } else {
       setChannels((prev) =>

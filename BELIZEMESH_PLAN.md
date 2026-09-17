@@ -82,3 +82,32 @@ Remaining from Phase 2 list:
 - Chain settlement for online mode via submit_mesh_transaction (item 4 —
   needs review of enum encodings against live node before wiring)
 - `via` label/channel UI alignment in messages/page.tsx (item 5)
+
+## Phase 2 items 4-5 status (2026-09-17, live-node verified)
+- ✅ Live-node verification against Ceiba (spec 105):
+  - issueEmergencyAlert encoding builds (27 bytes) exactly as wired — params:
+    AlertSeverity, EmergencyType, i32 lat, i32 lon, u32 radius, Bytes msg,
+    u32 duration_blocks, BelizeDistrict
+  - submitMeshTransaction inspected: anchors FINANCIAL mesh txs and REQUIRES
+    the signer to own a registered, ACTIVE GATEWAY node (pallet check
+    gateway.owner == who, is_gateway, active). Zero mesh nodes registered on
+    the live chain as of this session.
+- ✅ Settlement service added (services/pallets/mesh.ts):
+  - getGatewayStatus() reads nodesByOwner + meshNodes in their REAL storage
+    shapes (AccountId -> Vec<[u8;4]>, [u8;4] hex -> struct)
+  - settleMeshTransaction() with fail-fast MESHWAIT gate unless the signer
+    owns an active gateway node
+  - registerMeshNode() helper (encodings verified against live metadata)
+- ✅ MessagingContext online-mode routing: chain settlement via identityPing
+  receipt when a gateway node exists; otherwise BLE mesh + Pakit sync.
+  gatewayStatus exposed via useMessaging().
+- ✅ messages/page.tsx labeled honestly: send path marked as demo view;
+  real transport flows through /messages/compose (which IS wired to
+  MessagingContext). Success notification copy updated to say so.
+
+## Remaining for full function (tracked, not yet done)
+- registerNode for gateway users needs KYC level >= min_kyc_for_registration
+  (identity pallet) — UI flow for gateway onboarding not yet built
+- submitRelayProof wiring for Pakit bundle proofs (UI touch) — exists in
+  pakit-bridge but proof submission still manual/dashboard-only
+- Emergency alert runtime subscription (pallet has no push subscription yet)
