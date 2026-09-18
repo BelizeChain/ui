@@ -60,7 +60,9 @@ export default function BridgePage() {
 
   // Transfer Stepper Modal
   const [showBridgeModal, setShowBridgeModal] = useState(false);
-  const [bridgeStep, setBridgeStep] = useState<1 | 2 | 3 | 4>(1);
+  // Only 1 is meaningful today (source extrinsic). Steps 2-3 render as
+  // explicit Awaiting states; step 4 was removed as fabricated.
+  const [bridgeStep] = useState<1>(1);
   const [isBridging, setIsBridging] = useState(false);
   const [generatedTxHash, setGeneratedTxHash] = useState('');
 
@@ -101,7 +103,6 @@ export default function BridgePage() {
 
     setIsBridging(true);
     setShowBridgeModal(true);
-    setBridgeStep(1);
 
     try {
       const result = await initiateBridgeTransfer(
@@ -113,45 +114,39 @@ export default function BridgePage() {
       );
       setGeneratedTxHash(result.hash);
 
-      // Multi-phase cross-chain relayer sequence
-      setTimeout(() => {
-        setBridgeStep(2); // Lock Confirmed
-        setTimeout(() => {
-          setBridgeStep(3); // Relayer Proof Verified
-          setTimeout(() => {
-            setBridgeStep(4); // Mint Complete
-            setIsBridging(false);
-            addNotification({
-              type: 'success',
-              message: `Successfully bridged ${amount} ${selectedAsset} to ${toChain.name}!`,
-            });
+      // CONFIG-002: the source-chain extrinsic is real (runtime event above);
+      // relayer consensus + destination mint have NO live backend yet, so we
+      // do NOT animate fake progress. The transfer stays honestly Pending
+      // until the relayer infra lands.
+      setIsBridging(false);
+      addNotification({
+        type: 'info',
+        message: `Bridge initiated: ${amount} ${selectedAsset} → ${toChain.name}. Awaiting relayer confirmation.`,
+      });
 
-            // Add to local history
-            const newTx: BridgeTransfer = {
-              transferId: result.transferId,
-              from: selectedAccount.address,
-              to: destinationAddress,
-              fromChain: fromChain.name,
-              toChain: toChain.name,
-              asset: selectedAsset,
-              amount,
-              fee: result.estimatedFee || calculateBridgeFee(),
-              status: 'Pending',
-              initiatedAt: Math.floor(Date.now() / 1000),
-              completedAt: undefined,
-              sourceHash: result.hash,
-              // CONFIG-002: no fabricated destination hash or fictional
-              // "64/64 confirmations". A real cross-chain completion hash
-              // arrives only from the bridge backend; until then the entry
-              // honestly reads Pending.
-              destinationHash: undefined,
-              confirmations: 0,
-              requiredConfirmations: 64,
-            };
-            setHistory((prev) => [newTx, ...prev]);
-          }, 1800);
-        }, 1800);
-      }, 1500);
+      // Add to local history
+      const newTx: BridgeTransfer = {
+        transferId: result.transferId,
+        from: selectedAccount.address,
+        to: destinationAddress,
+        fromChain: fromChain.name,
+        toChain: toChain.name,
+        asset: selectedAsset,
+        amount,
+        fee: result.estimatedFee || calculateBridgeFee(),
+        status: 'Pending',
+        initiatedAt: Math.floor(Date.now() / 1000),
+        completedAt: undefined,
+        sourceHash: result.hash,
+        // CONFIG-002: no fabricated destination hash or fictional
+        // "64/64 confirmations". A real cross-chain completion hash
+        // arrives only from the bridge backend; until then the entry
+        // honestly reads Pending.
+        destinationHash: undefined,
+        confirmations: 0,
+        requiredConfirmations: 64,
+      };
+      setHistory((prev) => [newTx, ...prev]);
     } catch (err) {
       console.error('Bridge transfer error:', err);
       setIsBridging(false);
@@ -592,41 +587,42 @@ export default function BridgePage() {
                   bridgeStep >= 1 ? 'bg-slate-950 border-purple-500/40 text-white' : 'bg-slate-950/40 border-slate-800 text-slate-600'
                 }`}>
                   <span className="font-semibold">1. Source Lock Extrinsic</span>
-                  {bridgeStep > 1 ? <CheckCircle size={18} weight="fill" className="text-emerald-400" /> : <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />}
+                  {generatedTxHash
+                    ? <CheckCircle size={18} weight="fill" className="text-emerald-400" />
+                    : <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />}
                 </div>
 
                 <div className={`p-3 rounded-2xl border flex items-center justify-between ${
                   bridgeStep >= 2 ? 'bg-slate-950 border-purple-500/40 text-white' : 'bg-slate-950/40 border-slate-800 text-slate-600'
                 }`}>
                   <span className="font-semibold">2. Relayer Consensus Verification ({toChain.name})</span>
-                  {bridgeStep > 2 ? <CheckCircle size={18} weight="fill" className="text-emerald-400" /> : bridgeStep === 2 ? <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" /> : null}
+                  {/* CONFIG-002: no relayer backend live yet — steps 2–3 show an
+                      explicit Awaiting state, never a fake spinner or check. */}
+                  <Clock size={18} className="text-slate-500" />
                 </div>
 
                 <div className={`p-3 rounded-2xl border flex items-center justify-between ${
                   bridgeStep >= 3 ? 'bg-slate-950 border-purple-500/40 text-white' : 'bg-slate-950/40 border-slate-800 text-slate-600'
                 }`}>
                   <span className="font-semibold">3. Destination Mint / Unlock Extrinsic</span>
-                  {bridgeStep > 3 ? <CheckCircle size={18} weight="fill" className="text-emerald-400" /> : bridgeStep === 3 ? <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" /> : null}
+                  <Clock size={18} className="text-slate-500" />
                 </div>
               </div>
 
-              {bridgeStep === 4 && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-300 text-center font-bold space-y-2">
-                  <p>Transfer Complete! {amount} {selectedAsset} delivered to recipient on {toChain.name}.</p>
-                  <p className="font-mono text-[11px] text-slate-400 truncate">Tx: {generatedTxHash}</p>
-                </div>
-              )}
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-300 text-center font-bold space-y-2">
+                <p>Bridge initiated — source extrinsic submitted.</p>
+                <p>Relayer confirmation pending. Funds unlock on {toChain.name} only after relayer consensus is verified.</p>
+                <p className="font-mono text-[11px] text-slate-400 truncate">Src Tx: {generatedTxHash}</p>
+              </div>
             </div>
 
-            {bridgeStep === 4 && (
-              <button
-                type="button"
-                onClick={() => setShowBridgeModal(false)}
-                className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-bold rounded-2xl text-xs transition-all shadow-lg shadow-emerald-500/20"
-              >
-                Done
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowBridgeModal(false)}
+              className="w-full py-3.5 bg-purple-500 hover:bg-purple-600 active:scale-95 text-white font-bold rounded-2xl text-xs transition-all shadow-lg shadow-purple-500/20"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

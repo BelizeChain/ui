@@ -21,13 +21,13 @@ let rateSubscriptions: Map<string, (() => void)> = new Map();
 // Initialize with blockchain API instance (lazy loaded)
 export async function initializeOracle(): Promise<void> {
   if (apiInstance) return;
-  
+
   try {
     // Dynamic import to avoid SSR issues
     const blockchainService = await import('./blockchain');
     const api = await blockchainService.initializeApi();
     apiInstance = api;
-    
+
     walletLogger.info('Oracle service initialized');
   } catch (error) {
     walletLogger.error('Failed to initialize oracle service', error);
@@ -61,7 +61,7 @@ export async function getExchangeRate(
 ): Promise<ExchangeRate> {
   try {
     await initializeOracle();
-    
+
     if (!apiInstance) {
       throw new Error('Oracle API not initialized');
     }
@@ -120,25 +120,40 @@ export async function getExchangeRate(
       }
     }
 
-    // Fallback to statutory rates if Oracle feed is empty or for unpegged native coin (DALLA)
+    // Statutory pegs are protocol-defined (bBZD 1:1 BZD, BZD $0.50 peg) —
+    // these ARE legitimate fallback values, not fabrications.
     const fallbackRate = getFallbackRate(fromCurrency, toCurrency);
-    walletLogger.info('Using statutory exchange rate', { pair, rate: fallbackRate });
-    
-    return {
-      pair,
-      rate: fallbackRate,
-      timestamp: Date.now(),
-      source: 'Statutory Reserve Peg (1 bBZD = $0.50 USD)',
-    };
+    if (fallbackRate !== null) {
+      walletLogger.info('Using statutory exchange rate', { pair, rate: fallbackRate });
+      return {
+        pair,
+        rate: fallbackRate,
+        timestamp: Date.now(),
+        source: 'Statutory Reserve Peg (1 bBZD = $0.50 USD)',
+      };
+    }
+
+    // CONFIG-002: floating assets (e.g. DALLA) with no oracle feed get rate:0
+    // + explicit Unavailable source so UI can show 'Rate unavailable' rather
+    // than an invented price.
+    return { pair, rate: 0, timestamp: Date.now(), source: 'Oracle Rate Unavailable' };
   } catch (error) {
     walletLogger.error('Failed to get exchange rate', error);
-    
+
     const fallbackRate = getFallbackRate(fromCurrency, toCurrency);
+    if (fallbackRate !== null) {
+      return {
+        pair: `${fromCurrency}/${toCurrency}`,
+        rate: fallbackRate,
+        timestamp: Date.now(),
+        source: 'Statutory Fallback',
+      };
+    }
     return {
       pair: `${fromCurrency}/${toCurrency}`,
-      rate: fallbackRate,
+      rate: 0,
       timestamp: Date.now(),
-      source: 'Statutory Fallback',
+      source: 'Oracle Rate Unavailable',
     };
   }
 }
@@ -153,7 +168,7 @@ export async function subscribeToExchangeRate(
 ): Promise<() => void> {
   try {
     await initializeOracle();
-    
+
     const pair = `${fromCurrency}/${toCurrency}`;
     const baseCur = toOracleCurrency(fromCurrency);
     const quoteCur = toOracleCurrency(toCurrency);
@@ -192,9 +207,9 @@ export async function subscribeToExchangeRate(
         const fallbackRate = getFallbackRate(fromCurrency, toCurrency);
         callback({
           pair,
-          rate: fallbackRate,
+          rate: fallbackRate ?? 0,
           timestamp: Date.now(),
-          source: 'Statutory Peg',
+          source: fallbackRate !== null ? 'Statutory Peg' : 'Oracle Rate Unavailable',
         });
       });
 
@@ -216,12 +231,12 @@ export async function subscribeToExchangeRate(
     return unsubscribe;
   } catch (error) {
     walletLogger.error('Failed to subscribe to exchange rate', error);
-    
+
     const interval = setInterval(async () => {
       const rate = await getExchangeRate(fromCurrency, toCurrency);
       callback(rate);
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }
 }
@@ -249,7 +264,7 @@ export async function getMerchantVerification(merchantId: string): Promise<{
 }> {
   try {
     await initializeOracle();
-    
+
     if (!apiInstance?.query?.oracle?.merchantCategories) {
       return {
         verified: false,
@@ -259,7 +274,7 @@ export async function getMerchantVerification(merchantId: string): Promise<{
     }
 
     const merchantInfo = await apiInstance.query.oracle.merchantCategories(merchantId);
-    
+
     if (!merchantInfo || merchantInfo.isNone) {
       return {
         verified: false,
@@ -310,7 +325,7 @@ function parseOracleRate(oracleData: any): number {
   }
 }
 
-function getFallbackRate(fromCurrency: string, toCurrency: string): number {
+function getFallbackRate(fromCurrency: string, toCurrency: string): number | null {
   // Fallback rates (bBZD is strictly pegged: 1 bBZD = 1 BZD = $0.50 USD; DALLA is unpegged floating crypto)
   const rates: Record<string, number> = {
     'bBZD/USD': 0.50,     // 1 bBZD = 0.50 USD (pegged stablecoin)
@@ -322,17 +337,14 @@ function getFallbackRate(fromCurrency: string, toCurrency: string): number {
     'bBZD/GBP': 0.40,     // 1 bBZD = 0.40 GBP
     'GBP/USD': 1.25,      // 1 GBP = 1.25 USD
     'USD/GBP': 0.80,      // Inverse
-    // DALLA: Unpegged floating native crypto (Initial market price discovery baseline)
-    'DALLA/USD': 1.00,    // 1 DALLA = $1.00 USD (floating)
-    'USD/DALLA': 1.00,    // 1 USD = 1.00 DALLA
-    'DALLA/bBZD': 2.00,   // 1 DALLA ($1.00) = 2.00 bBZD ($0.50)
-    'bBZD/DALLA': 0.50,   // 1 bBZD = 0.50 DALLA
-    'DALLA/BZD': 2.00,    // 1 DALLA = 2.00 BZD
-    'BZD/DALLA': 0.50,    // 1 BZD = 0.50 DALLA
+    // CONFIG-002: DALLA is UNPEGGED / floating — no hardcoded price here.
+    // If the oracle has no feed, callers receive rate:null (see
+    // getFallbackRate returning null for unknown pairs) and the UI must
+    // surface 'Rate unavailable' instead of inventing a number.
   };
 
   const pair = `${fromCurrency}/${toCurrency}`;
-  
+
   if (rates[pair]) {
     return rates[pair];
   }
@@ -348,6 +360,7 @@ function getFallbackRate(fromCurrency: string, toCurrency: string): number {
     return 1.0;
   }
 
-  walletLogger.warn('No fallback rate available', { pair });
-  return 1.0;
+  // CONFIG-002: unknown pair = no rate. Never fabricate 1.0.
+  walletLogger.warn('No statutory rate for pair; oracle rate required', { pair });
+  return null;
 }

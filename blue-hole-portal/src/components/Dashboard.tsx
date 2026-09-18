@@ -274,9 +274,11 @@ function OverviewTab() {
   const { proposals } = useGovernance();
   const { stats: stakingStats } = useStaking();
 
+  // CONFIG-002: no placeholder block numbers — if the node is unreachable,
+  // say so plainly instead of showing a stale or invented height.
   const blockNumberDisplay = systemInfo?.blockNumber
     ? `Block #${systemInfo.blockNumber.toLocaleString()}`
-    : systemLoading ? 'Connecting to node...' : 'Block #6,187+';
+    : systemLoading ? 'Connecting to node...' : 'Node unreachable';
 
   const peerCountDisplay = systemInfo?.peersCount !== undefined
     ? `${systemInfo.peersCount} peer${systemInfo.peersCount === 1 ? '' : 's'} connected`
@@ -414,7 +416,7 @@ function OverviewTab() {
           <ActivityItem
             time="Live on-chain"
             action="Block Production"
-            description={`Substrate BABE slot finalized: ${blockNumberDisplay} (${systemInfo?.blockHash ? systemInfo.blockHash.slice(0, 16) + '...' : '0x8ec3cf9e...'})`}
+            description={`Substrate BABE slot finalized: ${blockNumberDisplay} (${systemInfo?.blockHash ? systemInfo.blockHash.slice(0, 16) + '...' : 'no header cached'})`}
             icon={Cube}
             color="bluehole"
           />
@@ -432,10 +434,12 @@ function OverviewTab() {
             icon={Users}
             color="caribbean"
           />
+          {/* CONFIG-002: the "PoUW verified" line was fabricated — no Nawal
+ FL round is live on this chain yet. Show the honest state instead. */}
           <ActivityItem
-            time="PoUW Verification"
-            action="Federated Learning Round"
-            description="Nawal operator sovereign commitment verified via CONS-010"
+            time="Awaiting Activation"
+            action="Federated Learning (PoUW)"
+            description="Nawal FL round service is not yet live on Ceiba — no PoUW verifications recorded here yet"
             icon={Lightning}
             color="jungle"
           />

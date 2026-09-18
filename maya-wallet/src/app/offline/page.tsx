@@ -52,6 +52,7 @@ export default function OfflineSigningPage() {
   // Signed Payload input for broadcast
   const [signedHex, setSignedHex] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [broadcastError, setBroadcastError] = useState('');
   const [broadcastResult, setBroadcastResult] = useState<{
     blockHash: string;
     extrinsicHash: string;
@@ -114,16 +115,45 @@ export default function OfflineSigningPage() {
     });
   };
 
-  const handleSimulateColdSign = () => {
-    const payloadBytes = stringToU8a(unsignedPayload || recipient + amount);
-    const payloadDigest = blake2AsHex(payloadBytes, 256).slice(2);
-    // Authentic Substrate signed extrinsic framing (0x84 v4 signed + 0x01 sr25519 signature scheme + 64B sig)
-    const authenticExtrinsic = `0x840001${payloadDigest}${payloadDigest}00${parseInt(nonce, 10).toString(16).padStart(2, '0')}000400`;
-    setSignedHex(authenticExtrinsic);
+  const handleSimulateColdSign = async () => {
+    // CONFIG-002: A real air-gap signature requires a signer. When an
+    // extension injector is available we sign the actual payload bytes via
+    // signRaw. Without a signer we produce an explicit UNSIGNED envelope
+    // (0x00 marker) — we never synthesize plausible-looking signature bytes,
+    // because a fake extrinsic is worse than an honest 'bring the payload
+    // to a cold device' handoff.
+    if (!unsignedPayload) return;
+
+    const from = selectedAccount?.address;
+    if (from) {
+      try {
+        const { web3FromAddress } = await import('@polkadot/extension-dapp');
+        const injector = await web3FromAddress(from);
+        const signer = injector?.signer as { signRaw?: (req: { address: string; type: string; data: string }) => Promise<{ signature: string }> };
+        if (signer?.signRaw) {
+          const result = await signer.signRaw({
+            address: from,
+            type: 'bytes',
+            data: `0x${Buffer.from(stringToU8a(unsignedPayload)).toString('hex')}`,
+          });
+          setSignedHex(result.signature);
+          setStep('broadcast');
+          addNotification({ type: 'success', message: 'Cold signature applied via wallet extension (signRaw).' });
+          return;
+        }
+      } catch (err) {
+        console.warn('Extension signRaw unavailable for cold sign:', err);
+      }
+    }
+
+    // No signer available — explicit unsigned envelope, honestly labeled.
+    const payloadBytes = stringToU8a(unsignedPayload);
+    const payloadDigest = blake2AsHex(payloadBytes, 256);
+    setSignedHex(`0x00${payloadDigest.slice(2)}`); // 0x00 prefix = unsigned marker
     setStep('broadcast');
     addNotification({
-      type: 'success',
-      message: 'Air-gapped signature derived and framed via Blake2b cryptographic digest!',
+      type: 'warning',
+      message: 'Payload prepared UNSIGNED. Import into a cold signer to produce a real signature before broadcasting.',
     });
   };
 
@@ -139,18 +169,32 @@ export default function OfflineSigningPage() {
       const blockHash = header.hash.toHex();
 
       let extrinsicHash = '';
+      let submissionError: string | undefined;
       try {
-        if (signedHex.startsWith('0x') && signedHex.length > 30) {
+        if (signedHex.startsWith('0x') && signedHex.length > 30 && !signedHex.startsWith('0x00')) {
           const sub = await api.rpc.author.submitExtrinsic(signedHex);
           extrinsicHash = sub.toHex();
         }
       } catch (submitErr) {
-        extrinsicHash = blake2AsHex(stringToU8a(signedHex), 256);
-        console.warn('Air-gapped transaction framed with Blake2b extrinsic hash:', extrinsicHash, submitErr);
+        // CONFIG-002: submission failed — we do NOT invent a hash to cover it.
+        submissionError = `Submission rejected: ${submitErr instanceof Error ? submitErr.message : String(submitErr)}`;
+        console.warn('Extrinsic submission failed:', submissionError);
       }
 
       if (!extrinsicHash) {
-        extrinsicHash = blake2AsHex(stringToU8a(signedHex), 256);
+        if (submissionError) {
+          setBroadcastResult(null);
+          setBroadcastError(submissionError);
+          setStep('result');
+          addNotification({ type: 'error', message: submissionError });
+          return;
+        }
+        // Unsigned envelope reached broadcast without a real submission path.
+        setBroadcastResult(null);
+        setBroadcastError('Broadcast requires a signed extrinsic. Sign the payload with a cold signer first.');
+        setStep('result');
+        addNotification({ type: 'error', message: 'Broadcast requires a signed extrinsic.' });
+        return;
       }
 
       const res = {
@@ -166,20 +210,12 @@ export default function OfflineSigningPage() {
         message: `Successfully broadcasted to BelizeChain Node (Block #${res.blockNumber})!`,
       });
     } catch (err) {
-      console.warn('Live node query error during broadcast:', err);
-      const extrinsicHash = blake2AsHex(stringToU8a(signedHex), 256);
-      const res = {
-        blockHash: '0x8b66304f267a91ed4af49cd5ccf2b32900de780f2355402d3f217b2057c9c59c',
-        extrinsicHash,
-        blockNumber: 1,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      setBroadcastResult(res);
+      // Node unreachable. We show an honest failure — no fabricated block/hash.
+      const detail = err instanceof Error ? err.message : String(err);
+      setBroadcastResult(null);
+      setBroadcastError(`Could not broadcast: ${detail}`);
       setStep('result');
-      addNotification({
-        type: 'warning',
-        message: 'Relayed via mempool buffer to BelizeChain node',
-      });
+      addNotification({ type: 'error', message: 'Broadcast failed — node unreachable. Payload kept for later signing/broadcast.' });
     } finally {
       setIsBroadcasting(false);
     }
@@ -497,6 +533,33 @@ export default function OfflineSigningPage() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Step 4: Broadcast Result — error branch */}
+        {step === 'result' && !broadcastResult && broadcastError && (
+          <div className="max-w-xl mx-auto bg-slate-900/80 border border-red-500/40 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl text-xs">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto border border-red-500/40 shadow-lg">
+                <Warning size={32} weight="fill" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Broadcast Not Completed</h3>
+              <p className="text-slate-400 max-w-md mx-auto">The transaction was NOT included in the ledger. Nothing was faked here — keep the payload and sign/broadcast again.</p>
+            </div>
+            <div className="bg-slate-950 p-4 rounded-2xl border border-red-500/20 text-red-300 font-mono text-[11px] break-words">
+              {broadcastError}
+            </div>
+            <button
+              onClick={() => {
+                setStep('create');
+                setSignedHex('');
+                setUnsignedPayload('');
+                setBroadcastError('');
+              }}
+              className="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all"
+            >
+              Back to Studio
+            </button>
           </div>
         )}
 
