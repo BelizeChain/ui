@@ -214,14 +214,13 @@ export default function LendingPage() {
     e.preventDefault();
     setIsExecutingFlash(true);
 
-    setTimeout(() => {
-      setIsExecutingFlash(false);
-      const fee = parseFloat(flashLoanAmount) * 0.0005; // 0.05% flash loan fee
-      addNotification({
-        type: 'success',
-        message: `Flash Loan of ${parseFloat(flashLoanAmount).toLocaleString()} ${flashLoanAsset.toUpperCase()} executed atomically in block #1,492,308! Fee paid: ${fee.toFixed(2)} ${flashLoanAsset.toUpperCase()}.`,
-      });
-    }, 1400);
+    // CONFIG-002: flash-loan router is not wired from this page — nothing
+    // moved on chain. Show an honest gate.
+    setIsExecutingFlash(false);
+    addNotification({
+      type: 'info',
+      message: `Flash loans are not live on BelizeChain yet — no funds moved and no block referenced.`,
+    });
   };
 
   const toggleCollateral = (id: string) => {

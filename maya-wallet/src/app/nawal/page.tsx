@@ -144,20 +144,23 @@ export default function NawalPage() {
     }
   };
 
-  const handleRunBenchmark = () => {
+  const handleRunBenchmark = async () => {
     setIsBenchmarking(true);
-    setTimeout(() => {
-      setIsBenchmarking(false);
-      setBenchmarkResult({
-        tokensPerSec: 48.6,
-        flopsGflops: 342.5,
-        webGlAccelerated: true,
-      });
+    // CONFIG-002: real client-side benchmark — measure a threaded WebGPU/WebGL
+    // matmul if available, else a plain JS loop; report actual numbers.
+    try {
+      const { measureDeviceThroughput } = await import('@/services/performance');
+      const res = await measureDeviceThroughput();
+      setBenchmarkResult(res);
       addNotification({
         type: 'success',
-        message: 'Client Edge-AI Benchmark completed! Device is rated High Capacity for Federated Training.',
+        message: `Device benchmark: ${res.flopsGflops} GFLOPS (${res.webGlAccelerated ? 'WebGL' : 'CPU'}), device rated for service node floor.`,
       });
-    }, 1800);
+    } catch (err) {
+      addNotification({ type: 'error', message: `Benchmark failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setIsBenchmarking(false);
+    }
   };
 
   if (!isConnected || !selectedAccount) {

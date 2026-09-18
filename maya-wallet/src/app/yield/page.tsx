@@ -139,6 +139,7 @@ export default function YieldPage() {
     setIsProcessing(true);
     setTimeout(() => {
       setIsProcessing(false);
+      // CONFIG-002: yield vault deposits not wired on chain.
       if (modalAction === 'deposit') {
         setVaults((prev) =>
           prev.map((v) =>

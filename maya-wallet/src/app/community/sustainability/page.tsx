@@ -79,13 +79,12 @@ export default function SustainabilityPage() {
 
   const handleContribute = (project: GreenProject) => {
     setContributingId(project.id);
-    setTimeout(() => {
-      setContributingId(null);
-      addNotification({
-        type: 'success',
-        message: `Bonded 25.00 Ɗ to ${project.title}! Unlocked ${project.yieldBooster} booster.`,
-      });
-    }, 1200);
+    setContributingId(null);
+    // CONFIG-002: no eco-contribution extrinsic is wired yet — no Ɗ moved.
+    addNotification({
+      type: 'info',
+      message: `Eco-program bonding for "${project.title}" is not wired on-chain yet. Community treasury funding is queued — no funds moved.`,
+    });
   };
 
   if (!isConnected || !selectedAccount) {

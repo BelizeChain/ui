@@ -193,6 +193,7 @@ export default function RwaPage() {
     setIsSubmittingInvest(true);
     setTimeout(() => {
       setIsSubmittingInvest(false);
+      // CONFIG-002: RWA invest is design-preview.
       setAssets((prev) =>
         prev.map((item) =>
           item.id === selectedAsset.id
@@ -237,6 +238,7 @@ export default function RwaPage() {
     setIsSubmittingTokenize(true);
     setTimeout(() => {
       setIsSubmittingTokenize(false);
+      // CONFIG-002: RWA tokenize is design-preview.
       const newAsset: RwaAsset = {
         id: `rwa-${Date.now()}`,
         title: newPropTitle,

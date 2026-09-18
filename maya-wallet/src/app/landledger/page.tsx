@@ -265,23 +265,13 @@ export default function LandLedgerPage() {
   const handleTokenizeParcel = (e: React.FormEvent) => {
     e.preventDefault();
     setIsTokenizing(true);
-
-    setTimeout(() => {
-      const targetParcel = DISTRICT_CADASTRE_DATA.find((p) => p.parcelId === tokenizeParcelId);
-      if (targetParcel) {
-        targetParcel.isTokenized = true;
-        targetParcel.tokenSymbol = tokenSymbolInput.toUpperCase();
-        targetParcel.tokenSupply = parseInt(tokenSharesInput);
-        targetParcel.tokenPriceBBZD = targetParcel.assessedValueBBZD / parseInt(tokenSharesInput);
-      }
-
-      setIsTokenizing(false);
-      addNotification({
-        type: 'success',
-        message: `Successfully tokenized ${tokenizeParcelId} into ${tokenSharesInput} ${tokenSymbolInput} RWA security tokens!`,
-      });
-      setActiveTab('my-titles');
-    }, 1200);
+    // CONFIG-002: fractional RWA tokenization of land titles has no wired
+    // extrinsic yet (no security-token issuance path from this page).
+    setIsTokenizing(false);
+    addNotification({
+      type: 'info',
+      message: `RWA tokenization of ${tokenizeParcelId} is not wired on-chain yet — securities token issuance requires the GEM RWA contract integration. No shares were minted.`,
+    });
   };
 
   if (!isConnected || !selectedAccount) {

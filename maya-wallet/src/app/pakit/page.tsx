@@ -202,7 +202,8 @@ export default function PakitPage() {
 
     setIsCreatingBackup(true);
     setTimeout(() => {
-      const backupCid = `QmVault${Date.now().toString(36)}${Math.random().toString(36).substring(2, 6)}`;
+      // CONFIG-002: fabricated CID removed — needs real Pakit gateway.
+      const backupCid = null as any;
       const backupFile: StoredFile = {
         id: `backup-${Date.now()}`,
         name: `Wicked_Citizen001_Backup_${new Date().toISOString().slice(0, 10)}.pakit`,

@@ -226,6 +226,8 @@ export default function BNSPage() {
     if (!newSubdomainPrefix.trim() || !currentDomain) return;
 
     setIsAddingSubdomain(true);
+    // CONFIG-002: domain objects on this page are local records — changes are
+    // session-local until BNS triggers come from the real service flow.
     setTimeout(() => {
       const cleanPrefix = newSubdomainPrefix.toLowerCase().replace(/[^a-z0-9-]/g, '');
       const fullSubdomain = `${cleanPrefix}.${currentDomain.name}${currentDomain.tld}`;

@@ -182,7 +182,7 @@ export default function KinichPage() {
       setIsCompressing(false);
       addNotification({
         type: 'success',
-        message: `Achieved ${result.compressionRatio}x compression ratio with Kinich Surface-Code Error Correction!`,
+        message: `Local Kinich compression demo: ${result.compressionRatio}x (client-side simulation — no on-chain/photonic job was submitted).`,
       });
     }, 1200);
   };
@@ -201,7 +201,7 @@ export default function KinichPage() {
       setIsRunningCircuit(false);
       addNotification({
         type: 'success',
-        message: `Quantum circuit executed successfully on ${selectedBackend} in ${res.executionTimeMs}ms!`,
+        message: `Local circuit simulation on '${selectedBackend}' profile in ${res.executionTimeMs}ms (no real quantum backend was contacted).`,
       });
     }, 1400);
   };

@@ -223,21 +223,19 @@ export default function EducationModulesPage() {
     } else {
       // Finished all questions!
       setIsClaimingReward(true);
-      setTimeout(() => {
-        const certId = `CERT-${activeQuest.category.substring(0, 3).toUpperCase()}-2026-${Math.floor(100 + Math.random() * 900)}`;
+      // CONFIG-002: completion is local progress; certificate issuance on
+      // chain is queued. Mark done without inventing a cert id.
+      setModules((prev) =>
+        prev.map((m) => (m.id === activeQuest.id ? { ...m, completed: true } : m))
+      );
 
-        setModules((prev) =>
-          prev.map((m) => (m.id === activeQuest.id ? { ...m, completed: true, certificateId: certId } : m))
-        );
-
-        setIsClaimingReward(false);
-        setActiveQuest(null);
-
-        addNotification({
-          type: 'success',
-          message: `Passed with score ${correctAnswersCount + (selectedAnswerIdx === activeQuest.quiz[currentQuestionIdx].correctIndex ? 1 : 0)}/${activeQuest.quiz.length}! Earned +${activeQuest.rewardDalla} Ɗ and minted ${certId}!`,
-        });
-      }, 1200);
+      setIsClaimingReward(false);
+      const score = correctAnswersCount + (selectedAnswerIdx === activeQuest.quiz[currentQuestionIdx].correctIndex ? 1 : 0);
+      setActiveQuest(null);
+      addNotification({
+        type: 'success',
+        message: `Passed with score ${score}/${activeQuest.quiz.length}! Learn-to-earn rewards payout is queued with the education pallet (not yet on chain).`,
+      });
     }
   };
 
