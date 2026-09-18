@@ -47,7 +47,16 @@ import {
 } from 'phosphor-react';
 
 export default function MorePage() {
-  const menuSections = [
+  type MenuItem = {
+    icon: React.ReactNode;
+    label: string;
+    description: string;
+    href: string;
+    disabled?: boolean;
+    color: string;
+    badge?: string;
+  };
+  const menuSections: { title: string; description: string; items: MenuItem[] }[] = [
     {
       title: 'DeFi & Asset Management',
       description: 'Trading floor, lending, vaults & tokenized real estate',
@@ -63,26 +72,29 @@ export default function MorePage() {
         {
           icon: <Coins size={20} weight="fill" />,
           label: 'Collateral Lending',
-          description: '50-80% LTV micro-loans',
-          href: '/lending',
+          description: 'COMING SOON — market data shown is illustrative',
+          href: '#',
+          disabled: true,
           color: 'from-emerald-500 to-teal-600',
-          badge: 'Health Factor',
+          badge: 'Coming Soon',
         },
         {
           icon: <TrendUp size={20} weight="fill" />,
           label: 'Yield Aggregator',
-          description: 'Multi-strategy auto-compounder',
-          href: '/yield',
+          description: 'COMING SOON — sample rates shown are illustrative, not live',
+          href: '#',
+          disabled: true,
           color: 'from-purple-500 to-indigo-600',
-          badge: '18.4% APY',
+          badge: 'Coming Soon',
         },
         {
           icon: <Buildings size={20} weight="fill" />,
           label: 'Tokenized RWA Studio',
-          description: 'LandLedger deeds & green bonds',
-          href: '/rwa',
+          description: 'COMING SOON — deed listing shown is illustrative',
+          href: '#',
+          disabled: true,
           color: 'from-amber-500 to-orange-600',
-          badge: 'FSC Compliant',
+          badge: 'Coming Soon',
         },
         {
           icon: <Coins size={20} weight="fill" />,
@@ -95,10 +107,11 @@ export default function MorePage() {
         {
           icon: <LockKey size={20} weight="fill" />,
           label: 'Institutional Custody',
-          description: 'M-of-N multi-sig vaults (48h delay)',
-          href: '/custody',
+          description: 'COMING SOON — enterprise vaults in design',
+          href: '#',
+          disabled: true,
           color: 'from-red-500 to-pink-600',
-          badge: 'Enterprise',
+          badge: 'Coming Soon',
         },
       ],
     },
@@ -332,7 +345,30 @@ export default function MorePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {section.items.map((item, iIdx) => (
-                <Link key={iIdx} href={item.href}>
+                item.disabled ? (
+                  <div key={iIdx} aria-disabled="true" title="Coming soon"
+                    className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 flex items-center justify-between opacity-60 cursor-not-allowed">
+                    <div className="flex items-center gap-3.5">
+                      <div
+                        className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-md grayscale`}
+                      >
+                        {item.icon}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-slate-300 flex items-center gap-2">
+                          {item.label}
+                          {item.badge && (
+                            <span className="px-1.5 py-0.5 bg-slate-700/60 text-slate-300 rounded text-[9px] font-mono font-bold">
+                              {item.badge}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{item.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                <Link key={iIdx} href={item.href === '#' ? '#' : item.href}>
                   <div className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 transition-all flex items-center justify-between group shadow-md hover:shadow-cyan-500/5">
                     <div className="flex items-center gap-3.5">
                       <div
@@ -360,6 +396,7 @@ export default function MorePage() {
                     />
                   </div>
                 </Link>
+                )
               ))}
             </div>
           </div>
