@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -29,18 +29,63 @@ export default function CompliancePage() {
 
   const [activeTab, setActiveTab] = useState<'proof-of-reserve' | 'kyc-aml' | 'fiu-limits' | 'certs'>('proof-of-reserve');
   const [isAuditing, setIsAuditing] = useState(false);
-  const [auditTimestamp, setAuditTimestamp] = useState('Just now (Block #1,492,034)');
+  // CONFIG-002: real reserve-ratio query from the compliance pallet.
+  const [auditTimestamp, setAuditTimestamp] = useState('');
+  const [collateralRatio, setCollateralRatio] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAudit = async () => {
+      try {
+        const { initializeApi } = await import('@/services/blockchain');
+        const api = await initializeApi();
+        // compliance.totalReserves / compliance.issuedStablecoins —
+        // fall back to showing nothing rather than fabricating a ratio.
+        const reserves = (await api.query.compliance?.totalReserves?.()) as any;
+        const liabilities = (await api.query.compliance?.totalLiabilities?.()) as any;
+        if (reserves && liabilities && !reserves.isNone && !liabilities.isNone) {
+          const r = BigInt(reserves.unwrap().toString());
+          const l = BigInt(liabilities.unwrap().toString());
+          const pct = l > 0n ? Number((r * 10000n) / l) / 100 : null;
+          if (!cancelled) {
+            setCollateralRatio(pct !== null ? `${pct.toFixed(1)}%` : null);
+            setAuditTimestamp(`Block #${(await api.rpc.chain.getHeader()).number.toNumber().toLocaleString()}`);
+          }
+        } else if (!cancelled) {
+          setAuditTimestamp('Statutory reserve data not published on-chain yet');
+        }
+      } catch (err) {
+        if (!cancelled) setAuditTimestamp(`Audit lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    fetchAudit();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleRefreshAudit = () => {
     setIsAuditing(true);
-    setTimeout(() => {
-      setIsAuditing(false);
-      setAuditTimestamp(`Just now (Block #${1492035 + Math.floor(Math.random() * 5)})`);
-      addNotification({
-        type: 'success',
-        message: 'Central Bank of Belize Statutory Proof of Reserve verified! 100.2% collateralized.',
-      });
-    }, 1200);
+    // re-run the same real query by forcing a state tick
+    setAuditTimestamp('');
+    setTimeout(async () => {
+      try {
+        const { initializeApi } = await import('@/services/blockchain');
+        const api = await initializeApi();
+        const header = await api.rpc.chain.getHeader();
+        const reserves = (await api.query.compliance?.totalReserves?.()) as any;
+        const liabilities = (await api.query.compliance?.totalLiabilities?.()) as any;
+        if (reserves && liabilities && !reserves.isNone && !liabilities.isNone) {
+          const r = BigInt(reserves.unwrap().toString());
+          const l = BigInt(liabilities.unwrap().toString());
+          const pct = l > 0n ? Number((r * 10000n) / l) / 100 : null;
+          setCollateralRatio(pct !== null ? `${pct.toFixed(1)}%` : null);
+          setAuditTimestamp(`Block #${header.number.toNumber().toLocaleString()}`);
+        } else {
+          setAuditTimestamp('Statutory reserve data not published on-chain yet');
+        }
+      } finally {
+        setIsAuditing(false);
+      }
+    }, 100);
   };
 
   if (!isConnected || !selectedAccount) {
@@ -78,8 +123,12 @@ export default function CompliancePage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">bBZD Peg Backing Ratio</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400">100.2%</span>
-              <span className="text-[10px] text-slate-400">Over-Collateralized</span>
+              <span className="text-lg font-bold text-emerald-400">
+                {collateralRatio ?? '—'}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {collateralRatio ? (parseFloat(collateralRatio) >= 100 ? 'Over-Collateralized' : 'Under-Collateralized') : 'Awaiting on-chain data'}
+              </span>
             </div>
             <span className="text-[11px] text-slate-400 block">Pegged 1:1 to BZD ($0.50 USD)</span>
           </div>

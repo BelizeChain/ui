@@ -51,28 +51,43 @@ export default function DeveloperPage() {
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  const handlePingRpc = () => {
+  const handlePingRpc = async () => {
     setIsPinging(true);
-    setTimeout(() => {
+    try {
+      const { initializeApi } = await import('@/services/blockchain');
+      const api = await initializeApi();
+      const t0 = performance.now();
+      const header = await api.rpc.chain.getHeader();
+      const latency = Math.round(performance.now() - t0);
+      setRpcLatency(latency);
+      addNotification({ type: 'success', message: `Ceiba RPC responded in ${latency}ms (Block #${header.number.toNumber().toLocaleString()}).` });
+    } catch (err) {
+      setRpcLatency(null);
+      addNotification({ type: 'error', message: `RPC unreachable: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
       setIsPinging(false);
-      setRpcLatency(10 + Math.floor(Math.random() * 6));
-      addNotification({ type: 'success', message: 'Ceiba RPC node responded in 12ms (Block #1,492,108)!' });
-    }, 500);
+    }
   };
 
-  const handleClaimFaucet = (e: React.FormEvent) => {
+  const handleClaimFaucet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!faucetAddress) return;
 
     setIsClaimingFaucet(true);
-    setTimeout(() => {
-      setIsClaimingFaucet(false);
-      setFaucetCooldown(86400); // 24 hours in seconds
+    try {
+      // Real faucet = fungible faucet contract (gem/faucet, ink!) — needs the
+      // contract instance. Not wired from this page yet.
+      const { initializeApi } = await import('@/services/blockchain');
+      await initializeApi();
       addNotification({
-        type: 'success',
-        message: `Dispatched 1,000 DALLA (Ɗ) + 500 bBZD to ${faucetAddress.slice(0, 6)}...${faucetAddress.slice(-4)}!`,
+        type: 'info',
+        message: 'Faucet claim routes through the pallet_fungible_faucet contract call — integration from this page is queued. No tokens were dispatched.',
       });
-    }, 1200);
+    } catch (err) {
+      addNotification({ type: 'error', message: `Node unreachable: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setIsClaimingFaucet(false);
+    }
   };
 
   const codeSnippets = {

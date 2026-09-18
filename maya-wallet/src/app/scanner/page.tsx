@@ -82,18 +82,16 @@ export default function ScannerPage() {
   const handleGenerateInvoice = (e: React.FormEvent) => {
     e.preventDefault();
     const id = `INV-BZ-${Date.now().toString(36).toUpperCase()}`;
-    setInvoiceId(id);
+    setInvoiceId(`INV-BZ-${Date.now().toString(36).toUpperCase()}`);
     setInvoiceCreated(true);
-    setPaymentReceived(false);
-
-    // Simulate customer scan & instant settlement after 3.5s
-    setTimeout(() => {
-      setPaymentReceived(true);
-      addNotification({
-        type: 'success',
-        message: `Payment received! ${totalDue} ${posCurrency} settled instantly with 2.5% Eco-Tourism cashback issued.`,
-      });
-    }, 3500);
+    // CONFIG-002: no fake auto-settlement. The invoice QR is real (encodes
+    // the charge details); payment detection needs a balances.transfer event
+    // subscription to the merchant account — until wired, status stays
+    // 'Awaiting payment'.
+    addNotification({
+      type: 'info',
+      message: `Invoice ${invoiceId} created for ${totalDue} ${posCurrency} — show this QR to the customer. Awaiting on-chain payment confirmation.`,
+    });
   };
 
   const rawNum = parseFloat(chargeAmount) || 0;
