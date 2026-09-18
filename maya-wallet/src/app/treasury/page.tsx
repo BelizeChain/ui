@@ -1,11 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import {
+  getTreasuryBalance,
+  getTreasurySpendProposals,
+  type TreasurySpendProposalView,
+} from '@/services/pallets/treasury';
 import {
   Vault,
   Users,
@@ -56,8 +61,6 @@ export default function TreasuryPage() {
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'disbursements' | 'multisig' | 'liquidity'>('overview');
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [isExecutingId, setIsExecutingId] = useState<string | null>(null);
 
   const [signers, setSigners] = useState<MultiSigSigner[]>([
     {
@@ -88,95 +91,46 @@ export default function TreasuryPage() {
     },
   ]);
 
-  const [disbursements, setDisbursements] = useState<TreasuryDisbursement[]>([
-    {
-      id: 'TR-108',
-      title: 'Placencia Marine LoRaWAN Mesh Repeater Array',
-      recipient: '5FLSig...59Y (Belize Marine Foundation)',
-      amount: '35,000 bBZD',
-      category: 'Disaster Telecom',
-      status: 'Pending Signatures',
-      approvals: 2,
-      requiredApprovals: 3,
-      signers: ['r1Sa...9sj24', '5FHn...694ty'],
-      description:
-        'Solar-powered off-grid emergency packet radio relays for marine emergency beacon routing across Placencia lagoon.',
-    },
-    {
-      id: 'TR-107',
-      title: 'Kinich Quantum Circuit OpenQASM 2.0 Studio Grants',
-      recipient: 'r1Sa...9sj24 (Ceiba Quantum Research)',
-      amount: '50,000 Ɗ',
-      category: 'PQC Cryptography',
-      status: 'Executed',
-      approvals: 3,
-      requiredApprovals: 3,
-      signers: ['r1Sa...9sj24', '5FHn...694ty', '5DAA...PTXFy'],
-      executionTxHash: '0x8f27301928340192834019283401928340192834019283401928340192834019',
-      description:
-        'Funding development of NIST FIPS 204 ML-DSA post-quantum signature verification algorithms inside Substrate runtime.',
-    },
-    {
-      id: 'TR-106',
-      title: 'Ambergris Caye Mangrove Sequestration MRV Oracle',
-      recipient: '5C4hr...37K1 (Belize Carbon Verifiers Ltd)',
-      amount: '80,000 bBZD',
-      category: 'Blue Carbon Ecology',
-      status: 'Approved',
-      approvals: 3,
-      requiredApprovals: 3,
-      signers: ['r1Sa...9sj24', '5FHn...694ty', '5FLS...59Y'],
-      description:
-        'Satellite radar telemetry and drone LiDAR verification pipeline for statutory Belize Blue Carbon credit issuance.',
-    },
-  ]);
+  // CONFIG-002: real treasury spend proposals from the governance pallet.
+  const [disbursements, setDisbursements] = useState<TreasurySpendProposalView[]>([]);
+  const [treasuryLoading, setTreasuryLoading] = useState(true);
+  const [treasuryError, setTreasuryError] = useState('');
+  const [treasuryBalance, setTreasuryBalance] = useState<string | null>(null);
 
-  const handleApproveDisbursement = (id: string) => {
-    setApprovingId(id);
-    setTimeout(() => {
-      setDisbursements((prev) =>
-        prev.map((d) => {
-          if (d.id === id) {
-            const nextApprovals = d.approvals + 1;
-            return {
-              ...d,
-              approvals: nextApprovals,
-              status: nextApprovals >= d.requiredApprovals ? 'Approved' : d.status,
-              signers: [...d.signers, '5FLS...59Y (Signed)'],
-            };
-          }
-          return d;
-        })
-      );
-      setApprovingId(null);
-      addNotification({
-        type: 'success',
-        message: `Cryptographically signed Treasury Disbursement ${id} (3-of-4 Multi-Sig quorum updated)!`,
-      });
-    }, 1200);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      setTreasuryLoading(true);
+      try {
+        const [proposals, balance] = await Promise.all([
+          getTreasurySpendProposals(),
+          getTreasuryBalance(),
+        ]);
+        if (cancelled) return;
+        setDisbursements(proposals);
+        setTreasuryBalance(balance.freeDalla);
+        setTreasuryError('');
+      } catch (err) {
+        if (!cancelled) {
+          setTreasuryError(err instanceof Error ? err.message : String(err));
+          setDisbursements([]);
+        }
+      } finally {
+        if (!cancelled) setTreasuryLoading(false);
+      }
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
-  const handleExecuteDisbursement = (id: string) => {
-    setIsExecutingId(id);
-    setTimeout(() => {
-      setDisbursements((prev) =>
-        prev.map((d) => {
-          if (d.id === id) {
-            return {
-              ...d,
-              status: 'Executed',
-              executionTxHash: '0x3a99283401928340192834019283401928340192834019283401928340192834',
-            };
-          }
-          return d;
-        })
-      );
-      setIsExecutingId(null);
-      addNotification({
-        type: 'success',
-        message: `Treasury Disbursement ${id} successfully executed and settled on-chain!`,
-      });
-    }, 1500);
+  // CONFIG-002: approve/execute are multi-sig governance extrinsics not yet
+  // exposed from this page. Show honest gates instead of fake approval flows.
+  const handleApproveDisbursement = (id: number) => {
+    addNotification({
+      type: 'info',
+      message: `Proposal #${id} voting happens through the governance flow (castVote). Open the proposal to vote — this page is currently read-only.`,
+    });
   };
 
   if (!isConnected || !selectedAccount) {
@@ -380,16 +334,16 @@ export default function TreasuryPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-bold">
-                        {d.category}
+                        {d.beneficiary ? 'Treasury Spend' : 'Proposal'}
                       </span>
-                      <span className="font-mono text-slate-500 text-[11px] font-bold">{d.id}</span>
+                      <span className="font-mono text-slate-500 text-[11px] font-bold">#{d.id}</span>
                     </div>
                     <h3 className="font-bold text-white text-base">{d.title}</h3>
-                    <span className="text-slate-400 text-xs font-mono">Recipient: {d.recipient}</span>
+                    <span className="text-slate-400 text-xs font-mono">Beneficiary: {d.beneficiary || "none"}</span>
                   </div>
 
                   <div className="text-right font-mono">
-                    <span className="font-bold text-emerald-400 text-lg block">{d.amount}</span>
+                    <span className="font-bold text-emerald-400 text-lg block">{d.amountDalla} DALLA</span>
                     <span
                       className={`px-3 py-1 rounded-full text-[10px] font-bold inline-block mt-1 ${
                         d.status === 'Executed'
@@ -399,7 +353,7 @@ export default function TreasuryPage() {
                           : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                       }`}
                     >
-                      {d.status} ({d.approvals}/{d.requiredApprovals} Quorum)
+                      {d.status} ({d.voteCount.ayes} ayes / {d.voteCount.nays} nays)
                     </span>
                   </div>
                 </div>
@@ -408,40 +362,26 @@ export default function TreasuryPage() {
 
                 <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono text-[11px]">
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Active Signers:</span>
-                    <span className="text-slate-300">{d.signers.join(' • ')}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Proposer:</span>
+                    <span className="text-slate-300">{d.proposer}</span>
                   </div>
 
-                  {d.executionTxHash && (
+                  {d.voteEnd > 0 && (
                     <div className="text-right">
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Settlement Extrinsic:</span>
-                      <span className="text-cyan-400 font-bold">{d.executionTxHash.slice(0, 18)}...</span>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Voting Ends:</span>
+                      <span className="text-cyan-400 font-bold">{new Date(d.voteEnd).toLocaleString()}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
-                  {d.status === 'Pending Signatures' && (
-                    <button
-                      onClick={() => handleApproveDisbursement(d.id)}
-                      disabled={approvingId === d.id}
-                      className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 transition-all shadow-md"
-                    >
-                      <ShieldCheck size={16} weight="bold" />
-                      {approvingId === d.id ? 'Cryptographically Signing...' : 'Sign with Multi-Sig Key'}
-                    </button>
-                  )}
-
-                  {d.status === 'Approved' && (
-                    <button
-                      onClick={() => handleExecuteDisbursement(d.id)}
-                      disabled={isExecutingId === d.id}
-                      className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 transition-all shadow-md"
-                    >
-                      <CheckCircle size={16} weight="bold" />
-                      {isExecutingId === d.id ? 'Settling Tranche On-Chain...' : 'Execute On-Chain Settlement'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleApproveDisbursement(d.id)}
+                    className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 transition-all shadow-md"
+                  >
+                    <ShieldCheck size={16} weight="bold" />
+                    {d.status === 'Pending' || d.status === 'Active' ? 'Vote on Proposal' : 'View Status'}
+                  </button>
                 </div>
               </div>
             ))}
