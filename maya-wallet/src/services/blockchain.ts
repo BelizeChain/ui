@@ -69,9 +69,11 @@ export async function fetchBalance(address: string): Promise<Balance> {
     // Get bBZD balance from economy pallet (if available)
     let bBZD = '0.00';
     try {
-      const bBZDBalance = await apiInstance.query.economy?.bBzdBalances(address);
-      if (bBZDBalance) {
-        bBZD = formatBalance(bBZDBalance.toString());
+      const bBZDBalance = await apiInstance.query.economy?.bbzdBalances(address);
+      if (bBZDBalance && typeof bBZDBalance.toPrimitive === 'function') {
+        const primitive = bBZDBalance.toPrimitive();
+        const raw = typeof primitive === 'number' ? String(primitive) : (primitive as { free?: string | number }).free ?? bBZDBalance.toString();
+        bBZD = formatBalance(String(raw));
       }
     } catch (error) {
       console.warn('bBZD balance not available:', error);

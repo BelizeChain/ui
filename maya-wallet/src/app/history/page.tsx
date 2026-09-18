@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
+import { formatDisplayNumber } from '@/lib/utils';
 import {
   ArrowLeft,
   MagnifyingGlass,
@@ -167,7 +168,7 @@ export default function HistoryPage() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold text-white tracking-tight">
-              +{totalReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-emerald-400 font-mono">Ɗ</span>
+              +{formatDisplayNumber(totalReceived)} <span className="text-xs text-emerald-400 font-mono">Ɗ</span>
             </p>
           </div>
 
@@ -179,7 +180,7 @@ export default function HistoryPage() {
               </div>
             </div>
             <p className="text-xl md:text-2xl font-bold text-white tracking-tight">
-              -{totalSent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-cyan-400 font-mono">Ɗ</span>
+              -{formatDisplayNumber(totalSent)} <span className="text-xs text-cyan-400 font-mono">Ɗ</span>
             </p>
           </div>
         </div>

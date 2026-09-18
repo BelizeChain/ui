@@ -16,24 +16,24 @@ declare global {
       }): Promise<BluetoothDevice>;
     };
   }
-  
+
   interface BluetoothDevice {
     id: string;
     name?: string;
     gatt?: BluetoothRemoteGATTServer;
   }
-  
+
   interface BluetoothRemoteGATTServer {
     connected: boolean;
     connect(): Promise<BluetoothRemoteGATTServer>;
     disconnect(): void;
     getPrimaryService(service: string): Promise<BluetoothRemoteGATTService>;
   }
-  
+
   interface BluetoothRemoteGATTService {
     getCharacteristic(characteristic: string): Promise<BluetoothRemoteGATTCharacteristic>;
   }
-  
+
   interface BluetoothRemoteGATTCharacteristic {
     value?: DataView;
     readValue(): Promise<DataView>;
@@ -78,11 +78,11 @@ class BluetoothMeshService {
   private relayNodes: Set<string> = new Set();
   private seenMessageIds: Set<string> = new Set();
   private retryTimer: ReturnType<typeof setInterval> | null = null;
-  
+
   // BelizeChain Mesh Protocol UUIDs
   private readonly SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
   private readonly CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
-  
+
   private readonly MAX_MESSAGE_SIZE = 512; // Bytes
   private readonly MAX_HOPS = 5;
   private readonly DISCOVERY_INTERVAL = 30000; // 30 seconds
@@ -91,7 +91,11 @@ class BluetoothMeshService {
 
   async initialize(): Promise<boolean> {
     if (!navigator.bluetooth) {
-      console.error('[BLE-MESH] Web Bluetooth API not available');
+      // Web Bluetooth is an optional Tier-2 capability (desktop Chromium with
+      // the flag, or the native app). Its absence is expected, not an error —
+      // logging it as console.error trips the Next.js dev overlay and makes
+      // the whole wallet unusable on unsupported browsers.
+      console.info('[BLE-MESH] Web Bluetooth API not available — mesh tier disabled');
       return false;
     }
 
@@ -110,7 +114,7 @@ class BluetoothMeshService {
 
       // Get mesh service
       const service = await server.getPrimaryService(this.SERVICE_UUID);
-      
+
       // Get characteristic for messaging
       this.characteristic = await service.getCharacteristic(this.CHARACTERISTIC_UUID);
 
@@ -163,7 +167,7 @@ class BluetoothMeshService {
   private handleIncomingMessage(event: Event) {
     const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
     const value = target.value;
-    
+
     if (!value) return;
 
     try {
@@ -340,11 +344,11 @@ class BluetoothMeshService {
   // Process message queue (retry failed messages)
   async processQueue() {
     const pending = this.messageQueue.filter(q => q.status === 'pending' && q.attempts < 3);
-    
+
     for (const queued of pending) {
       queued.attempts++;
       queued.lastAttempt = new Date();
-      
+
       const success = await this.transmitMessage(queued.message);
       queued.status = success ? 'sent' : 'pending';
     }

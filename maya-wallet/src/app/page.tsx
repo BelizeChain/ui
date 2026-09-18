@@ -14,6 +14,7 @@ import {
   type TourismReward,
 } from '@/services/pallets';
 import { getExchangeRate } from '@/services/oracle';
+import { formatDisplayNumber, formatDalla, formatBbzd } from '@/lib/utils';
 import {
   Eye,
   EyeSlash,
@@ -136,21 +137,21 @@ export default function HomeNew() {
 
   const formattedPrimaryTotal = useMemo(() => {
     if (currencyPref === 'DALLA') {
-      return `${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`;
+      return formatDalla(totalDallaHolding);
     }
     if (currencyPref === 'BZD') {
       if (dallaOracleRate > 0) {
         const totalBzd = totalDallaHolding * (dallaOracleRate * 2.0) + bbzdBal * 1.0;
-        return `BZ$ ${totalBzd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return formatBbzd(totalBzd);
       }
-      return `${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`;
+      return formatDalla(totalDallaHolding);
     }
     // USD
     if (dallaOracleRate > 0) {
       const totalUsd = totalDallaHolding * dallaOracleRate + bbzdBal * bbzdRate;
-      return `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return `$${formatDisplayNumber(totalUsd)}`;
     }
-    return `${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`;
+    return formatDalla(totalDallaHolding);
   }, [currencyPref, totalDallaHolding, bbzdBal, dallaOracleRate, bbzdRate]);
 
   const secondaryConversionText = useMemo(() => {
@@ -158,21 +159,21 @@ export default function HomeNew() {
       if (dallaOracleRate > 0) {
         const usdVal = totalDallaHolding * dallaOracleRate + bbzdBal * 0.5;
         const bzdVal = totalDallaHolding * (dallaOracleRate * 2.0) + bbzdBal * 1.0;
-        return `≈ $${usdVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD (BZ$ ${bzdVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) • ${bbzdBal.toFixed(2)} bBZD`;
+        return `≈ $${formatDisplayNumber(usdVal)} USD (${formatBbzd(bzdVal)}) • ${bbzdBal.toFixed(2)} bBZD`;
       }
-      return `Native Cryptocurrency (Unpegged) • ${bbzdBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} bBZD available`;
+      return `Native Cryptocurrency (Unpegged) • ${formatDisplayNumber(bbzdBal)} bBZD available`;
     }
     if (currencyPref === 'BZD') {
       if (dallaOracleRate > 0) {
-        return `≈ $${(totalDallaHolding * dallaOracleRate + bbzdBal * 0.5).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD (${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ)`;
+        return `≈ $${formatDisplayNumber(totalDallaHolding * dallaOracleRate + bbzdBal * 0.5)} USD (${formatDalla(totalDallaHolding)})`;
       }
-      return `DALLA is unpegged • Holdings: ${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ + BZ$ ${bbzdBal.toFixed(2)} bBZD`;
+      return `DALLA is unpegged • Holdings: ${formatDalla(totalDallaHolding)} + BZ$ ${bbzdBal.toFixed(2)} bBZD`;
     }
     // USD
     if (dallaOracleRate > 0) {
-      return `≈ BZ$ ${(totalDallaHolding * (dallaOracleRate * 2) + bbzdBal * 1.0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ)`;
+      return `≈ ${formatBbzd(totalDallaHolding * (dallaOracleRate * 2) + bbzdBal * 1.0)} (${formatDalla(totalDallaHolding)})`;
     }
-    return `DALLA is unpegged • Holdings: ${totalDallaHolding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ + $${(bbzdBal * 0.5).toFixed(2)} bBZD`;
+    return `DALLA is unpegged • Holdings: ${formatDalla(totalDallaHolding)} + $${(bbzdBal * 0.5).toFixed(2)} bBZD`;
   }, [currencyPref, totalDallaHolding, bbzdBal, dallaOracleRate]);
 
   // Real assets (DALLA + bBZD always; Staked only when there is an active stake)
@@ -182,11 +183,11 @@ export default function HomeNew() {
         id: 'dalla',
         name: 'DALLA',
         symbol: 'Ɗ',
-        displayAmount: `${dallaBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`,
+        displayAmount: formatDalla(dallaBal),
         priceInfo: 'Native • Unpegged',
         secondaryInfo:
           dallaOracleRate > 0
-            ? `≈ $${(dallaBal * dallaOracleRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`
+            ? `≈ $${formatDisplayNumber(dallaBal * dallaOracleRate)} USD`
             : 'Native Cryptocurrency',
         color: 'from-emerald-500 to-teal-500',
         badgeBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
@@ -196,9 +197,9 @@ export default function HomeNew() {
         id: 'bbzd',
         name: 'bBZD',
         symbol: 'BZ$',
-        displayAmount: `BZ$ ${bbzdBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        displayAmount: formatBbzd(bbzdBal),
         priceInfo: 'Pegged: 1 BZD = $0.50',
-        secondaryInfo: `≈ $${(bbzdBal * 0.5).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD • Stablecoin`,
+        secondaryInfo: `≈ $${formatDisplayNumber(bbzdBal * 0.5)} USD • Stablecoin`,
         color: 'from-cyan-500 to-blue-500',
         badgeBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
         icon: Coins,
@@ -209,7 +210,7 @@ export default function HomeNew() {
         id: 'staked',
         name: 'Staked DALLA',
         symbol: 'Ɗ',
-        displayAmount: `${stakedBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ɗ`,
+        displayAmount: formatDalla(stakedBal),
         priceInfo: 'PoUW APY',
         secondaryInfo: 'Securing BelizeChain Validators',
         color: 'from-purple-500 to-violet-600',

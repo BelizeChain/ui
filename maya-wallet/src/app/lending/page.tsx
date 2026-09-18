@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
+import { formatDisplayNumber } from '@/lib/utils';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   Bank,
@@ -289,7 +290,7 @@ export default function LendingPage() {
             </div>
             <div>
               <span className="text-2xl font-bold font-mono text-white">
-                BZ$ {totalCollateralValueBBZD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                BZ$ {formatDisplayNumber(totalCollateralValueBBZD)}
               </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">
@@ -306,7 +307,7 @@ export default function LendingPage() {
             </div>
             <div>
               <span className="text-2xl font-bold font-mono text-cyan-300">
-                BZ$ {totalBorrowedValueBBZD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                BZ$ {formatDisplayNumber(totalBorrowedValueBBZD)}
               </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">
@@ -323,7 +324,7 @@ export default function LendingPage() {
             </div>
             <div>
               <span className="text-2xl font-bold font-mono text-purple-300">
-                BZ$ {maxBorrowLimitBBZD.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                BZ$ {formatDisplayNumber(maxBorrowLimitBBZD)}
               </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">

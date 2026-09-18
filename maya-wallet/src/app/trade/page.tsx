@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
+import { formatDisplayNumber } from '@/lib/utils';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import { TradingChartCanvas } from '@/components/trade/TradingChartCanvas';
 import {
@@ -92,7 +93,7 @@ interface CandleData {
 
 function formatPairPrice(val: number, p?: TradingPair): string {
   if (isNaN(val)) return '0.0000';
-  if (val >= 1000) return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (val >= 1000) return formatDisplayNumber(val);
   if (val >= 10) return val.toFixed(3);
   return val.toFixed(4);
 }

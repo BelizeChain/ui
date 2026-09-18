@@ -122,7 +122,10 @@ export default function SendPage() {
         data.currency.toLowerCase() as 'dalla' | 'bBZD'
       );
 
-      const baseFee = fee === 'Unknown' ? 0.001 : parseFloat(fee);
+      if (fee === 'Unknown') {
+        throw new Error('Unable to calculate transaction fee — node did not respond. Check connection and retry.');
+      }
+      const baseFee = parseFloat(fee);
       const finalFee = txPriority === 'express' ? (baseFee * 2.5).toFixed(4) : baseFee.toFixed(4);
       setEstimatedFee(`${finalFee} Ɗ`);
     } catch (error: any) {
