@@ -586,20 +586,14 @@ function TradePageInner() {
     if (!amt || amt <= 0) return;
 
     setIsSwapping(true);
-    setTimeout(() => {
-      setIsSwapping(false);
-      const estOut =
-        fromAsset === 'DALLA' && toAsset === 'bBZD'
-          ? amt * 0.5
-          : fromAsset === 'bBZD' && toAsset === 'DALLA'
-          ? amt * 2.0
-          : amt;
-
-      addNotification({
-        type: 'success',
-        message: `BelizeX Router Executed: Swapped ${amt} ${fromAsset} to ${estOut.toFixed(2)} ${toAsset} via contract r1Uen... (Slippage: ${slippage}%)`,
-      });
-    }, 800);
+    // CONFIG-002: the gem DEX contract swap entrypoint is not wired from
+    // this page yet (gem.ts service exposes token reads, not router swaps).
+    // Announce honestly instead of faking a router execution.
+    setIsSwapping(false);
+    addNotification({
+      type: 'info',
+      message: `DEX swap of ${amt} ${fromAsset} → ${toAsset} is not yet executable from this page — the gem dex contract router call is queued. No funds moved.`,
+    });
   };
 
   const handleCopyRouter = () => {

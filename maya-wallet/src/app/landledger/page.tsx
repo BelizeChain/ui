@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import { getUserLandTitles, type LandTitle } from '@/services/pallets/landledger';
+import { getUserLandTitles, initiatePropertyTransfer, type LandTitle } from '@/services/pallets/landledger';
 import {
   House,
   MapPin,
@@ -217,37 +217,48 @@ export default function LandLedgerPage() {
     return DISTRICT_CADASTRE_DATA.filter((p) => p.district === selectedDistrictFilter);
   }, [selectedDistrictFilter]);
 
-  // Handle Tax Payment
+  // CONFIG-002: no on-chain property-tax extrinsic is exposed to this page;
+  // landledger transfers/escrow are real, tax collection is not.
   const handlePayTax = (parcel: CadastreParcel) => {
-    setPayingTaxId(parcel.parcelId);
-    setTimeout(() => {
-      parcel.taxStatus = 'Paid';
-      setPayingTaxId(null);
-      addNotification({
-        type: 'success',
-        message: `Property Tax for ${parcel.parcelId} paid (${parcel.annualTaxBBZD} bBZD) with 5% digital rebate applied!`,
-      });
-    }, 1000);
+    addNotification({
+      type: 'info',
+      message: `On-chain property tax settlement for ${parcel.parcelId} is not wired yet. Payment rails go through the Ministry registrar portal — no bBZD was moved.`,
+    });
   };
 
   // Handle Transfer Escrow
-  const handleInitiateTransfer = (e: React.FormEvent) => {
+  const handleInitiateTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferBuyer) {
       addNotification({ type: 'error', message: 'Please specify the buyer Maya Wallet address or BNS domain.' });
       return;
     }
 
+    const title = chainTitles.find((t) => t.titleId === transferParcelId);
+    if (!title) {
+      addNotification({ type: 'error', message: `Title ${transferParcelId} not found in your on-chain titles.` });
+      return;
+    }
     setIsInitializingEscrow(true);
-    setTimeout(() => {
-      setIsInitializingEscrow(false);
+    try {
+      const res = await initiatePropertyTransfer(
+        selectedAccount!.address,
+        title.titleId,
+        transferBuyer
+      );
       addNotification({
         type: 'success',
-        message: `Transfer Escrow for ${transferParcelId} created! 5% Stamp Duty locked and forwarded to Ministry Registrar.`,
+        message: `Escrow initiated for ${title.titleId}: ${res.hash.slice(0, 16)}… (stamp duty escrows on chain).`,
       });
       setTransferBuyer('');
       setActiveTab('my-titles');
-    }, 1200);
+      const titles = await getUserLandTitles(selectedAccount!.address);
+      setChainTitles(titles);
+    } catch (err) {
+      addNotification({ type: 'error', message: `Escrow failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setIsInitializingEscrow(false);
+    }
   };
 
   // Handle RWA Fractional Tokenization

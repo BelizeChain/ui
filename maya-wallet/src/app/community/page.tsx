@@ -9,6 +9,11 @@ import { CommentsModal } from '@/components/CommentsModal';
 import { useToast } from '@/contexts/ToastContext';
 import { useWallet } from '@/contexts/WalletContext';
 import {
+  getActiveReferenda,
+  voteOnProposal,
+  type Referendum as ChainReferendum,
+} from '@/services/pallets/governance';
+import {
   PencilSimple,
   ChartBar,
   Medal,
@@ -131,44 +136,26 @@ export default function CommunityPage() {
   ]);
 
   // Active Civic Referendums
-  const [referendums, setReferendums] = useState<ReferendumItem[]>([
-    {
-      id: 14,
-      title: 'BIP-14: Caye Caulker Marine Coral Restoration Sensor Network',
-      category: 'Environmental Stewardship',
-      district: 'San Pedro / Islands',
-      requestedAmount: '45,000 bBZD',
-      description: 'Deploy 40 LoRaWAN water-quality sensor buoys around the Belize Barrier Reef connected to Nawal AI environmental models.',
-      ayes: 1420,
-      nays: 45,
-      endBlock: 1495000,
-      status: 'Active',
-    },
-    {
-      id: 15,
-      title: 'BIP-15: Belmopan Municipal Solar Microgrid Phase II',
-      category: 'District Infrastructure',
-      district: 'Belmopan',
-      requestedAmount: '60,000 bBZD',
-      description: 'Expand sovereign solar microgrid infrastructure powering public safety stations and decentralized data storage clusters.',
-      ayes: 2890,
-      nays: 110,
-      endBlock: 1498200,
-      status: 'Active',
-    },
-    {
-      id: 16,
-      title: 'BIP-16: Toledo Organic Cacao Geographical Indication & Export Escrow',
-      category: 'National Policy',
-      district: 'Toledo',
-      requestedAmount: '35,000 bBZD',
-      description: 'Establish cryptographic provenance registry for indigenous Mayan cacao farmers exporting to European organic markets.',
-      ayes: 840,
-      nays: 22,
-      endBlock: 1502000,
-      status: 'Active',
-    },
-  ]);
+  // CONFIG-002: live referenda from the governance pallet (no fake BIP list).
+  const [referendums, setReferendums] = useState<ChainReferendum[]>([]);
+  const [communityGovLoading, setCommunityGovLoading] = useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        const refe = await getActiveReferenda();
+        if (!cancelled) setReferendums(refe);
+      } catch (err) {
+        console.warn('Referenda fetch failed:', err);
+      } finally {
+        if (!cancelled) setCommunityGovLoading(false);
+      }
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // Sovereign Civic Merits (Badges)
   const badges = [
@@ -333,27 +320,18 @@ export default function CommunityPage() {
     }
   };
 
-  const handleVoteReferendum = (id: number, vote: 'Aye' | 'Nay') => {
+  const handleVoteReferendum = async (id: number, vote: 'Aye' | 'Nay') => {
     setVotingReferendumId(id);
-    setTimeout(() => {
-      setReferendums((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                myVote: vote,
-                ayes: vote === 'Aye' ? r.ayes + 10 * convictionMultiplier : r.ayes,
-                nays: vote === 'Nay' ? r.nays + 10 * convictionMultiplier : r.nays,
-              }
-            : r
-        )
-      );
+    try {
+      await voteOnProposal(selectedAccount!.address, id, vote, 'None');
+      showToast({ type: 'success', message: `Recorded ${vote} on referendum #${id}.` });
+      const refe = await getActiveReferenda();
+      setReferendums(refe);
+    } catch (err) {
+      showToast({ type: 'error', message: `Vote failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
       setVotingReferendumId(null);
-      showToast({
-        type: 'success',
-        message: `Recorded ${vote} on BIP-${id} with ${convictionMultiplier}x conviction weight.`,
-      });
-    }, 700);
+    }
   };
 
   const filteredPosts = districtFilter === 'All'
@@ -543,45 +521,47 @@ export default function CommunityPage() {
               </div>
 
               {referendums.map((ref) => {
-                const totalVotes = ref.ayes + ref.nays;
-                const ayesPct = totalVotes > 0 ? (ref.ayes / totalVotes) * 100 : 50;
+                const ayes = parseFloat(ref.voteCount.ayes);
+                const nays = parseFloat(ref.voteCount.nays);
+                const totalVotes = ayes + nays;
+                const ayesPct = totalVotes > 0 ? (ayes / totalVotes) * 100 : 0;
 
                 return (
                   <div
-                    key={ref.id}
+                    key={ref.index}
                     className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-lg transition-all"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2 mb-2.5">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                            BIP-{ref.id}
+                            Referendum #{ref.index}
                           </span>
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                            {ref.category}
+                            {ref.voteThreshold}
                           </span>
                           <span className="text-[11px] text-slate-400 flex items-center gap-1">
                             <MapPin size={12} className="text-teal-400" />
-                            {ref.district}
+                            {ref.status}
                           </span>
                         </div>
-                        <h4 className="text-sm sm:text-base font-bold text-white">{ref.title}</h4>
+                        <h4 className="text-sm sm:text-base font-bold text-white">On-chain Referendum #{ref.index}</h4>
                       </div>
                       <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
-                        Requested: {ref.requestedAmount}
+                        Turnout: {ref.voteCount.turnout} DALLA
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-300 leading-relaxed mb-3">{ref.description}</p>
+                    <p className="text-xs text-slate-300 leading-relaxed mb-3 font-mono">Hash: {ref.proposalHash.slice(0, 20)}…</p>
 
                     {/* Voting Progress Bar */}
                     <div className="space-y-1.5 mb-3">
                       <div className="flex justify-between text-[11px] font-mono">
                         <span className="text-teal-400 font-semibold">
-                          Ayes: {ref.ayes.toLocaleString()} ({ayesPct.toFixed(1)}%)
+                          Ayes: {ref.voteCount.ayes} ({ayesPct.toFixed(1)}%)
                         </span>
                         <span className="text-rose-400 font-semibold">
-                          Nays: {ref.nays.toLocaleString()} ({(100 - ayesPct).toFixed(1)}%)
+                          Nays: {ref.voteCount.nays} ({(100 - ayesPct).toFixed(1)}%)
                         </span>
                       </div>
                       <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800 flex">
@@ -594,37 +574,28 @@ export default function CommunityPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
                       <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
                         <Clock size={13} />
-                        Ballot Closes at Block #{ref.endBlock.toLocaleString()}
+                        Ballot ends block #{ref.voteEnd.toLocaleString()}
                       </span>
 
                       <div className="flex items-center gap-2">
-                        {ref.myVote ? (
-                          <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-xl text-xs font-bold flex items-center gap-1">
-                            <CheckCircle size={14} weight="fill" />
-                            Voted {ref.myVote}
-                          </span>
-                        ) : (
-                          <>
                             <button
-                              onClick={() => handleVoteReferendum(ref.id, 'Aye')}
-                              disabled={votingReferendumId === ref.id}
+                              onClick={() => handleVoteReferendum(ref.index, 'Aye')}
+                              disabled={votingReferendumId === ref.index || ref.status !== 'Voting'}
                               className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 text-xs font-bold flex items-center gap-1.5 transition-all"
                             >
                               <ThumbsUp size={14} weight="bold" />
                               <span>Vote Aye</span>
                             </button>
                             <button
-                              onClick={() => handleVoteReferendum(ref.id, 'Nay')}
-                              disabled={votingReferendumId === ref.id}
+                              onClick={() => handleVoteReferendum(ref.index, 'Nay')}
+                              disabled={votingReferendumId === ref.index || ref.status !== 'Voting'}
                               className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all"
                             >
                               <ThumbsDown size={14} weight="bold" />
                               <span>Vote Nay</span>
                             </button>
-                          </>
-                        )}
                         <Link
-                          href={`/proposal/${ref.id}`}
+                          href={`/proposal/${ref.index}`}
                           className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-all"
                         >
                           Details

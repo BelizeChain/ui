@@ -160,41 +160,16 @@ export default function PakitPage() {
     if (!fileName) return;
 
     setIsEncryptingAndPinning(true);
-
-    setTimeout(() => {
-      const generatedIv = Math.random().toString(16).substring(2, 18);
-      const newCid = `Qm${Math.random().toString(36).substring(2, 12)}${Date.now().toString(36)}`;
-      const generatedCiphertext = enableZkEncryption
-        ? `0x${Array.from({ length: 48 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`
-        : null;
-
-      const newFile: StoredFile = {
-        id: `doc-${Date.now()}`,
-        name: fileName.endsWith('.enc') || !enableZkEncryption ? fileName : `${fileName}.enc`,
-        cid: newCid,
-        size: fileContentText ? `${(fileContentText.length / 1024).toFixed(1)} KB` : '1.4 MB',
-        tier: selectedTier,
-        encrypted: enableZkEncryption,
-        category: selectedCategory,
-        uploadDate: 'Just now',
-        replications: selectedTier === 'Hot' ? 12 : selectedTier === 'Warm' ? 6 : 3,
-        leaseExpires: 'Aug 2027 (1 Year)',
-        ivHex: enableZkEncryption ? generatedIv : undefined,
-      };
-
-      setFiles([newFile, ...files]);
-      setIsEncryptingAndPinning(false);
-      setSimulatedCiphertext(generatedCiphertext);
-
-      addNotification({
-        type: 'success',
-        message: `Successfully encrypted & pinned ${newFile.name} to Pakit IPFS with CID ${newCid.slice(0, 14)}...!`,
-      });
-
-      setFileName('');
-      setFileContentText('');
-      setActiveTab('vault');
-    }, 1200);
+    // CONFIG-002: real pinning needs the Pakit storage service (or IPFS
+    // kubo endpoint) reachable from the browser. Fabricated Qm... CIDs are
+    // not upload receipts — storage is queued pending the Pakit-on-Ceiba
+    // gateways. Nothing was stored.
+    setIsEncryptingAndPinning(false);
+    addNotification({
+      type: 'info',
+      message: 'Pakit upload is not wired from the browser yet — DAG/IPFS gateway integrations are queued. Your file stayed local; nothing was pinned.',
+    });
+    setIsEncryptingAndPinning(true);
   };
 
   // Handle Changing Storage Tier
