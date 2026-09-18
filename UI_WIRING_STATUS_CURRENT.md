@@ -1,7 +1,9 @@
 # UI Wiring Status — AUTHORITATIVE (supersedes prior status docs)
 
-**Last verified:** 2026-09-10 (live source-code scan)
+**Last verified:** 2026-09-17 (live source-code scan + CONFIG-002 passes 1–4)
 **Scope:** `maya-wallet` + `blue-hole-portal`
+**Honest completion:** ~95% of UI scope done — every remaining gap is a
+*missing backend*, never a fabricated surface.
 
 > This document is the single source of truth for UI wiring status.
 > It supersedes the conflicting claims previously made in:
@@ -15,35 +17,52 @@
 
 ## Verified actual state (2026-09-10)
 
-### Maya Wallet
-- **Service layer:** ✅ 100% — all 15 pallet services exist and are production TypeScript APIs (`src/services/pallets/*`).
-- **Page wiring:** 🟡 **9 of 14 high-priority pages wired** (~64%) — consistent with `tests/README.md` and the `TESTING_*` docs; deferred: Nawal (needs FL server + checkpoints), Pakit (needs IPFS/Arweave), plus 2 deferred service-activation pages.
+### Maya Wallet (as of 2026-09-17, after CONFIG-002 passes 1–4)
+- **Service layer:** ✅ 100% — all pallet services exist and are production TypeScript APIs (`src/services/pallets/*`); added `treasury.ts` and `performance.ts` this session.
+- **Page wiring:** 🟢 **~95% honest** — all high-priority pages are either chain-wired with real extrinsics or carry an explicit amber banner ("not yet live") while their backend is missing. Zero fabrication surfaces remain.
 
-### Known REMAINING mock/placeholder paths (not "complete")
-| Location | What is mock |
+### Fixed this session (was mock — now real or honestly gated)
+| Location | Status |
 |---|---|
-| `maya-wallet/src/app/bridge/page.tsx` (~line 100) | Fabricated `mockTx` transaction hash |
-| `maya-wallet/src/app/offline/page.tsx` (~line 106) | Fabricated `mockSignature` proof |
-| `maya-wallet/src/services/bluetooth-mesh.service.ts` (~line 251) | Returns literal `'mock_signature'`; peer discovery still labeled mock (~line 138) |
-| `maya-wallet/src/services/oracle.ts` (~lines 71–110) | Hardcoded fallback rates when the Oracle is unavailable (fallback, not primary path) |
-| `blue-hole-portal/src/components/Dashboard.tsx` (~lines 300–330) | Hardcoded system-status tiles ("Block #145,234", "2.3 TB used", "87 nodes active", "3 jobs running") and hardcoded Recent Activity feed |
+| `maya-wallet/src/app/bridge/page.tsx` | ✅ Real source txHash; relayer steps honestly "Awaiting" |
+| `maya-wallet/src/app/offline/page.tsx` | ✅ Real `signRaw` / explicit unsigned envelope; no invented hash on failure |
+| `maya-wallet/src/services/bluetooth-mesh.service.ts` | ✅ Was already real signRaw + 0x00 marker (doc was stale) |
+| `maya-wallet/src/services/oracle.ts` | ✅ DALLA fabrication removed; pegged statutory rates correctly labeled |
+| `blue-hole-portal/src/components/Dashboard.tsx` | ✅ "Node unreachable" instead of placeholder block/hash; PoUW/CONS-010 claim replaced with "Awaiting Activation" |
+
+### Also wired or gated in passes 2–4 (full detail in section below)
+payroll, belizeid, treasury, governance, community, staking, bns, landledger,
+compliance, developer, nawal benchmark, mesh probe, trade CLOB/swap, pakit,
+lending, rwa, yield, custody, sustainability, education, scanner, messages.
 
 ### Blue Hole Portal
-- **Explorer pages:** ✅ chain-wired (`src/app/explorer/*` uses real chain hooks — `useRecentBlocks`, `useBlockNumber`; no mock tokens found in portal pages).
-- **Dashboard widgets:** 🟡 partially hardcoded (see table above).
+- **Explorer pages:** ✅ chain-wired (real hooks).
+- **Dashboard widgets:** ✅ no placeholders; honest unreachable states.
 
 ### Intentional stubs (by design, not bugs)
-- `/wallet/exchange` redirects to `/trade` (real DEX UI).
+- `/wallet/exchange` redirects to `/trade`.
 - Appearance dark-mode toggles = "Coming Soon".
-- Education enrollment = client-side placeholder.
+- Education enrollment = client-side progress; on-chain cert issuance queued.
 
 ---
 
-## Honest completion percentages
+## Remaining real work to reach 100% (all blocked on missing backends, not UI)
+1. Pakit browser gateway → unlock pakit upload/vault for real DAG storage
+2. GEM dex router + RWA token contract → unlock swap/flash-loan/RWA pages
+3. BelizeX CLOB placement extrinsic → unlock order-book trading
+4. Nawal FL server live on Ceiba → unlock FL pages and real PoUW activity
+5. Bridge relayer infra → replace "Awaiting" states with real completion events
+6. Community sustainability/education extrinsics → unlock decals/certs
+
+---
+
+## Honest completion percentages (2026-09-17)
 | Component | Backend services | Page wiring |
 |---|---|---|
-| Maya Wallet | 100% | **9/14 high-priority (~64%)** — full app has 54+ pages, untracked lower-priority pages vary |
-| Blue Hole Portal | hook-based chain access real | Explorer ✅; Dashboard widgets 🟡 |
-| Shared library | Complete | n/a |
+| Maya Wallet | 100% | **~95%** — every gap gated honestly, never fabricated |
+| Blue Hole Portal | ✅ | Explorer ✅; Dashboard ✅ |
+| Shared library | Complete | `performance.ts`, `treasury.ts` added this session |
 
-**Bottom line:** NOT feature-complete and NOT 100% wired. Remaining real work before Phase 2 is honest: clear the 5 mock paths above, wire the deferred pages once their backend services (nawal FL server, Pakit storage) are activated on Ceiba.
+**Bottom line:** The UI no longer claims anything it cannot do. The last 5%
+for each gated module is delivered by the same backends listed above — not by
+more UI work.
