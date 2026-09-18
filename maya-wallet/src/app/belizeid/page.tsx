@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import QRCode from 'qrcode.react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import {
+  getBelizeID,
+  getKYCStatus,
+  type BelizeID,
+  type KYCStatus,
+} from '@/services/pallets/identity';
 import {
   IdentificationCard,
   ShieldCheck,
@@ -49,6 +55,11 @@ export default function BelizeIDPage() {
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'credentials' | 'did' | 'zk-proofs'>('credentials');
+  // CONFIG-002: real on-chain BelizeID + KYC status (identity pallet).
+  const [belizeID, setBelizeID] = useState<BelizeID | null>(null);
+  const [kycStatus, setKycStatus] = useState<KYCStatus | null>(null);
+  const [idLoading, setIdLoading] = useState(true);
+  const [idError, setIdError] = useState('');
   const [selectedCred, setSelectedCred] = useState<VerifiableCredential | null>(null);
   const [zkProofGenerated, setZkProofGenerated] = useState<{
     type: string;
@@ -58,6 +69,34 @@ export default function BelizeIDPage() {
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
 
   const didString = `did:belize:${selectedAccount?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      if (!selectedAccount?.address) {
+        setIdLoading(false);
+        return;
+      }
+      setIdLoading(true);
+      try {
+        const [id, kyc] = await Promise.all([
+          getBelizeID(selectedAccount.address),
+          getKYCStatus(selectedAccount.address),
+        ]);
+        if (!cancelled) {
+          setBelizeID(id);
+          setKycStatus(kyc);
+          setIdError('');
+        }
+      } catch (err) {
+        if (!cancelled) setIdError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setIdLoading(false);
+      }
+    };
+    fetchData();
+    return () => { cancelled = true; };
+  }, [selectedAccount?.address]);
 
   const credentials: VerifiableCredential[] = [
     {
@@ -109,28 +148,26 @@ export default function BelizeIDPage() {
     },
   ];
 
+  // CONFIG-002: no ZK circuit runs in the browser. Instead of fabricating a
+  // fake "0xZK_SNARK_GROTH16_..._VALIDATED" proof, we show honestly what a
+  // ZK proof WOULD attest without exposing hidden data.
   const handleGenerateZkProof = (type: 'age' | 'citizenship' | 'land') => {
-    setIsGeneratingProof(true);
-    setTimeout(() => {
-      setIsGeneratingProof(false);
-      const proofHex = `0xZK_SNARK_GROTH16_${type.toUpperCase()}_${Date.now().toString(16).toUpperCase()}_VALIDATED`;
-      const publicInputs: Record<string, string> =
-        type === 'age'
-          ? { 'Condition': 'Age >= 18', 'Birthdate Exposed': 'NO (Hidden)', 'Status': 'Verified Adult' }
-          : type === 'citizenship'
-          ? { 'Condition': 'Belize Sovereign National', 'National ID Exposed': 'NO (Hidden)', 'Status': 'Valid Citizen' }
-          : { 'Condition': 'Ambergris Freehold Tenure', 'Parcel Bounds Exposed': 'NO (Hidden)', 'Status': 'Title Holder' };
+    const publicInputs: Record<string, string> =
+      type === 'age'
+        ? { 'Statement': 'Age >= 18 (attestation only)', 'Birthdate Revealed': 'NO', 'Status': 'Wired to ZK circuit — pending integration with identity pallet' }
+        : type === 'citizenship'
+        ? { 'Statement': 'Belizean nationality attestation', 'National ID Revealed': 'NO', 'Status': 'Wired to ZK circuit — pending integration with identity pallet' }
+        : { 'Statement': 'Freehold tenure attestation', 'Parcel Bounds Revealed': 'NO', 'Status': 'Wired to ZK circuit — pending integration with landledger pallet' };
 
-      setZkProofGenerated({
-        type: type === 'age' ? 'Proof of Adult Age (18+)' : type === 'citizenship' ? 'Proof of Belizean Citizenship' : 'Proof of Land Tenure',
-        proof: proofHex,
-        publicInputs,
-      });
-      addNotification({
-        type: 'success',
-        message: `Generated Zero-Knowledge ${type.toUpperCase()} proof!`,
-      });
-    }, 1000);
+    setZkProofGenerated({
+      type: type === 'age' ? 'Proof of Adult Age (18+) — NOT CRYPTOGRAPHICALLY PROVEN' : type === 'citizenship' ? 'Proof of Belizean Citizenship — NOT CRYPTOGRAPHICALLY PROVEN' : 'Proof of Land Tenure — NOT CRYPTOGRAPHICALLY PROVEN',
+      proof: 'DESIGN PREVIEW — no real zk-SNARK circuit executed',
+      publicInputs,
+    });
+    addNotification({
+      type: 'info',
+      message: 'ZK proof generation is a design preview — real Groth16 circuit integration is queued.',
+    });
   };
 
   const handleDownloadVP = () => {
@@ -299,6 +336,23 @@ export default function BelizeIDPage() {
         {/* Tab 1: Credentials */}
         {activeTab === 'credentials' && (
           <div className="space-y-4">
+            {idError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-xs text-center">
+                On-chain identity lookup failed: {idError}
+              </div>
+            )}
+            {belizeID ? (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs space-y-1">
+                <span className="font-bold block">On-chain BelizeID verified</span>
+                <span className="text-slate-300 block">
+                  KYC: {kycStatus?.status ?? 'unknown'} ({kycStatus?.level ?? '—'}) • District: {belizeID.district} • SSN {belizeID.ssnVerified ? 'verified' : 'unverified'} • Passport {belizeID.passportVerified ? 'verified' : 'unverified'}
+                </span>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
+                No BelizeID registered for this address on chain. Cards below are design previews — Transport / Elections / LandLedger have not issued credentials for this account.
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {credentials.map((c) => (
                 <div

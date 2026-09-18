@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import {
+  getPayrollRecord,
+  getSalaryPayments,
+  type PayrollRecord,
+  type SalaryPayment,
+} from '@/services/pallets/payroll';
 import {
   Briefcase,
   Users,
@@ -119,6 +125,7 @@ export default function PayrollPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
+  const [employmentRecord, setEmploymentRecord] = useState<PayrollRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'my-payslips' | 'ssb-pension' | 'advance' | 'employer-batch'>('my-payslips');
   const [advanceAmount, setAdvanceAmount] = useState('500.00');
   const [isSubmittingAdvance, setIsSubmittingAdvance] = useState(false);
@@ -135,66 +142,59 @@ export default function PayrollPage() {
   const [newEmpWallet, setNewEmpWallet] = useState('');
   const [newEmpSalary, setNewEmpSalary] = useState('3500');
 
-  // Employee Payslips
-  const [payslips] = useState<PayslipRecord[]>([
-    {
-      id: 'PAY-BZ-2026-08',
-      period: 'August 1 - August 31, 2026',
-      gross: 4500,
-      ssbEmployee: 180,
-      ssbEmployer: 225,
-      incomeTax: 350,
-      net: 3970,
-      paymentDate: 'Aug 25, 2026',
-      employer: 'Government of Belize (Ministry of Digital Transformation)',
-      status: 'Paid On-Chain',
-      txHash: '0x8f14c0a9b891823f98a7291a...',
-    },
-    {
-      id: 'PAY-BZ-2026-07',
-      period: 'July 1 - July 31, 2026',
-      gross: 4500,
-      ssbEmployee: 180,
-      ssbEmployer: 225,
-      incomeTax: 350,
-      net: 3970,
-      paymentDate: 'Jul 25, 2026',
-      employer: 'Government of Belize (Ministry of Digital Transformation)',
-      status: 'Paid On-Chain',
-      txHash: '0x3a91b2c4e5f6789012345678...',
-    },
-  ]);
+  // CONFIG-002: real chain payslips — payroll.payments entries for the
+  // connected account. No fabricated "August 2026 $4,500" sample data.
+  const [payslips, setPayslips] = useState<SalaryPayment[]>([]);
+  const [payrollLoading, setPayrollLoading] = useState(true);
+  const [payrollError, setPayrollError] = useState('');
 
-  // Handle Salary Advance
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      if (!selectedAccount?.address) return;
+      setPayrollLoading(true);
+      setPayrollError('');
+      try {
+        const [record, payments] = await Promise.all([
+          getPayrollRecord(selectedAccount.address),
+          getSalaryPayments(selectedAccount.address, 12),
+        ]);
+        if (cancelled) return;
+        setEmploymentRecord(record);
+        setPayslips(payments);
+        setPayrollError('');
+      } catch (err) {
+        if (!cancelled) {
+          setPayrollError(err instanceof Error ? err.message : String(err));
+          setPayslips([]);
+        }
+      } finally {
+        if (!cancelled) setPayrollLoading(false);
+      }
+    };
+    fetchData();
+    return () => { cancelled = true; };
+  }, [selectedAccount?.address]);
+
+  // CONFIG-002: advances and batch payroll are EMPLOYER-side actions with
+  // no employee-initiated extrinsics on chain (requestSalaryAdvance in the
+  // service raises, and no batch-disbursement extrinsic exists). Until the
+  // employer portal ships, these buttons show an honest gate instead of
+  // faking an approval + disbursement.
   const handleRequestAdvance = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmittingAdvance(true);
-    setTimeout(() => {
-      setIsSubmittingAdvance(false);
-      addNotification({
-        type: 'success',
-        message: `Salary advance of ${advanceAmount} bBZD approved & disbursed instantly from employer payroll pool!`,
-      });
-      setAdvanceAmount('');
-    }, 1200);
+    addNotification({
+      type: 'info',
+      message: 'Salary advances are employer-issued (payroll.issueBonus on chain). Ask your employer to issue the advance — there is no employee-initiated extrinsic.',
+    });
+    setAdvanceAmount('');
   };
 
-  // Handle Batch Payroll Execution
   const handleExecuteBatchPayroll = () => {
-    setIsProcessingBatch(true);
-    setTimeout(() => {
-      setRoster((prev) => prev.map((emp) => ({ ...emp, status: 'Paid' })));
-      setIsProcessingBatch(false);
-
-      const totalNet = roster.reduce((acc, emp) => acc + emp.netPayBBZD, 0);
-      const totalSsb = roster.reduce((acc, emp) => acc + emp.ssbEmployee + emp.ssbEmployer, 0);
-      const totalTax = roster.reduce((acc, emp) => acc + emp.incomeTaxPAYE, 0);
-
-      addNotification({
-        type: 'success',
-        message: `Batch Payroll Executed! Disbursed BZ$ ${totalNet.toLocaleString()} net to ${roster.length} employees, BZ$ ${totalSsb.toLocaleString()} to SSB, and BZ$ ${totalTax.toLocaleString()} to Belize Tax Service.`,
-      });
-    }, 1600);
+    addNotification({
+      type: 'info',
+      message: 'Batch disbursement lives in the employer payroll portal (not yet deployed). This wallet view is read-only for employees.',
+    });
   };
 
   // Handle Add Employee
@@ -375,17 +375,30 @@ export default function PayrollPage() {
               </p>
             </div>
 
+            {payrollLoading && (
+              <div className="text-center py-8 text-slate-400 text-xs">Loading on-chain payroll records…</div>
+            )}
+            {payrollError && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-300 text-center">
+                {payrollError}
+              </div>
+            )}
+            {!payrollLoading && !payrollError && payslips.length === 0 && (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                No on-chain salary payments recorded for this account yet.
+              </div>
+            )}
             <div className="space-y-4">
               {payslips.map((p) => (
                 <div
-                  key={p.id}
+                  key={p.paymentId}
                   className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                     <div>
                       <span className="font-bold text-white text-sm block">{p.employer}</span>
                       <span className="text-slate-400 text-[11px]">
-                        {p.period} • Paid: {p.paymentDate}
+                        {new Date(p.payPeriod.start).toLocaleDateString()} – {new Date(p.payPeriod.end).toLocaleDateString()} • {p.status}
                       </span>
                     </div>
                     <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full font-bold text-[10px]">
@@ -396,19 +409,19 @@ export default function PayrollPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-400 text-[11px] font-mono">
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
                       <span className="text-slate-500 block text-[10px]">Gross Salary</span>
-                      <span className="text-white font-bold text-xs">BZ$ {p.gross.toLocaleString()}</span>
+                      <span className="text-white font-bold text-xs">{p.currency === 'bBZD' ? 'BZ$' : 'Ɗ'} {p.grossSalary}</span>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
                       <span className="text-slate-500 block text-[10px]">SSB (Employee 4%)</span>
-                      <span className="text-purple-300 font-bold text-xs">BZ$ {p.ssbEmployee.toFixed(2)}</span>
+                      <span className="text-purple-300 font-bold text-xs">{(() => { const ssb = p.deductions.find((d) => d.type === 'SSB'); return ssb ? ssb.amount : '—'; })()}</span>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
                       <span className="text-slate-500 block text-[10px]">Income Tax (PAYE)</span>
-                      <span className="text-amber-300 font-bold text-xs">BZ$ {p.incomeTax.toFixed(2)}</span>
+                      <span className="text-amber-300 font-bold text-xs">{(() => { const tax = p.deductions.find((d) => d.type === 'Tax'); return tax ? tax.amount : '—'; })()}</span>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
                       <span className="text-slate-500 block text-[10px]">Net Disbursed</span>
-                      <span className="text-emerald-400 font-bold text-xs">BZ$ {p.net.toLocaleString()}</span>
+                      <span className="text-emerald-400 font-bold text-xs">{p.netSalary}</span>
                     </div>
                   </div>
 
@@ -419,10 +432,10 @@ export default function PayrollPage() {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `Payslip_${p.id}.json`;
+                        a.download = `Payslip_${p.paymentId}.json`;
                         a.click();
                         URL.revokeObjectURL(url);
-                        addNotification({ type: 'success', message: `Downloaded Payslip JSON for ${p.id}!` });
+                        addNotification({ type: 'success', message: `Downloaded Payslip JSON for ${p.paymentId}!` });
                       }}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-700/50"
                     >
