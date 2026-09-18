@@ -546,27 +546,13 @@ function TradePageInner() {
     };
 
     if (orderType === 'MARKET') {
-      setOrderHistory([newOrder, ...orderHistory]);
-      setRecentTrades([
-        {
-          id: `t-${Date.now()}`,
-          price: prc,
-          amount: amt,
-          side: orderSide,
-          time: new Date().toLocaleTimeString(),
-        },
-        ...recentTrades,
-      ]);
+      // CONFIG-002: CLOB order placement isn't wired from this page yet —
+      // announce honestly instead of faking an instant match.
       addNotification({
-        type: 'success',
-        message: `Market ${orderSide} matched instantly! Executed ${amt} ${selectedPair.base} @ ${prc.toFixed(4)} ${selectedPair.quote}.`,
+        type: 'info',
+        message: `Order book trading is not wired to the BelizeX CLOB yet — your ${orderSide} order for ${amt} ${selectedPair.base} @ ${prc.toFixed(4)} was NOT submitted.`,
       });
-    } else {
-      setOpenOrders([newOrder, ...openOrders]);
-      addNotification({
-        type: 'success',
-        message: `Placed ${orderType} ${orderSide} order on BelizeX CLOB: ${amt} ${selectedPair.base} @ ${prc.toFixed(4)} ${selectedPair.quote}.`,
-      });
+      return;
     }
   };
 

@@ -614,8 +614,14 @@ export default function MessagesPage() {
   // Create new conversation
   const handleCreateNewChat = (e: React.FormEvent) => {
     e.preventDefault();
-    const handle = newChatBns.trim() || 'sovereign-peer.bz';
-    const addr = newChatAddress.trim() || `5${Math.random().toString(36).substring(2, 10)}...${Math.random().toString(36).substring(2, 6)}`;
+    // CONFIG-002: a conversation needs a REAL peer address. Without one we
+    // refuse — no fabricated identity, no fake 'E2EE established' message.
+    if (!newChatAddress.trim()) {
+      addNotification({ type: 'error', message: 'Peer wallet address is required to start a conversation.' });
+      return;
+    }
+    const handle = newChatBns.trim() || '';
+    const addr = newChatAddress.trim();
 
     const newConv: PeerConversation = {
       id: `conv-${Date.now()}`,
