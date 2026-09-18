@@ -296,6 +296,60 @@ function OverviewTab() {
   const activeProposalsCount = proposals?.length ?? 0;
   const activeValidatorsCount = stakingStats?.activeValidators ?? 4;
 
+  // REAL chain data (CONFIG-002 fake-numerics sweep): no more hardcoded
+  // "$25.4M treasury" / "12,847 citizens" marketing figures.
+  const [treasuryBalance, setTreasuryBalance] = useState<bigint | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const fetchTreasury = async () => {
+      try {
+        const bal = await blockchainService.getTreasuryBalance();
+        if (!cancelled) setTreasuryBalance(bal);
+      } catch (error) {
+        console.error('Failed to fetch treasury balance:', error);
+        if (!cancelled) setTreasuryBalance(null);
+      }
+    };
+
+    fetchTreasury();
+    const interval = setInterval(fetchTreasury, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const treasuryDisplay = treasuryBalance === null
+    ? 'unavailable'
+    : `${(Number(treasuryBalance) / 1e12).toFixed(4)} DALLA`;
+
+  // Honest identity count: derive from the pendingVerifications identity
+  // pallet entries (no standalone "citizens" metric exists on-chain).
+  const [identityCount, setIdentityCount] = useState<number | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    const fetchIdentities = async () => {
+      try {
+        const api = await blockchainService.getApi();
+        const entries = await api.query.identity?.pendingVerifications?.entries?.() || [];
+        if (!cancelled) setIdentityCount(entries.length);
+      } catch (error) {
+        console.error('Failed to fetch identity count:', error);
+        if (!cancelled) setIdentityCount(null);
+      }
+    };
+
+    fetchIdentities();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const identityCountDisplay = identityCount === null
+    ? 'unavailable'
+    : String(identityCount);
+
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
@@ -303,16 +357,16 @@ function OverviewTab() {
         <StatsCard
           icon={CurrencyDollar}
           label="Treasury Balance"
-          value="$25.4M"
-          change="+5.2%"
+          value={treasuryDisplay}
+          change="live chain balance"
           trend="up"
           color="jungle"
         />
         <StatsCard
           icon={Users}
-          label="Active Citizens"
-          value="12,847"
-          change="+234"
+          label="Registered Identities"
+          value={identityCountDisplay}
+          change="chain query"
           trend="up"
           color="caribbean"
         />
@@ -884,7 +938,7 @@ function GovernanceTab() {
               const totalVotes = (proposal.votesFor || 0) + (proposal.votesAgainst || 0);
               const votePercentage = totalVotes > 0 ? ((proposal.votesFor || 0) / totalVotes) * 100 : 0;
               const quorumMet = totalVotes >= (proposal.quorum || 100);
-              
+
               return (
                 <div key={proposal.id} className="p-4 rounded-lg border border-sand-200 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between mb-3">
@@ -981,7 +1035,7 @@ function GovernanceTab() {
             {[...passedProposals.slice(0, 3), ...rejectedProposals.slice(0, 2)].map((proposal) => {
               const totalVotes = (proposal.votesFor || 0) + (proposal.votesAgainst || 0);
               const passed = proposal.status === 'passed' || proposal.status === 'executed';
-              
+
               return (
                 <div key={proposal.id} className="flex items-center justify-between p-3 rounded-lg border border-sand-200">
                   <div className="flex items-center space-x-3">
@@ -1348,7 +1402,7 @@ function MonitoringTab() {
     };
 
     fetchData();
-    
+
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
@@ -1833,7 +1887,7 @@ function ComplianceTab() {
   const handleApproveKyc = async (accountId: string) => {
     try {
       setProcessingId(accountId);
-      
+
       const api = (blockchainService as any).api;
       if (!api) throw new Error('Blockchain API not initialized');
 
@@ -1858,7 +1912,7 @@ function ComplianceTab() {
   const handleRejectKyc = async (accountId: string) => {
     try {
       setProcessingId(accountId);
-      
+
       const api = (blockchainService as any).api;
       if (!api) throw new Error('Blockchain API not initialized');
 
@@ -2152,7 +2206,7 @@ function LogsTab() {
 
   const exportLogs = (format: 'csv' | 'json') => {
     const { exportToCSV, exportToJSON } = require('@/services/analytics');
-    
+
     const data = filteredEvents.map(e => ({
       block: e.blockNumber,
       timestamp: e.timestamp.toISOString(),

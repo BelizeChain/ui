@@ -35,36 +35,12 @@ const sendMoneySchema = z.object({
 
 type SendMoneyForm = z.infer<typeof sendMoneySchema>;
 
-const SOVEREIGN_DIRECTORY = [
-  {
-    id: 'sov-1',
-    name: 'BelizeChain Sovereign Reserve Treasury',
-    category: 'Sovereign Protocol',
-    badge: 'Official Reserve',
-    address: 'r1UWtr25o6VbvDcfqU5o8P2t2g7R3J2C4v9A5M1T8X7K6Q4B',
-  },
-  {
-    id: 'sov-2',
-    name: 'Ceiba Consensus Authority Node 01',
-    category: 'Validator Network',
-    badge: 'Consensus Node',
-    address: 'r1CeibaAuthorityNode01MainnetBabeConsensusKey99',
-  },
-  {
-    id: 'sov-3',
-    name: 'Restorative Justice Citizen Court Pool',
-    category: 'Civic Restitution',
-    badge: 'Judicial Escrow',
-    address: 'r1Vb8Kq3P4d9Z1m8N2x7C5v4B3n2M1l9K8j7H6g5F4d3S',
-  },
-  {
-    id: 'sov-4',
-    name: 'Maya Biosphere Carbon Conservation DAO',
-    category: 'Environmental RWA',
-    badge: 'Verified DAO',
-    address: 'r1XGB7p4K9d2L1n8M3x6C4v5B2n1M9l8K7j6H5g4F3d2S',
-  },
-];
+// CONFIG-002 fake-numerics sweep: The Former SOVEREIGN_DIRECTORY contained
+// fabricated addresses ('r1UWtr25o...' style, not valid ss58) presented as
+// official endpoints. Removed — users fund Real saved contacts (below) or
+// paste a Real recipient address; nothing here claims to be an on-chain
+// destination until it comes from the User's own address book or an
+// explicit address entry.
 
 export default function SendPage() {
   const router = useRouter();
@@ -132,7 +108,7 @@ export default function SendPage() {
   const handleReview = async (data: SendMoneyForm) => {
     try {
       if (!selectedAccount?.address) throw new Error('No account connected');
-      
+
       const targetAddress = resolveAddress(selectedContact?.address || data.recipient);
       if (!targetAddress) throw new Error('Recipient address is required');
 
@@ -306,43 +282,6 @@ export default function SendPage() {
             </div>
 
             {/* Sovereign Ecosystem Verified Directory */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-                  <ShieldCheck size={16} weight="bold" />
-                  Verified Sovereign Institutions & DAOs
-                </h3>
-              </div>
-
-              <div className="space-y-2">
-                {SOVEREIGN_DIRECTORY.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => handleSelectContact(item)}
-                    className="bg-slate-900/70 border border-teal-500/20 hover:border-teal-500/50 p-3.5 rounded-2xl cursor-pointer transition-all hover:bg-slate-800/60 flex items-center justify-between group backdrop-blur-md"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center font-bold text-teal-300 text-xs shadow-inner">
-                        {item.name.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-sm text-white group-hover:text-teal-300 transition-colors">{item.name}</p>
-                          <span className="px-1.5 py-0.2 bg-teal-500/15 text-teal-300 rounded text-[9px] font-mono font-bold">
-                            {item.badge}
-                          </span>
-                        </div>
-                        <p className="text-[11px] font-mono text-slate-400 mt-0.5">
-                          {item.address.slice(0, 12)}...{item.address.slice(-8)}
-                        </p>
-                      </div>
-                    </div>
-                    <ArrowRight size={16} className="text-teal-400 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Saved / Frequent Contacts */}
             {contactsList.length > 0 && (
               <div className="space-y-3">

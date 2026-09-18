@@ -136,14 +136,16 @@ export default function BridgePage() {
               asset: selectedAsset,
               amount,
               fee: result.estimatedFee || calculateBridgeFee(),
-              status: 'Completed',
+              status: 'Pending',
               initiatedAt: Math.floor(Date.now() / 1000),
-              completedAt: Math.floor(Date.now() / 1000) + 45,
+              completedAt: undefined,
               sourceHash: result.hash,
-              destinationHash: `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('')}`,
-              confirmations: 64,
+              // CONFIG-002: no fabricated destination hash or fictional
+              // "64/64 confirmations". A real cross-chain completion hash
+              // arrives only from the bridge backend; until then the entry
+              // honestly reads Pending.
+              destinationHash: undefined,
+              confirmations: 0,
               requiredConfirmations: 64,
             };
             setHistory((prev) => [newTx, ...prev]);
