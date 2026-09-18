@@ -134,21 +134,21 @@ export default function MeshPage() {
     loadInitialData();
   }, [selectedAccount?.address]);
 
-  const handlePairBluetooth = () => {
+  const handlePairBluetooth = async () => {
     setIsPairingBle(true);
-    setTimeout(() => {
+    try {
+      const { bluetoothMeshService } = await import('@/services/bluetooth-mesh.service');
+      const ok = await bluetoothMeshService.initialize?.();
+      if (ok === false) {
+        addNotification({ type: 'info', message: 'Bluetooth adapter unavailable — mesh pairing needs a WebBluetooth-capable browser and nearby LoRa/BLE gateways.' });
+      } else {
+        addNotification({ type: 'success', message: 'Bluetooth mesh interface ready. Peer discovery runs only when nearby mesh nodes advertise.' });
+      }
+    } catch (err) {
+      addNotification({ type: 'info', message: `Mesh pairing unavailable: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
       setIsPairingBle(false);
-      setRadio((prev) => ({
-        ...prev,
-        connectionStatus: 'Connected',
-        batteryPercent: 94,
-        snr: 10.4,
-      }));
-      addNotification({
-        type: 'success',
-        message: 'Meshtastic radio paired via Web Bluetooth (BLE 915 MHz)!',
-      });
-    }, 1500);
+    }
   };
 
   const handleClaimMiningRewards = async () => {

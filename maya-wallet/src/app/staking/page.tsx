@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import { stakeDalla, claimStakingRewards } from '@/services/pallets/staking';
 import {
   getStakingInfo,
   getPoUWContributions,
@@ -121,20 +122,24 @@ export default function StakingPage() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [stakingLedger, setStakingLedger] = useState<StakingInfo | null>(null);
 
-  useEffect(() => {
-    async function loadStaking() {
-      if (!selectedAccount?.address) return;
-      try {
-        const info = await getStakingInfo(selectedAccount.address);
-        setStakingLedger(info);
-      } catch (err) {
-        console.warn('Could not load on-chain staking ledger, falling back to local simulation:', err);
-      }
+  const loadStaking = async () => {
+    if (!selectedAccount?.address) return;
+    try {
+      const info = await getStakingInfo(selectedAccount.address);
+      setStakingLedger(info);
+    } catch (err) {
+      console.warn('Could not load on-chain staking ledger, falling back to local simulation:', err);
     }
+  };
+
+  useEffect(() => {
     loadStaking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.address]);
 
-  const handleStake = (e: React.FormEvent) => {
+  const refreshStaking = loadStaking;
+
+  const handleStake = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
       addNotification({ type: 'error', message: 'Please enter a valid DALLA stake amount.' });
@@ -145,25 +150,39 @@ export default function StakingPage() {
     const validatorLabel = validatorObj ? validatorObj.name : 'Selected Validator';
 
     setIsStaking(true);
-    setTimeout(() => {
-      setIsStaking(false);
+    try {
+      const res = await stakeDalla(
+        selectedAccount!.address,
+        stakeAmount,
+        validatorObj?.address || '',
+      );
       addNotification({
         type: 'success',
-        message: `Successfully bonded & nominated ${stakeAmount} Ɗ to ${validatorLabel} (Auto-Compound: ${autoCompound ? 'Active' : 'Disabled'})!`,
+        message: `Bonded ${stakeAmount} DALLA to ${validatorLabel}: ${res.hash.slice(0, 16)}…`,
       });
       setStakeAmount('');
-    }, 1200);
+      await refreshStaking();
+    } catch (err) {
+      addNotification({ type: 'error', message: `Stake failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setIsStaking(false);
+    }
   };
 
-  const handleClaim = () => {
+  const handleClaim = async () => {
     setIsClaiming(true);
-    setTimeout(() => {
-      setIsClaiming(false);
+    try {
+      const res = await claimStakingRewards(selectedAccount!.address);
       addNotification({
         type: 'success',
-        message: 'Claimed +42.50 Ɗ Staking & Nawal PoUW Era Rewards directly to wallet balance!',
+        message: `Claimed ${res.amount} DALLA era rewards: ${res.hash.slice(0, 16)}…`,
       });
-    }, 1000);
+      await refreshStaking();
+    } catch (err) {
+      addNotification({ type: 'error', message: `Claim failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setIsClaiming(false);
+    }
   };
 
   if (!isConnected || !selectedAccount) {

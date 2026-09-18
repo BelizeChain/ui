@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import { registerDomain, setPrimaryDomain, isDomainAvailable, listDomainForSale } from '@/services/pallets/bns';
 import {
   Globe,
   MagnifyingGlass,
@@ -182,46 +183,28 @@ export default function BNSPage() {
   }, [searchName, selectedTld, myDomains, marketListings]);
 
   // Handle Domain Registration
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchAvailability || !searchAvailability.available || !selectedAccount?.address) return;
 
     setIsRegistering(true);
-    setTimeout(() => {
-      setIsRegistering(false);
-      const userAddr = selectedAccount.address;
-      const initialRecords: DnsRecord[] = [
-        { type: 'SS58', key: 'crypto.substrate', value: userAddr },
-      ];
-
-      if (autoBindDid) {
-        initialRecords.push({
-          type: 'DID',
-          key: 'identity.w3c',
-          value: `did:belize:cit:2026:${searchAvailability.name}`,
-        });
-      }
-
-      const newDomain: DomainRecord = {
-        name: searchAvailability.name,
-        tld: selectedTld,
-        owner: userAddr,
-        resolvedAddress: userAddr,
-        didIdentifier: autoBindDid ? `did:belize:cit:2026:${searchAvailability.name}` : undefined,
-        subdomains: [],
-        expires: `Sep ${2026 + regYears}`,
-        isPrimary: myDomains.length === 0,
-        records: initialRecords,
-      };
-
-      setMyDomains([newDomain, ...myDomains]);
+    try {
+      const res = await registerDomain(
+        selectedAccount.address,
+        `${searchAvailability.name}${selectedTld}`,
+        regYears,
+      );
       addNotification({
         type: 'success',
-        message: `Registered sovereign domain ${searchAvailability.name}${selectedTld} for ${regYears} year(s) on BelizeChain!`,
+        message: `Registered ${res.domain}: ${res.hash.slice(0, 16)}… (cost ${res.cost}).`,
       });
       setSearchName('');
       setActiveTab('my-domains');
-    }, 1200);
+    } catch (err) {
+      addNotification({ type: 'error', message: `Registration failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   // Set Primary Domain
