@@ -240,7 +240,12 @@ export default function LendingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-24">
+    <div>
+      {/* CONFIG-002: backend gate */}
+      <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs text-center py-2 px-4">
+        Collateral Lending is not yet live on BelizeChain — this page is a design preview. Data is illustrative, not on-chain.
+      </div>
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-24">
       {/* Header Bar */}
       <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -733,6 +738,7 @@ export default function LendingPage() {
           </div>
         )}
       </AnimatePresence>
+    </div>
     </div>
   );
 }

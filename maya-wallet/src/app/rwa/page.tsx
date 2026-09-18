@@ -274,7 +274,12 @@ export default function RwaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white pb-24">
+    <div>
+      {/* CONFIG-002: backend gate */}
+      <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs text-center py-2 px-4">
+        Tokenized RWA Studio is not yet live on BelizeChain — this page is a design preview. Data is illustrative, not on-chain.
+      </div>
+      <div className="min-h-screen bg-slate-950 text-white pb-24">
       {/* Header */}
       <div className="sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 z-10">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
@@ -626,6 +631,7 @@ export default function RwaPage() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
