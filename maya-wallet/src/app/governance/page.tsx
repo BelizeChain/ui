@@ -1,10 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import {
+  getActiveReferenda,
+  voteOnProposal,
+  type Referendum as ChainReferendum,
+} from '@/services/pallets/governance';
 import {
   Users,
   ChartLine,
@@ -45,44 +50,42 @@ export default function GovernancePage() {
   const [conviction, setConviction] = useState<number>(1);
   const [votingId, setVotingId] = useState<number | null>(null);
 
-  const [referendums, setReferendums] = useState<Referendum[]>([
-    {
-      id: 14,
-      title: 'BIP-14: Caye Caulker Marine Coral Restoration Sensor Network',
-      category: 'District Infrastructure',
-      proposer: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-      description: 'Deploy 40 LoRaWAN water-quality sensor buoys around the Belize Barrier Reef connected to Nawal AI environmental models.',
-      requestedAmount: '45,000 bBZD',
-      ayes: 1420,
-      nays: 45,
-      endBlock: 1495000,
-      status: 'Active',
-    },
-    {
-      id: 13,
-      title: 'BIP-13: ink! v5 Gas RefTime Optimization Runtime Upgrade',
-      category: 'Runtime Upgrade',
-      proposer: 'Ceiba Foundation Technical Committee',
-      description: 'Upgrade Wasm contract execution limits to allow 2.5x larger smart contract state access.',
-      ayes: 3890,
-      nays: 120,
-      endBlock: 1491000,
-      status: 'Passed',
-    },
-  ]);
+  // CONFIG-002: real referenda from governance.referendumInfoOf.
+  const [referendums, setReferendums] = useState<ChainReferendum[]>([]);
+  const [govLoading, setGovLoading] = useState(true);
+  const [govError, setGovError] = useState('');
 
-  const handleVote = (id: number, vote: 'Aye' | 'Nay') => {
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        const refe = await getActiveReferenda();
+        if (!cancelled) {
+          setReferendums(refe);
+          setGovError('');
+        }
+      } catch (err) {
+        if (!cancelled) setGovError(err instanceof Error ? err.message : String(err));
+      }
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  // CONFIG-002: real castVote extrinsic via the governance pallet.
+  const handleVote = async (id: number, vote: 'Aye' | 'Nay') => {
     setVotingId(id);
-    setTimeout(() => {
-      setReferendums((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, myVote: vote, ayes: vote === 'Aye' ? r.ayes + 10 * conviction : r.ayes, nays: vote === 'Nay' ? r.nays + 10 * conviction : r.nays } : r))
-      );
+    try {
+      await voteOnProposal(selectedAccount!.address, id, vote, 'None');
+      addNotification({ type: 'success', message: `Cast ${vote} vote on referendum #${id} (${conviction}x conviction).` });
+      const refe = await getActiveReferenda();
+      setReferendums(refe);
+    } catch (err) {
+      addNotification({ type: 'error', message: `Vote failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
       setVotingId(null);
-      addNotification({
-        type: 'success',
-        message: `Cast ${vote} vote on BIP-${id} with ${conviction}x conviction multiplier!`,
-      });
-    }, 1200);
+    }
   };
 
   if (!isConnected || !selectedAccount) {
@@ -202,28 +205,30 @@ export default function GovernancePage() {
         {activeTab === 'referendums' && (
           <div className="space-y-4">
             {referendums.map((r) => {
-              const totalVotes = r.ayes + r.nays;
-              const ayePct = totalVotes > 0 ? Math.round((r.ayes / totalVotes) * 100) : 50;
+              const ayes = parseFloat(r.voteCount.ayes);
+              const nays = parseFloat(r.voteCount.nays);
+              const totalVotes = ayes + nays;
+              const ayePct = totalVotes > 0 ? Math.round((ayes / totalVotes) * 100) : 0;
 
               return (
                 <div
-                  key={r.id}
+                  key={r.index}
                   className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl text-xs"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 font-bold rounded-full text-[10px]">
-                          {r.category}
+                          {r.voteThreshold}
                         </span>
-                        <span className="text-slate-500 text-[11px] font-mono">BIP #{r.id}</span>
+                        <span className="text-slate-500 text-[11px] font-mono">Referendum #{r.index}</span>
                       </div>
-                      <h3 className="font-bold text-white text-sm">{r.title}</h3>
+                      <h3 className="font-bold text-white text-sm">{r === null ? "" : "On-chain Referendum #${r.index}".replace("${r.index}", String(r.index))}</h3>
                     </div>
 
                     <span
                       className={`px-3 py-1 font-bold rounded-full text-[10px] ${
-                        r.status === 'Active'
+                        r.status === 'Voting'
                           ? 'bg-emerald-500/20 text-emerald-300'
                           : 'bg-blue-500/20 text-blue-300'
                       }`}
@@ -232,20 +237,18 @@ export default function GovernancePage() {
                     </span>
                   </div>
 
-                  <p className="text-slate-300 text-xs leading-relaxed">{r.description}</p>
+                  <p className="text-slate-300 text-xs leading-relaxed font-mono">Proposal hash: {r.proposalHash.slice(0, 18)}…</p>
 
-                  {r.requestedAmount && (
-                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-[11px]">
-                      <span className="text-slate-400">Requested Treasury Grant:</span>
-                      <span className="text-emerald-400 font-bold font-mono">{r.requestedAmount}</span>
-                    </div>
-                  )}
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400">Turnout:</span>
+                    <span className="text-emerald-400 font-bold font-mono">{r.voteCount.turnout} DALLA</span>
+                  </div>
 
                   {/* Voting Progress */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-[11px] font-mono">
-                      <span className="text-emerald-400 font-bold">Aye: {r.ayes} ({ayePct}%)</span>
-                      <span className="text-rose-400 font-bold">Nay: {r.nays} ({100 - ayePct}%)</span>
+                      <span className="text-emerald-400 font-bold">Aye: {r.voteCount.ayes} DALLA ({ayePct}%)</span>
+                      <span className="text-rose-400 font-bold">Nay: {r.voteCount.nays} DALLA ({100 - ayePct}%)</span>
                     </div>
                     <div className="w-full bg-rose-500/30 rounded-full h-2 overflow-hidden flex">
                       <div className="bg-emerald-500 h-2 transition-all duration-500" style={{ width: `${ayePct}%` }} />
@@ -255,10 +258,10 @@ export default function GovernancePage() {
                   {/* Voting Buttons */}
                   <div className="flex gap-3 pt-2">
                     <button
-                      onClick={() => handleVote(r.id, 'Aye')}
-                      disabled={votingId === r.id || r.status !== 'Active'}
+                      onClick={() => handleVote(r.index, 'Aye')}
+                      disabled={votingId === r.index || r.status !== 'Voting'}
                       className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
-                        r.myVote === 'Aye'
+                        false
                           ? 'bg-emerald-500 text-slate-950 shadow-lg'
                           : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
                       }`}
@@ -268,10 +271,10 @@ export default function GovernancePage() {
                     </button>
 
                     <button
-                      onClick={() => handleVote(r.id, 'Nay')}
-                      disabled={votingId === r.id || r.status !== 'Active'}
+                      onClick={() => handleVote(r.index, 'Nay')}
+                      disabled={votingId === r.index || r.status !== 'Voting'}
                       className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
-                        r.myVote === 'Nay'
+                        false
                           ? 'bg-rose-500 text-white shadow-lg'
                           : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
                       }`}
