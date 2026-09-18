@@ -1,4 +1,8 @@
 // P2P Messaging Service
+// STATUS (CONFIG-002): This service is LOCAL-ONLY (browser localStorage /
+// in-memory). Data does not sync across devices and is lost on cache clear.
+// Backend integration is queued; UI today is representative, not durable.
+
 import { walletLogger, getPakitClient, type PakitClient } from '@belizechain/shared';
 
 export interface Message {
