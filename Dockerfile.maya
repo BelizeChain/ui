@@ -58,8 +58,11 @@ ENV PORT=3001
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy built wallet app
-COPY --from=builder /app/maya-wallet/.next/standalone ./
+# Copy built wallet app (standalone output traces to workspace root:
+# outputFileTracingRoot points at the repo root, so server.js lands at
+# /app/maya-wallet/server.js *inside the builder's standalone dir*, which maps
+# to ./app/maya-wallet after the COPY into /app — account for that nesting).
+COPY --from=builder /app/maya-wallet/.next/standalone/ /
 COPY --from=builder /app/maya-wallet/.next/static ./maya-wallet/.next/static
 COPY --from=builder /app/maya-wallet/public ./maya-wallet/public
 
