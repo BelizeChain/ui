@@ -106,7 +106,7 @@ jobs:
           CI: true
 
       - name: Upload test coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./blue-hole-portal/coverage/lcov.info
           flags: blue-hole-portal
