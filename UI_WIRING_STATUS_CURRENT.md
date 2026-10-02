@@ -19,7 +19,7 @@
 
 ### Maya Wallet (as of 2026-09-17, after CONFIG-002 passes 1–4)
 - **Service layer:** ✅ 100% — all pallet services exist and are production TypeScript APIs (`src/services/pallets/*`); added `treasury.ts` and `performance.ts` this session.
-- **Page wiring:** 🟢 **~95% honest** — all high-priority pages are either chain-wired with real extrinsics or carry an explicit amber banner ("not yet live") while their backend is missing. Zero fabrication surfaces remain.
+- **Page wiring:** 🟢 **mostly honest** — high-priority pages are either chain-wired with real extrinsics or carry an explicit amber banner ("not yet live") while their backend is missing. **Correction (verified 2026-10-02):** the BelizeX trade page (`maya-wallet/src/app/trade/page.tsx`) is a full simulation with **no** disclosure banner — synthetic candles (`generateCandles`), hardcoded pairs/orders/trades, and a computed order book. It is neither wired nor honestly gated yet.
 
 ### Fixed this session (was mock — now real or honestly gated)
 | Location | Status |
@@ -32,7 +32,7 @@
 
 ### Also wired or gated in passes 2–4 (full detail in section below)
 payroll, belizeid, treasury, governance, community, staking, bns, landledger,
-compliance, developer, nawal benchmark, mesh probe, trade CLOB/swap, pakit,
+compliance, developer, nawal benchmark, mesh probe, pakit,
 lending, rwa, yield, custody, sustainability, education, scanner, messages.
 
 ### Blue Hole Portal
@@ -48,8 +48,8 @@ lending, rwa, yield, custody, sustainability, education, scanner, messages.
 
 ## Remaining real work to reach 100% (all blocked on missing backends, not UI)
 1. Pakit browser gateway → unlock pakit upload/vault for real DAG storage
-2. GEM dex router + RWA token contract → unlock swap/flash-loan/RWA pages
-3. BelizeX CLOB placement extrinsic → unlock order-book trading
+2. GEM DEX contracts deployed on-chain + trade page wired to the real router → unlock swap/flash-loan/RWA pages (factory/pair/router all exist in `gem/dex` — verified 2026-10-02)
+3. BelizeX CLOB placement extrinsic → unlock order-book trading (trade page order book is currently computed from synthetic prices)
 4. Nawal FL server live on Ceiba → unlock FL pages and real PoUW activity
 5. Bridge relayer infra → replace "Awaiting" states with real completion events
 6. Community sustainability/education extrinsics → unlock decals/certs
