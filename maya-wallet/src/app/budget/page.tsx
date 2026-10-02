@@ -1,98 +1,163 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
-  Wallet,
-  TrendDown,
-  TrendUp,
-  Warning,
-  Plus,
-  ChartBar,
-  ArrowLeft,
-  Coins,
-  CheckCircle,
-  Bank,
-  Receipt,
-  Sparkle,
-  ShieldCheck,
-  X,
-} from 'phosphor-react';
+  addBudgetCategory,
+  BUDGET_CATEGORIES_KEY,
+  getBudgetCategories,
+  type BudgetCategory,
+} from '@/services/budgeting';
+import { getStakingInfo, type StakingInfo } from '@/services/pallets/staking';
+import { ArrowLeft, Plus, X } from 'phosphor-react';
 
-interface BudgetCategory {
-  id: string;
-  name: string;
-  allocatedBBZD: number;
-  spentBBZD: number;
-  iconColor: string;
+const CURRENCY_SYMBOLS: Record<BudgetCategory['currency'], string> = {
+  DALLA: 'Ɗ',
+  bBZD: 'BZ$',
+};
+
+interface CurrencyTotals {
+  currency: BudgetCategory['currency'];
+  symbol: string;
+  limit: number;
+  spent: number;
+  remaining: number;
+  spendPct: number;
+}
+
+/** Aggregate active envelopes per currency — DALLA and bBZD have no fixed peg,
+ *  so they must never be summed into a single number. */
+function getCurrencyTotals(categories: BudgetCategory[]): CurrencyTotals[] {
+  const totals = new Map<BudgetCategory['currency'], { limit: number; spent: number }>();
+
+  for (const category of categories.filter((c) => c.active)) {
+    const entry = totals.get(category.currency) ?? { limit: 0, spent: 0 };
+    entry.limit += category.monthlyLimit;
+    entry.spent += category.spent;
+    totals.set(category.currency, entry);
+  }
+
+  return Array.from(totals.entries()).map(([currency, { limit, spent }]) => ({
+    currency,
+    symbol: CURRENCY_SYMBOLS[currency],
+    limit,
+    spent,
+    remaining: limit - spent,
+    spendPct: limit > 0 ? Math.round((spent / limit) * 100) : 0,
+  }));
+}
+
+function formatTotals(entries: CurrencyTotals[], pick: (totals: CurrencyTotals) => number): string {
+  if (entries.length === 0) return '—';
+  return entries.map((totals) => `${totals.symbol} ${pick(totals).toLocaleString()}`).join(' · ');
+}
+
+const BUDGET_CHANGED_EVENT = 'maya-budget-changed';
+
+function subscribeToBudget(callback: () => void): () => void {
+  window.addEventListener('storage', callback);
+  window.addEventListener(BUDGET_CHANGED_EVENT, callback);
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener(BUDGET_CHANGED_EVENT, callback);
+  };
+}
+
+function getStoredBudgetSnapshot(): string {
+  return window.localStorage.getItem(BUDGET_CATEGORIES_KEY) ?? '';
+}
+
+/** Parse the raw payload the budgeting service writes to localStorage. */
+function parseBudgetCategories(raw: string): BudgetCategory[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as BudgetCategory[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export default function BudgetPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [categories, setCategories] = useState<BudgetCategory[]>([
-    {
-      id: 'c1',
-      name: 'Groceries & Household Supplies',
-      allocatedBBZD: 800,
-      spentBBZD: 420,
-      iconColor: 'from-emerald-500 to-teal-600',
-    },
-    {
-      id: 'c2',
-      name: 'Utility Bills (BEL & BWS)',
-      allocatedBBZD: 350,
-      spentBBZD: 310,
-      iconColor: 'from-amber-500 to-amber-600',
-    },
-    {
-      id: 'c3',
-      name: 'Dining & Eco-Tourism POS',
-      allocatedBBZD: 400,
-      spentBBZD: 180,
-      iconColor: 'from-purple-500 to-indigo-600',
-    },
-    {
-      id: 'c4',
-      name: 'DALLA Staking DCA Vault',
-      allocatedBBZD: 500,
-      spentBBZD: 500,
-      iconColor: 'from-cyan-500 to-blue-600',
-    },
-  ]);
+  const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
+  const [stakingError, setStakingError] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatLimit, setNewCatLimit] = useState('');
 
-  const totalAllocated = categories.reduce((sum, c) => sum + c.allocatedBBZD, 0);
-  const totalSpent = categories.reduce((sum, c) => sum + c.spentBBZD, 0);
-  const totalRemaining = totalAllocated - totalSpent;
-  const spendPct = Math.round((totalSpent / totalAllocated) * 100);
+  // Envelopes are backed by the budgeting service's localStorage store and are
+  // read through useSyncExternalStore (SSR-safe: the server snapshot is empty).
+  const storedBudget = useSyncExternalStore(subscribeToBudget, getStoredBudgetSnapshot, () => '');
+  const categories = useMemo(() => parseBudgetCategories(storedBudget), [storedBudget]);
+
+  // Seed the service defaults on first visit; the event makes the external
+  // store re-read what the service just wrote.
+  useEffect(() => {
+    if (window.localStorage.getItem(BUDGET_CATEGORIES_KEY) === null) {
+      getBudgetCategories();
+      window.dispatchEvent(new Event(BUDGET_CHANGED_EVENT));
+    }
+  }, []);
+
+  // DCA vault card: real on-chain stake for the connected account.
+  useEffect(() => {
+    if (!selectedAccount?.address) return;
+
+    let cancelled = false;
+    getStakingInfo(selectedAccount.address)
+      .then((info) => {
+        if (!cancelled) setStakingInfo(info);
+      })
+      .catch(() => {
+        if (!cancelled) setStakingError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccount?.address]);
+
+  const currencyTotals = useMemo(() => getCurrencyTotals(categories), [categories]);
+
+  const vaultValue = stakingInfo ? `${stakingInfo.totalStaked} Ɗ` : '—';
+  let vaultDetail = 'Reading on-chain stake…';
+  if (stakingError) {
+    vaultDetail = 'Staking read failed';
+  } else if (stakingInfo) {
+    vaultDetail =
+      stakingInfo.totalStaked === '0.00'
+        ? 'No staked position on chain'
+        : `Era ${stakingInfo.era} · Rewards ${stakingInfo.rewardsEarned} Ɗ`;
+  }
 
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName || !newCatLimit) return;
 
-    const newCategory: BudgetCategory = {
-      id: `c-${Date.now()}`,
+    const created = addBudgetCategory({
       name: newCatName,
-      allocatedBBZD: parseFloat(newCatLimit),
-      spentBBZD: 0,
-      iconColor: 'from-cyan-500 to-blue-600',
-    };
+      color: '#06b6d4',
+      monthlyLimit: parseFloat(newCatLimit),
+      currency: 'bBZD', // the modal collects a bBZD limit
+      alertThreshold: 80,
+      active: true,
+    });
 
-    setCategories([...categories, newCategory]);
+    // Same-tab notification so the external store re-reads what the service wrote
+    window.dispatchEvent(new Event(BUDGET_CHANGED_EVENT));
     setNewCatName('');
     setNewCatLimit('');
     setShowAddModal(false);
     addNotification({
       type: 'success',
-      message: `Created budget envelope: ${newCatName} (BZ$ ${parseFloat(newCatLimit).toFixed(2)})!`,
+      message: `Created budget envelope: ${created.name} (BZ$ ${created.monthlyLimit.toFixed(2)})!`,
     });
   };
 
@@ -132,7 +197,7 @@ export default function BudgetPage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Monthly Budget</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-white font-mono">BZ$ {totalAllocated.toLocaleString()}</span>
+              <span className="text-lg font-bold text-white font-mono">{formatTotals(currencyTotals, (t) => t.limit)}</span>
             </div>
             <span className="text-[11px] text-slate-400 block">{categories.length} active envelopes</span>
           </div>
@@ -140,46 +205,67 @@ export default function BudgetPage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Spent (Mtd)</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-cyan-300 font-mono">BZ$ {totalSpent.toLocaleString()}</span>
+              <span className="text-lg font-bold text-cyan-300 font-mono">{formatTotals(currencyTotals, (t) => t.spent)}</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">{spendPct}% of monthly cap</span>
+            <span className="text-[11px] text-slate-400 block">
+              {currencyTotals.length === 0
+                ? 'No active envelopes yet'
+                : `${currencyTotals.map((t) => `${t.spendPct}%`).join(' / ')} of monthly cap`}
+            </span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Remaining Balance</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400 font-mono">BZ$ {totalRemaining.toLocaleString()}</span>
+              <span className="text-lg font-bold text-emerald-400 font-mono">{formatTotals(currencyTotals, (t) => t.remaining)}</span>
             </div>
-            <span className="text-[11px] text-emerald-400 font-semibold">Healthy Fiscal Buffer</span>
+            <span
+              className={`text-[11px] font-semibold ${
+                currencyTotals.some((t) => t.remaining < 0) ? 'text-rose-400' : 'text-emerald-400'
+              }`}
+            >
+              {currencyTotals.some((t) => t.remaining < 0) ? 'Over budget' : 'Within budget'}
+            </span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">DCA Staking Vault</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-purple-400 font-mono">1,250 Ɗ</span>
+              <span className="text-lg font-bold text-purple-400 font-mono">{vaultValue}</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">Earning 14.8% APR</span>
+            <span className="text-[11px] text-slate-400 block">{vaultDetail}</span>
           </div>
         </div>
 
-        {/* Global Progress Bar */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-3 shadow-xl text-xs">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-white text-sm">Monthly Budget Utilization</span>
-            <span className="font-mono font-bold text-cyan-300">{spendPct}% Spent</span>
-          </div>
-          <div className="w-full bg-slate-950 rounded-full h-3 overflow-hidden border border-slate-800">
-            <div
-              className={`h-3 transition-all duration-500 ${
-                spendPct >= 90
-                  ? 'bg-rose-500'
-                  : spendPct >= 75
-                  ? 'bg-amber-500'
-                  : 'bg-gradient-to-r from-emerald-500 to-cyan-500'
-              }`}
-              style={{ width: `${Math.min(spendPct, 100)}%` }}
-            />
-          </div>
+        {/* Per-currency utilization (DALLA and bBZD are separate units) */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl text-xs">
+          <span className="font-bold text-white text-sm block">Monthly Budget Utilization</span>
+          {currencyTotals.length === 0 ? (
+            <p className="text-slate-400">No active envelopes yet — add one to start tracking.</p>
+          ) : (
+            currencyTotals.map((t) => (
+              <div key={t.currency} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 font-semibold">{t.currency} envelopes</span>
+                  <span className="font-mono font-bold text-cyan-300">
+                    {t.symbol} {t.spent.toLocaleString()} / {t.limit.toLocaleString()} ({t.spendPct}% Spent)
+                  </span>
+                </div>
+                <div className="w-full bg-slate-950 rounded-full h-3 overflow-hidden border border-slate-800">
+                  <div
+                    className={`h-3 transition-all duration-500 ${
+                      t.spendPct >= 90
+                        ? 'bg-rose-500'
+                        : t.spendPct >= 75
+                        ? 'bg-amber-500'
+                        : 'bg-gradient-to-r from-emerald-500 to-cyan-500'
+                    }`}
+                    style={{ width: `${Math.min(t.spendPct, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Categories List */}
@@ -190,8 +276,9 @@ export default function BudgetPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {categories.map((c) => {
-              const pct = Math.round((c.spentBBZD / c.allocatedBBZD) * 100);
+              const pct = c.monthlyLimit > 0 ? Math.round((c.spent / c.monthlyLimit) * 100) : 0;
               const isOver = pct >= 90;
+              const symbol = CURRENCY_SYMBOLS[c.currency];
 
               return (
                 <div
@@ -210,8 +297,8 @@ export default function BudgetPage() {
                   </div>
 
                   <div className="flex justify-between font-mono text-[11px] text-slate-400">
-                    <span>Spent: <strong className="text-white">BZ$ {c.spentBBZD}</strong></span>
-                    <span>Limit: <strong className="text-slate-200">BZ$ {c.allocatedBBZD}</strong></span>
+                    <span>Spent: <strong className="text-white">{symbol} {c.spent.toLocaleString()}</strong></span>
+                    <span>Limit: <strong className="text-slate-200">{symbol} {c.monthlyLimit.toLocaleString()}</strong></span>
                   </div>
 
                   <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">

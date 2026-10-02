@@ -34,6 +34,7 @@ export interface MonthlyBudget {
 }
 
 const BUDGET_CATEGORIES_KEY = 'maya-budget-categories';
+export { BUDGET_CATEGORIES_KEY };
 const BUDGET_ALERTS_KEY = 'maya-budget-alerts';
 const BUDGET_HISTORY_KEY = 'maya-budget-history';
 
