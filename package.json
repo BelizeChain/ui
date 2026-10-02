@@ -17,6 +17,7 @@
     "dev:bluehole": "npm run dev --workspace=blue-hole-portal",
     "dev:all": "concurrently \"npm run dev:maya\" \"npm run dev:bluehole\"",
     "build:all": "turbo run build",
+    "test:unit": "vitest run",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
@@ -27,7 +28,9 @@
     "@types/node": "^24.7.2",
     "@types/resolve": "^1.20.6",
     "concurrently": "^8.2.2",
-    "turbo": "^2.1.0"
+    "turbo": "^2.1.0",
+    "vite": "7.3.6",
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": ">=24.0.0",

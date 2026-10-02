@@ -6,6 +6,9 @@
  */
 
 import { ApiPromise } from '@polkadot/api';
+import type { EventRecord } from '@polkadot/types/interfaces';
+
+const APPROX_BLOCK_MS = 6000;
 
 export interface Transaction {
   hash: string;
@@ -43,13 +46,45 @@ interface CachedData {
 const CACHE_DURATION = 30000; // 30 seconds
 const CACHE_KEY_PREFIX = 'belizechain_tx_';
 
+/** Format a planck-scale integer string into a 4dp decimal string. */
+function formatUnits(value: string, decimals: number): string {
+  let planck: bigint;
+  try {
+    planck = BigInt(value);
+  } catch {
+    return '0';
+  }
+  const base = 10n ** BigInt(decimals);
+  const whole = planck / base;
+  const fraction = (planck % base).toString().padStart(decimals, '0').slice(0, 4);
+  return `${whole.toString()}.${fraction}`;
+}
+
+function categorizeExtrinsic(section: string, method: string): Transaction['type'] {
+  if ((section === 'balances' || section === 'assets') && method.startsWith('transfer')) {
+    return 'transfer';
+  }
+  if (section === 'staking') return 'staking';
+  if (
+    section === 'democracy' ||
+    section === 'council' ||
+    section === 'elections' ||
+    section === 'governance'
+  ) {
+    return 'governance';
+  }
+  return 'unknown';
+}
+
 export class TransactionIndexer {
   private api: ApiPromise;
   private cacheEnabled: boolean;
+  private scanBlocks: number;
 
-  constructor(api: ApiPromise, options?: { cacheEnabled?: boolean }) {
+  constructor(api: ApiPromise, options?: { cacheEnabled?: boolean; scanBlocks?: number }) {
     this.api = api;
     this.cacheEnabled = options?.cacheEnabled ?? true;
+    this.scanBlocks = options?.scanBlocks ?? 100;
   }
 
   /**
@@ -86,7 +121,9 @@ export class TransactionIndexer {
   }
 
   /**
-   * Fetch transactions from Subsquid GraphQL indexer (fallback to RPC if fails)
+   * Fetch transactions: tries an optional Subsquid GraphQL indexer
+   * (NEXT_PUBLIC_INDEXER_URL) and falls back to a direct RPC block scan —
+   * which is the primary path today, since no indexer runs on Ceiba.
    */
   private async fetchTransactions(
     accountAddress: string,
@@ -121,6 +158,7 @@ export class TransactionIndexer {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(3000),
         body: JSON.stringify({
           query,
           variables: { address: accountAddress, limit }
@@ -149,11 +187,122 @@ export class TransactionIndexer {
         }));
       }
     } catch (error) {
-      console.warn('Failed to fetch from indexer, falling back to empty list:', error);
+      console.warn('Indexer unreachable, falling back to direct RPC scan:', error);
     }
-    
-    // Fallback: If indexer is down, return empty array for now (or could preserve the old RPC logic)
-    return [];
+
+    // No indexer runs on Ceiba, so read account history straight from chain
+    // state — the same direct-RPC approach the portal explorer uses.
+    return this.scanRecentBlocks(accountAddress, filter);
+  }
+
+  /**
+   * Direct-RPC scan: walk back `scanBlocks` blocks from the head and decode the
+   * signed extrinsics that belong to the account. Block timestamps are
+   * approximated at ~6s per block — the chain carries wall clock via the
+   * timestamp.set inherent, not in the header.
+   */
+  private async scanRecentBlocks(
+    accountAddress: string,
+    filter: TransactionFilter
+  ): Promise<Transaction[]> {
+    const limit = filter.limit ?? 100;
+    const decimals = this.api.registry.chainDecimals[0] ?? 12;
+
+    let accountHex: string;
+    try {
+      // Compare raw account bytes: SS58 prefix rendering differs (this chain
+      // uses prefix 1981, wallets commonly show 42) but the bytes are the key.
+      accountHex = this.api.createType('AccountId', accountAddress).toHex();
+    } catch {
+      return [];
+    }
+
+    const head = (await this.api.rpc.chain.getHeader()).number.toNumber();
+    const oldest = Math.max(0, head - (this.scanBlocks - 1));
+    const transactions: Transaction[] = [];
+
+    for (let number = head; number >= oldest && transactions.length < limit; number--) {
+      const hash = await this.api.rpc.chain.getBlockHash(number);
+      const [signedBlock, rawEvents] = await Promise.all([
+        this.api.rpc.chain.getBlock(hash),
+        this.api.query.system.events.at(hash),
+      ]);
+      // The chain ships no type bundle, so events arrive typed as Codec; the
+      // runtime shape is Vec<EventRecord>.
+      const events = rawEvents as unknown as EventRecord[];
+      const timestamp = Date.now() - (head - number) * APPROX_BLOCK_MS;
+
+      for (const [index, extrinsic] of signedBlock.block.extrinsics.entries()) {
+        if (!extrinsic.isSigned) continue;
+
+        let signerHex: string;
+        try {
+          signerHex = this.api.createType('AccountId', extrinsic.signer).toHex();
+        } catch {
+          continue;
+        }
+        if (signerHex !== accountHex) continue;
+
+        const { section, method } = extrinsic.method;
+        let to = '';
+        let amount = '0';
+        let asset: Transaction['asset'] = 'DALLA';
+
+        if (section === 'balances' && method.startsWith('transfer')) {
+          const [destination, value] = extrinsic.method.args as unknown[];
+          to = destination?.toString() ?? '';
+          amount = formatUnits(value?.toString() ?? '0', decimals);
+        } else if (section === 'assets' && method.startsWith('transfer')) {
+          const [assetId, destination, value] = extrinsic.method.args as unknown[];
+          asset = Number(assetId?.toString()) === 1 ? 'bBZD' : 'DALLA';
+          to = destination?.toString() ?? '';
+          amount = formatUnits(value?.toString() ?? '0', decimals);
+        }
+
+        transactions.push({
+          hash: `${hash.toHex()}-${index}`,
+          blockNumber: number,
+          timestamp,
+          type: categorizeExtrinsic(section, method),
+          from: accountAddress,
+          to: to || '—',
+          amount,
+          asset,
+          status: this.extrinsicOutcome(events, index) ? 'success' : 'failed',
+          fee: this.extrinsicFee(events, index, decimals),
+          metadata: { palletName: section, method },
+        });
+
+        if (transactions.length >= limit) break;
+      }
+    }
+
+    return transactions;
+  }
+
+  /** system.ExtrinsicSuccess / ExtrinsicFailed for one extrinsic index. */
+  private extrinsicOutcome(events: EventRecord[], index: number): boolean {
+    for (const record of events) {
+      const phase = record.phase;
+      if (!phase.isApplyExtrinsic || phase.asApplyExtrinsic.toNumber() !== index) continue;
+      const { section, method } = record.event;
+      if (section === 'system' && method === 'ExtrinsicSuccess') return true;
+      if (section === 'system' && method === 'ExtrinsicFailed') return false;
+    }
+    // In-block without a failure event means it succeeded.
+    return true;
+  }
+
+  /** transactionPayment.TransactionFeePaid actual fee for an extrinsic, if any. */
+  private extrinsicFee(events: EventRecord[], index: number, decimals: number): string {
+    for (const record of events) {
+      const phase = record.phase;
+      if (!phase.isApplyExtrinsic || phase.asApplyExtrinsic.toNumber() !== index) continue;
+      const { section, method } = record.event;
+      if (section !== 'transactionPayment' || method !== 'TransactionFeePaid') continue;
+      return formatUnits(record.event.data[1]?.toString() ?? '0', decimals);
+    }
+    return '0';
   }
 
 

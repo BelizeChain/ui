@@ -36,7 +36,6 @@ jobs:
         run: npm run lint --workspace=shared
 
       - name: Type check shared library
-        continue-on-error: true
         run: npm run type-check --workspace=shared
 
   build:
@@ -85,8 +84,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm run test --workspace=shared || echo "No tests configured yet"
+      - name: Run unit tests
+        run: npm run test:unit --workspaces=false -- shared/
         env:
           CI: true
 

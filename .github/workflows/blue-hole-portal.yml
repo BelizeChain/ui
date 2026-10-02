@@ -99,19 +99,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Jest tests
-        continue-on-error: true
-        run: npm run test --workspace=blue-hole-portal
+      - name: Run unit tests
+        run: npm run test:unit --workspaces=false -- blue-hole-portal/
         env:
           CI: true
-
-      - name: Upload test coverage
-        uses: codecov/codecov-action@v7
-        with:
-          files: ./blue-hole-portal/coverage/lcov.info
-          flags: blue-hole-portal
-          name: blue-hole-portal
-          fail_ci_if_error: false
 
   # Storybook job removed: blue-hole-portal/.storybook config and stories
   # do not exist yet. Re-add when Storybook is actually configured.

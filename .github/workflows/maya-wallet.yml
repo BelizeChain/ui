@@ -108,6 +108,11 @@ jobs:
           name: maya-wallet-build
           path: maya-wallet/
 
+      - name: Run unit tests
+        run: npm run test:unit --workspaces=false -- maya-wallet/
+        env:
+          CI: true
+
       - name: Run Playwright tests
         continue-on-error: true
         run: npm run test --workspace=maya-wallet
