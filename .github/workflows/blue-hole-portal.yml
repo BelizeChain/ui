@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared library
+        run: npm run build --workspace=shared
+
       - name: Lint Blue Hole Portal
         run: npm run lint --workspace=blue-hole-portal
 
