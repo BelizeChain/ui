@@ -1,7 +1,7 @@
 /**
  * Kinich Quantum Computing Client
  * Connects BelizeChain UI to Kinich hybrid quantum-classical orchestrator
- * 
+ *
  * @see /home/wicked/BelizeChain/belizechain/kinich/
  */
 
@@ -75,12 +75,12 @@ export interface QPUAttestation {
   jobId: string;
   backend: QuantumBackend;
   attestation: {
-    signed: boolean;
-    signature: string;
+    algorithm: string; // e.g. "sha256"
+    digest: string; // sha256 over the actual stored result payload
+    signed: boolean; // false until a node signing key is wired
     timestamp: number;
-    proof: string; // Cryptographic proof of quantum execution
   };
-  onChainProof: string; // Hash stored on blockchain
+  onChainProof: string | null; // real on-chain tx reference, if recorded
 }
 
 export class KinichClient {
