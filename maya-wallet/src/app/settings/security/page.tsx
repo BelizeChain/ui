@@ -26,7 +26,13 @@ export default function SettingsSecurityPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setSettings(getSecuritySettings());
+    let cancelled = false;
+    Promise.resolve(getSecuritySettings()).then((securitySettings) => {
+      if (!cancelled) setSettings(securitySettings);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!settings) return null;

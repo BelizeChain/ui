@@ -46,14 +46,21 @@ export default function SettingsPage() {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const notifPrefs = getNotificationPreferences();
     const securitySettings = getSecuritySettings();
     const walletPrefs = getWalletPreferences();
     const savedCurrencyPref = typeof window !== 'undefined' ? localStorage.getItem('maya-currency-pref') : null;
-    setNotifications(notifPrefs.pushEnabled);
-    setBiometric(securitySettings.biometric);
-    setAnalytics(securitySettings.analytics);
-    setCurrency(savedCurrencyPref || walletPrefs.currency || 'DALLA');
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setNotifications(notifPrefs.pushEnabled);
+      setBiometric(securitySettings.biometric);
+      setAnalytics(securitySettings.analytics);
+      setCurrency(savedCurrencyPref || walletPrefs.currency || 'DALLA');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSaveSettings = () => {

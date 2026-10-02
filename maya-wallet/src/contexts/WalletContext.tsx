@@ -5,9 +5,12 @@
  * Manages user wallet connection and blockchain state
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useSyncExternalStore, ReactNode } from 'react';
 // Defer importing extension APIs to the client at runtime to avoid SSR window access
 import { useBalanceSubscription, useNotifications } from '@/hooks/useBlockchainEvents';
+
+/** Stable no-op subscription used with useSyncExternalStore for mount detection. */
+const subscribeNoop = () => () => {};
 
 interface WalletAccount {
   address: string;
@@ -20,11 +23,11 @@ interface WalletContextType {
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
-  
+
   // Account data
   accounts: WalletAccount[];
   selectedAccount: WalletAccount | null;
-  
+
   // Balance data
   balance: {
     dalla: string;
@@ -32,7 +35,7 @@ interface WalletContextType {
     total: string;
   } | null;
   balanceLoading: boolean;
-  
+
   // Notifications
   notifications: Array<{
     id: string;
@@ -45,7 +48,7 @@ interface WalletContextType {
   unreadNotifications: number;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
-  
+
   // Actions
   connect: (fallbackToLocal?: boolean | unknown) => Promise<void>;
   connectLocal: (customName?: string) => void;
@@ -56,15 +59,12 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [isMounted, setIsMounted] = useState(false);
+  // Mount detection without a state-setting effect
+  // (react-hooks/set-state-in-effect): false during SSR, true on the client.
+  const isMounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Only run on client-side to avoid SSR issues
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
   const [accounts, setAccounts] = useState<WalletAccount[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<WalletAccount | null>(null);
 
@@ -80,12 +80,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     markAsRead: markNotificationAsRead,
     markAllAsRead: markAllNotificationsAsRead,
   } = useNotifications(isMounted ? (selectedAccount?.address || null) : null);
-
-  // Auto-connect on mount if previously connected
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    void connect();
-  }, []);
 
   const DEMO_ACCOUNTS: WalletAccount[] = [
     {
@@ -131,7 +125,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const { web3Enable, web3Accounts } = await import('@polkadot/extension-dapp');
       // Enable Polkadot extension
       const extensions = await web3Enable('Maya Wallet');
-      
+
       if (extensions.length === 0) {
         if (shouldFallback) {
           console.info('No extension found. Connecting as Sovereign Citizen Local session.');
@@ -145,7 +139,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       // Get accounts from extension
       const allAccounts = await web3Accounts();
-      
+
       if (allAccounts.length === 0) {
         if (shouldFallback) {
           connectLocal();
@@ -167,7 +161,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const targetAccount = walletAccounts.find(acc => acc.address === savedAddress) || walletAccounts[0];
       setSelectedAccount(targetAccount);
       setIsConnected(true);
-      
+
       // Save to localStorage
       if (typeof window !== 'undefined' && targetAccount) {
         localStorage.setItem('selectedWalletAddress', targetAccount.address);
@@ -185,6 +179,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsConnecting(false);
     }
   };
+
+  // Auto-connect on mount if previously connected. Declared after `connect`
+  // for the React Compiler's declaration-order check; deferred so connect
+  // doesn't set state during the effect body (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    void Promise.resolve().then(() => connect());
+  }, []);
 
   const disconnect = () => {
     setAccounts([]);

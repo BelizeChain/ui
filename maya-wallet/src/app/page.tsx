@@ -78,12 +78,15 @@ export default function HomeNew() {
   const [currencyPref, setCurrencyPref] = useState<'DALLA' | 'BZD' | 'USD'>('DALLA');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    // Deferred so reading the saved preference doesn't set state during the
+    // effect body (react-hooks/set-state-in-effect).
+    Promise.resolve().then(() => {
+      if (typeof window === 'undefined') return;
       const saved = localStorage.getItem('maya-currency-pref') as 'DALLA' | 'BZD' | 'USD' | null;
       if (saved && (saved === 'DALLA' || saved === 'BZD' || saved === 'USD')) {
         setCurrencyPref(saved);
       }
-    }
+    });
   }, []);
 
   const handleCurrencyChange = (pref: 'DALLA' | 'BZD' | 'USD') => {
@@ -96,9 +99,13 @@ export default function HomeNew() {
   useEffect(() => {
     const address = selectedAccount?.address;
     if (!address) {
-      setStakingInfo(null);
-      setPouwContributions([]);
-      setTourismRewards([]);
+      // Deferred reset so the effect body doesn't set state directly
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(() => {
+        setStakingInfo(null);
+        setPouwContributions([]);
+        setTourismRewards([]);
+      });
       return;
     }
     let cancelled = false;

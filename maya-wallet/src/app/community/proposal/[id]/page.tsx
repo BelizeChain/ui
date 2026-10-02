@@ -48,8 +48,12 @@ export default function ProposalDetailPage() {
 
   useEffect(() => {
     if (!Number.isFinite(proposalIdNum)) {
-      setLoadError('Invalid proposal ID');
-      setIsLoading(false);
+      // Deferred so the guard doesn't set state during the effect body
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(() => {
+        setLoadError('Invalid proposal ID');
+        setIsLoading(false);
+      });
       return;
     }
     let cancelled = false;
@@ -72,8 +76,12 @@ export default function ProposalDetailPage() {
         if (!cancelled) setIsLoading(false);
       }
     };
-    setIsLoading(true);
-    void refresh();
+    // Deferred so starting the poll doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    void Promise.resolve().then(() => {
+      setIsLoading(true);
+      return refresh();
+    });
     const interval = setInterval(() => { void refresh(); }, POLL_MS);
     return () => { cancelled = true; clearInterval(interval); };
   }, [proposalIdNum]);

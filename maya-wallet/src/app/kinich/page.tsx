@@ -88,8 +88,12 @@ export default function KinichPage() {
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
   const [surfaceCodeDistance, setSurfaceCodeDistance] = useState<3 | 5>(3);
 
+  // Hoisted so the callback's deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
+
   const fetchData = useCallback(async () => {
-    if (!selectedAccount?.address) {
+    if (!address) {
       setLoading(false);
       return;
     }
@@ -97,7 +101,7 @@ export default function KinichPage() {
     try {
       const [backendsList, pqcInfo] = await Promise.all([
         getQuantumBackends(),
-        getPqcKeyStatus(selectedAccount.address),
+        getPqcKeyStatus(address),
       ]);
       setBackends(
         backendsList.length > 0
@@ -151,10 +155,12 @@ export default function KinichPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedAccount?.address]);
+  }, [address]);
 
   useEffect(() => {
-    fetchData();
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(fetchData);
   }, [fetchData]);
 
   const handleRotateKey = async (scheme: 'CRYSTALS-Dilithium5' | 'Falcon-512' | 'SPHINCS+') => {

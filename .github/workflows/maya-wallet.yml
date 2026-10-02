@@ -38,11 +38,9 @@ jobs:
         run: npm ci
 
       - name: Lint Maya Wallet
-        continue-on-error: true
         run: npm run lint --workspace=maya-wallet
 
       - name: Type check Maya Wallet
-        continue-on-error: true
         run: npm run type-check --workspace=maya-wallet
 
   build:
@@ -63,7 +61,6 @@ jobs:
         run: npm run build --workspace=shared
 
       - name: Build Maya Wallet
-        continue-on-error: true
         run: npm run build --workspace=maya-wallet
         env:
           NEXT_PUBLIC_DEV_MODE: 'false'

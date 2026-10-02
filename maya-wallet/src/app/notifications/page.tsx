@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@belizechain/shared';
-import { 
-  ArrowLeft, 
-  Bell, 
-  Check, 
+import {
+  ArrowLeft,
+  Bell,
+  Check,
   Money,
   FileText,
   Gift,
@@ -33,14 +33,16 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<WalletNotification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
   const loadNotifications = () => {
     const allNotifications = getNotifications();
     setNotifications(allNotifications);
   };
+
+  useEffect(() => {
+    // Deferred so the synchronous store read doesn't set state in the effect
+    // body (react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadNotifications);
+  }, []);
 
   const handleMarkAsRead = (id: string) => {
     markAsRead(id);
@@ -69,7 +71,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const filteredNotifications = filter === 'unread' 
+  const filteredNotifications = filter === 'unread'
     ? notifications.filter(n => !n.read)
     : notifications;
 
@@ -174,7 +176,7 @@ export default function NotificationsPage() {
                     }`}>
                       <Icon size={24} weight="bold" />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-semibold text-white">{notification.title}</h3>

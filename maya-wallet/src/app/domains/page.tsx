@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { initializeApi } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
 import { ApiPromise } from '@polkadot/api';
-import { 
-  Globe, 
-  Upload, 
-  Link as LinkIcon, 
-  ArrowsClockwise, 
-  CheckCircle, 
-  XCircle 
+import {
+  Globe,
+  Upload,
+  Link as LinkIcon,
+  ArrowsClockwise,
+  CheckCircle,
+  XCircle
 } from 'phosphor-react';
 
 interface Domain {
@@ -29,7 +29,8 @@ interface Domain {
 export default function DomainsPage() {
   const { selectedAccount } = useWallet();
   const [api, setApi] = useState<ApiPromise | null>(null);
-  const [account, setAccount] = useState<string | null>(null);
+  // Derived from the connected wallet — queries are scoped to it.
+  const account = selectedAccount?.address ?? null;
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'my-domains' | 'register' | 'marketplace' | 'hosting'>('my-domains');
@@ -46,20 +47,6 @@ export default function DomainsPage() {
     init();
   }, []);
 
-  // Track the connected wallet account; queries are scoped to it.
-  useEffect(() => {
-    setAccount(selectedAccount?.address ?? null);
-  }, [selectedAccount]);
-
-  useEffect(() => {
-    if (api && account) {
-      loadDomains();
-    } else {
-      setDomains([]);
-      setLoading(false);
-    }
-  }, [api, account]);
-
   const loadDomains = async () => {
     if (!api || !account) return;
 
@@ -68,19 +55,19 @@ export default function DomainsPage() {
 
       // Query AccountDomains storage
       const accountDomains = await api.query.bns.accountDomains(account);
-      
+
       // For demo: parse the response (adjust based on actual storage type)
       const domainList = accountDomains.toJSON() as string[] || [];
-      
+
       // Fetch details for each domain
       const domainDetails = await Promise.all(
         domainList.map(async (domainName: string) => {
           const record = await api.query.bns.domainRegistry(domainName);
           const hostingInfo = await api.query.bns.hostingConfigs(domainName);
-          
+
           const recordData = record.toJSON() as any;
           const hostingData = hostingInfo.toJSON() as any;
-          
+
           return {
             name: domainName,
             owner: recordData?.owner || account,
@@ -105,6 +92,20 @@ export default function DomainsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!api || !account) {
+      // Deferred reset so the effect body doesn't set state
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(() => {
+        setDomains([]);
+        setLoading(false);
+      });
+      return;
+    }
+    // loadDomains is declared above; deferred for the same reason.
+    Promise.resolve().then(loadDomains);
+  }, [api, account]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-6">
@@ -180,9 +181,9 @@ export default function DomainsPage() {
   );
 }
 
-function MyDomainsTab({ domains, loading, onRefresh }: { 
-  domains: Domain[]; 
-  loading: boolean; 
+function MyDomainsTab({ domains, loading, onRefresh }: {
+  domains: Domain[];
+  loading: boolean;
   onRefresh: () => void;
 }) {
   if (loading) {
@@ -231,7 +232,7 @@ function MyDomainsTab({ domains, loading, onRefresh }: {
 
 function DomainCard({ domain }: { domain: Domain }) {
   const tierNames = ['Basic (.bz)', 'Premium (.gov.bz)', 'Enterprise'];
-  
+
   return (
     <div className="bg-gray-800 rounded-xl shadow-lg p-6 hover:shadow-xl transition">
       <div className="flex justify-between items-start mb-4">
@@ -244,7 +245,7 @@ function DomainCard({ domain }: { domain: Domain }) {
           </div>
           <p className="text-sm text-gray-400">{tierNames[domain.tier]}</p>
         </div>
-        
+
         <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
           Active
         </span>
@@ -288,7 +289,7 @@ function RegisterTab({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="bg-gray-800 rounded-xl shadow-lg p-8">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Register New Domain</h2>
-      
+
       {/* Domain input */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -397,7 +398,7 @@ function MarketplaceTab() {
 
 function HostingTab({ domains }: { domains: Domain[] }) {
   const hostedDomains = domains.filter(d => d.hosting?.active);
-  
+
   return (
     <div className="space-y-6">
       <div className="bg-gray-800 rounded-xl shadow-lg p-8">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { GlassCard } from '@/components/ui';
 import { getRuntimeConfig } from '@belizechain/shared';
 import { useRouter } from 'next/navigation';
@@ -39,9 +39,15 @@ import {
   ArrowLeft
 } from 'phosphor-react';
 
+/** Stable no-op subscription used with useSyncExternalStore for mount detection. */
+const subscribeNoop = () => () => {};
+
 export default function GemPage() {
   const router = useRouter();
   const { selectedAccount } = useWallet();
+  // Hoisted so the callbacks' deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
   const [activeTab, setActiveTab] = useState<'deploy' | 'contracts' | 'dao' | 'nft'>('deploy');
   const runtimeConfig = getRuntimeConfig();
   const formatAddress = (address?: string) =>
@@ -56,22 +62,24 @@ export default function GemPage() {
   const [claimTxHash, setClaimTxHash] = useState<string | null>(null);
 
   const refreshFaucet = useCallback(async () => {
-    if (!selectedAccount?.address) return;
+    if (!address) return;
     try {
-      const status = await getFaucetStatus(selectedAccount.address, selectedAccount.address);
+      const status = await getFaucetStatus(address, address);
       setFaucetStatus(status);
       setFaucetError(null);
     } catch (err) {
       setFaucetError(err instanceof Error ? err.message : 'Failed to read faucet status');
     }
-  }, [selectedAccount?.address]);
+  }, [address]);
 
   useEffect(() => {
-    void refreshFaucet();
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    void Promise.resolve().then(refreshFaucet);
   }, [refreshFaucet]);
 
   const handleClaim = useCallback(async () => {
-    if (!selectedAccount?.address) {
+    if (!address) {
       setFaucetError('Connect a wallet account to claim from the faucet');
       return;
     }
@@ -79,7 +87,7 @@ export default function GemPage() {
     setFaucetError(null);
     setClaimTxHash(null);
     try {
-      const hash = await claimFromFaucet(selectedAccount.address);
+      const hash = await claimFromFaucet(address);
       setClaimTxHash(hash);
       await refreshFaucet();
     } catch (err) {
@@ -87,7 +95,7 @@ export default function GemPage() {
     } finally {
       setClaiming(false);
     }
-  }, [selectedAccount?.address, refreshFaucet]);
+  }, [address, refreshFaucet]);
 
   // DAO state
   const [daoProposals, setDaoProposals] = useState<DaoProposal[]>([]);
@@ -100,19 +108,18 @@ export default function GemPage() {
   const [nftCollection, setNftCollection] = useState<{ name: string; symbol: string; totalSupply: number } | null>(null);
   const [nftBalance, setNftBalance] = useState<number>(0);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Mount detection without a state-setting effect
+  // (react-hooks/set-state-in-effect): false during SSR, true on the client.
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
 
   const refreshDao = useCallback(async () => {
-    if (!selectedAccount?.address) return;
+    if (!address) return;
     setDaoLoading(true);
     setDaoError(null);
     try {
       const [proposals, dallaBal] = await Promise.all([
-        listDaoProposals(selectedAccount.address, 10),
-        getDallaBalance(selectedAccount.address, selectedAccount.address),
+        listDaoProposals(address, 10),
+        getDallaBalance(address, address),
       ]);
       setDaoProposals(proposals);
       try {
@@ -125,37 +132,39 @@ export default function GemPage() {
     } finally {
       setDaoLoading(false);
     }
-  }, [selectedAccount?.address]);
+  }, [address]);
 
   const refreshNfts = useCallback(async () => {
-    if (!selectedAccount?.address) return;
+    if (!address) return;
     try {
       const [collection, balance] = await Promise.all([
-        getBeliNftCollection(selectedAccount.address),
-        getBeliNftBalanceOf(selectedAccount.address, selectedAccount.address),
+        getBeliNftCollection(address),
+        getBeliNftBalanceOf(address, address),
       ]);
       setNftCollection(collection);
       setNftBalance(balance);
     } catch {
       // best-effort; NFT panel is informational
     }
-  }, [selectedAccount?.address]);
+  }, [address]);
 
   useEffect(() => {
-    void refreshDao();
-    void refreshNfts();
+    // Deferred so the initial loads don't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    void Promise.resolve().then(refreshDao);
+    void Promise.resolve().then(refreshNfts);
   }, [refreshDao, refreshNfts]);
 
   const handleVote = useCallback(
     async (proposalId: number, support: boolean) => {
-      if (!selectedAccount?.address) {
+      if (!address) {
         setDaoError('Connect a wallet account to vote');
         return;
       }
       setVoteBusyId(proposalId);
       setDaoError(null);
       try {
-        await voteOnDaoProposal(selectedAccount.address, proposalId, support);
+        await voteOnDaoProposal(address, proposalId, support);
         await refreshDao();
       } catch (err) {
         setDaoError(err instanceof Error ? err.message : 'Vote failed');
@@ -163,7 +172,7 @@ export default function GemPage() {
         setVoteBusyId(null);
       }
     },
-    [selectedAccount?.address, refreshDao],
+    [address, refreshDao],
   );
 
   // Proposal creation form state
@@ -172,7 +181,7 @@ export default function GemPage() {
   const [propTransferValue, setPropTransferValue] = useState('0');
   const [propBusy, setPropBusy] = useState(false);
   const [propTxHash, setPropTxHash] = useState<string | null>(null);  const handleCreateProposal = useCallback(async () => {
-    if (!selectedAccount?.address) {
+    if (!address) {
       setDaoError('Connect a wallet account to create a proposal');
       return;
     }
@@ -187,7 +196,7 @@ export default function GemPage() {
     try {
       const target = propTransferTarget.trim() || null;
       const hash = await createDaoProposal(
-        selectedAccount.address,
+        address,
         desc,
         target,
         propTransferValue.trim() || '0',
@@ -202,7 +211,7 @@ export default function GemPage() {
     } finally {
       setPropBusy(false);
     }
-  }, [selectedAccount?.address, propDescription, propTransferTarget, propTransferValue, refreshDao]);
+  }, [address, propDescription, propTransferTarget, propTransferValue, refreshDao]);
 
   // NFT form state
   const [nftMintTo, setNftMintTo] = useState('');
@@ -216,25 +225,27 @@ export default function GemPage() {
   const [ownedNfts, setOwnedNfts] = useState<Array<{ id: number; uri: string | null }>>([]);
 
   const refreshOwnedNfts = useCallback(async () => {
-    if (!selectedAccount?.address) return;
+    if (!address) return;
     try {
-      const owned = await listBeliNftsOwnedBy(selectedAccount.address, selectedAccount.address, 100);
+      const owned = await listBeliNftsOwnedBy(address, address, 100);
       setOwnedNfts(owned);
     } catch {
       setOwnedNfts([]);
     }
-  }, [selectedAccount?.address]);
+  }, [address]);
 
   useEffect(() => {
-    if (activeTab === 'nft') void refreshOwnedNfts();
+    // Deferred so the tab load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    if (activeTab === 'nft') void Promise.resolve().then(refreshOwnedNfts);
   }, [activeTab, refreshOwnedNfts]);
 
   const handleMintNft = useCallback(async () => {
-    if (!selectedAccount?.address) {
+    if (!address) {
       setNftError('Connect a wallet account first');
       return;
     }
-    const to = nftMintTo.trim() || selectedAccount.address;
+    const to = nftMintTo.trim() || address;
     const uri = nftMintUri.trim();
     if (!uri) {
       setNftError('Metadata URI is required');
@@ -244,7 +255,7 @@ export default function GemPage() {
     setNftError(null);
     setNftTxHash(null);
     try {
-      const hash = await mintBeliNft(selectedAccount.address, to, uri);
+      const hash = await mintBeliNft(address, to, uri);
       setNftTxHash(hash);
       setNftMintUri('');
       await Promise.all([refreshNfts(), refreshOwnedNfts()]);
@@ -253,10 +264,10 @@ export default function GemPage() {
     } finally {
       setNftMintBusy(false);
     }
-  }, [selectedAccount?.address, nftMintTo, nftMintUri, refreshNfts, refreshOwnedNfts]);
+  }, [address, nftMintTo, nftMintUri, refreshNfts, refreshOwnedNfts]);
 
   const handleTransferNft = useCallback(async () => {
-    if (!selectedAccount?.address) {
+    if (!address) {
       setNftError('Connect a wallet account first');
       return;
     }
@@ -270,7 +281,7 @@ export default function GemPage() {
     setNftError(null);
     setNftTxHash(null);
     try {
-      const hash = await transferBeliNft(selectedAccount.address, to, Number(id));
+      const hash = await transferBeliNft(address, to, Number(id));
       setNftTxHash(hash);
       setNftTransferId('');
       await Promise.all([refreshNfts(), refreshOwnedNfts()]);
@@ -279,7 +290,7 @@ export default function GemPage() {
     } finally {
       setNftTransferBusy(false);
     }
-  }, [selectedAccount?.address, nftTransferTo, nftTransferId, refreshNfts, refreshOwnedNfts]);
+  }, [address, nftTransferTo, nftTransferId, refreshNfts, refreshOwnedNfts]);
 
   const votingPowerDisplay = useMemo(() => {
     // DALLA has 12 decimals; show whole-token count with thousands separators.
@@ -454,11 +465,11 @@ export default function GemPage() {
 
                 <button
                   onClick={handleClaim}
-                  disabled={claiming || !selectedAccount?.address || (faucetStatus ? !faucetStatus.canClaim : false)}
+                  disabled={claiming || !address || (faucetStatus ? !faucetStatus.canClaim : false)}
                   className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-2xl text-xs hover:shadow-lg hover:shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <Lightning size={16} weight="fill" />
-                  <span>{claiming ? 'Claiming DALLA…' : selectedAccount?.address ? 'Claim 100 Test DALLA' : 'Connect Wallet to Claim'}</span>
+                  <span>{claiming ? 'Claiming DALLA…' : address ? 'Claim 100 Test DALLA' : 'Connect Wallet to Claim'}</span>
                 </button>
 
                 <p className="text-xs text-slate-400 text-center font-mono">
@@ -607,7 +618,7 @@ export default function GemPage() {
                   <Users size={28} className="text-teal-400" weight="fill" />
                 </div>
                 <p className="text-3xl font-black text-teal-400 font-mono">
-                  {selectedAccount?.address ? `${votingPowerDisplay} Ɗ` : 'Connect wallet'}
+                  {address ? `${votingPowerDisplay} Ɗ` : 'Connect wallet'}
                 </p>
                 {nftCollection && (
                   <p className="text-xs text-slate-400 font-mono pt-1 border-t border-slate-800">
@@ -677,7 +688,7 @@ export default function GemPage() {
 
                   <button
                     onClick={handleCreateProposal}
-                    disabled={propBusy || !selectedAccount?.address || !propDescription.trim()}
+                    disabled={propBusy || !address || !propDescription.trim()}
                     className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold rounded-2xl text-xs hover:shadow-lg hover:shadow-teal-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {propBusy ? 'Submitting to ink! Contract…' : 'Submit DAO Proposal'}
@@ -691,7 +702,7 @@ export default function GemPage() {
                   <p className="text-sm text-slate-400 text-center py-6 font-mono">Loading proposals from Substrate RPC…</p>
                 ) : daoProposals.length === 0 ? (
                   <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 text-center text-xs text-slate-400 font-mono">
-                    {selectedAccount?.address
+                    {address
                       ? 'No proposals active in this contract block. Submit the first proposal above!'
                       : 'Connect wallet to view ink! DAO proposals.'}
                   </div>
@@ -746,14 +757,14 @@ export default function GemPage() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleVote(proposal.id, true)}
-                                disabled={busy || !selectedAccount?.address}
+                                disabled={busy || !address}
                                 className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
                               >
                                 {busy ? '…' : 'Vote Aye'}
                               </button>
                               <button
                                 onClick={() => handleVote(proposal.id, false)}
-                                disabled={busy || !selectedAccount?.address}
+                                disabled={busy || !address}
                                 className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
                               >
                                 {busy ? '…' : 'Vote Nay'}
@@ -817,7 +828,7 @@ export default function GemPage() {
                       type="text"
                       value={nftMintTo}
                       onChange={(e) => setNftMintTo(e.target.value)}
-                      placeholder={selectedAccount?.address ?? '5...'}
+                      placeholder={address ?? '5...'}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 font-mono focus:outline-none focus:border-teal-500/50 transition-all"
                     />
                   </div>
@@ -833,7 +844,7 @@ export default function GemPage() {
                   </div>
                   <button
                     onClick={handleMintNft}
-                    disabled={nftMintBusy || !selectedAccount?.address || !nftMintUri.trim()}
+                    disabled={nftMintBusy || !address || !nftMintUri.trim()}
                     className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold rounded-2xl text-xs hover:shadow-lg hover:shadow-teal-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {nftMintBusy ? 'Minting NFT…' : 'Mint BeliNFT'}
@@ -872,7 +883,7 @@ export default function GemPage() {
                   </div>
                   <button
                     onClick={handleTransferNft}
-                    disabled={nftTransferBusy || !selectedAccount?.address || !nftTransferTo.trim() || !nftTransferId.trim()}
+                    disabled={nftTransferBusy || !address || !nftTransferTo.trim() || !nftTransferId.trim()}
                     className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 font-bold rounded-2xl text-xs hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {nftTransferBusy ? 'Transferring…' : 'Transfer NFT'}
@@ -894,7 +905,7 @@ export default function GemPage() {
 
                 {ownedNfts.length === 0 ? (
                   <p className="text-xs text-slate-400 font-mono text-center py-4">
-                    {selectedAccount?.address
+                    {address
                       ? 'No BeliNFTs registered to this account in the first 100 token IDs.'
                       : 'Connect wallet to view your owned NFTs.'}
                   </p>

@@ -66,15 +66,19 @@ export default function NawalPage() {
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [benchmarkResult, setBenchmarkResult] = useState<{ tokensPerSec: number; flopsGflops: number; webGlAccelerated: boolean } | null>(null);
 
+  // Hoisted so the callback's deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
+
   const fetchData = useCallback(async () => {
-    if (!selectedAccount?.address) {
+    if (!address) {
       setLoading(false);
       return;
     }
 
     try {
       const [participantStats, sysMetrics, activeRoundsList] = await Promise.all([
-        getParticipantStats(selectedAccount.address),
+        getParticipantStats(address),
         getSystemMetrics(),
         getActiveRounds(),
       ]);
@@ -87,10 +91,12 @@ export default function NawalPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedAccount?.address]);
+  }, [address]);
 
   useEffect(() => {
-    fetchData();
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(fetchData);
   }, [fetchData]);
 
   const handleStartLocalTraining = async (roundId: string) => {

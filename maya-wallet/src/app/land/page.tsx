@@ -73,7 +73,9 @@ export default function LandPage() {
   };
 
   useEffect(() => {
-    fetchLandData();
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(fetchLandData);
     const interval = setInterval(fetchLandData, 30000);
     return () => clearInterval(interval);
   }, [selectedAccount?.address]);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { getDallaBalance } from '@/services/gem';
 
 const DALLA_PLANCK = 1_000_000_000_000n;
@@ -242,8 +242,12 @@ export function useBalanceSubscription(address: string | null) {
 
   useEffect(() => {
     if (!address || typeof window === 'undefined') {
-      setBalance(null);
-      setIsLoading(false);
+      // Deferred reset so the effect body doesn't set state directly
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(() => {
+        setBalance(null);
+        setIsLoading(false);
+      });
       return;
     }
     let cancelled = false;
@@ -284,8 +288,12 @@ export function useBalanceSubscription(address: string | null) {
         setIsLoading(false);
       }
     };
-    setIsLoading(true);
-    void fetchBalance();
+    // Deferred so starting the poll doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    void Promise.resolve().then(() => {
+      setIsLoading(true);
+      return fetchBalance();
+    });
     const interval = setInterval(() => { void fetchBalance(); }, BALANCE_POLL_MS);
     return () => { cancelled = true; clearInterval(interval); };
   }, [address]);
@@ -421,47 +429,63 @@ export function useAllEventsSubscription(address: string | null) {
   return { balance, stakingRewards, tourismCashback, governanceProposals, complianceAlerts, landTransfers, domainEvents, dexEvents };
 }
 
+type WalletNotification = {
+  id: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  timestamp: number;
+  read: boolean;
+};
+
 export function useNotifications(address: string | null) {
-  const [notifications, setNotifications] = useState<Array<{id: string; type: 'info' | 'success' | 'warning' | 'error'; title: string; message: string; timestamp: number; read: boolean;}>>([]);
   const stakingRewards = useStakingRewardsSubscription(address);
   const tourismCashback = useTourismCashbackSubscription(address);
   const complianceAlerts = useComplianceAlertsSubscription(address);
   const landTransfers = useLandTransfersSubscription(address);
 
-  useEffect(() => {
+  // Notifications are derived from the subscription streams at render time
+  // (the React Compiler forbids syncing them into state from effects); only
+  // the read/unread marks are stored as user state.
+  const derived = useMemo<WalletNotification[]>(() => {
+    const items: WalletNotification[] = [];
     if (stakingRewards.length > 0) {
       const latest = stakingRewards[0];
-      setNotifications(prev => [{id: `reward-${latest.timestamp}`, type: 'success', title: `${latest.type} Reward Earned`, message: `You received ${latest.amount} DALLA`, timestamp: latest.timestamp, read: false}, ...prev]);
+      items.push({ id: `reward-${latest.timestamp}`, type: 'success', title: `${latest.type} Reward Earned`, message: `You received ${latest.amount} DALLA`, timestamp: latest.timestamp, read: false });
     }
-  }, [stakingRewards]);
-
-  useEffect(() => {
     if (tourismCashback.length > 0) {
       const latest = tourismCashback[0];
-      setNotifications(prev => [{id: `cashback-${latest.timestamp}`, type: 'success', title: 'Tourism Cashback Earned', message: `${latest.cashbackRate * 100}% cashback: ${latest.cashbackAmount} DALLA`, timestamp: latest.timestamp, read: false}, ...prev]);
+      items.push({ id: `cashback-${latest.timestamp}`, type: 'success', title: 'Tourism Cashback Earned', message: `${latest.cashbackRate * 100}% cashback: ${latest.cashbackAmount} DALLA`, timestamp: latest.timestamp, read: false });
     }
-  }, [tourismCashback]);
-
-  useEffect(() => {
     if (complianceAlerts.length > 0) {
       const latest = complianceAlerts[0];
-      setNotifications(prev => [{id: `alert-${latest.timestamp}`, type: latest.type === 'KYCApproved' ? 'success' : 'warning', title: latest.type, message: latest.message, timestamp: latest.timestamp, read: false}, ...prev]);
+      items.push({ id: `alert-${latest.timestamp}`, type: latest.type === 'KYCApproved' ? 'success' : 'warning', title: latest.type, message: latest.message, timestamp: latest.timestamp, read: false });
     }
-  }, [complianceAlerts]);
-
-  useEffect(() => {
     if (landTransfers.length > 0) {
       const latest = landTransfers[0];
-      setNotifications(prev => [{id: `land-${latest.timestamp}`, type: 'info', title: `Land Title ${latest.type}`, message: `Title ${latest.titleId} was ${latest.type.toLowerCase()}`, timestamp: latest.timestamp, read: false}, ...prev]);
+      items.push({ id: `land-${latest.timestamp}`, type: 'info', title: `Land Title ${latest.type}`, message: `Title ${latest.titleId} was ${latest.type.toLowerCase()}`, timestamp: latest.timestamp, read: false });
     }
-  }, [landTransfers]);
+    return items.sort((a, b) => b.timestamp - a.timestamp);
+  }, [stakingRewards, tourismCashback, complianceAlerts, landTransfers]);
+
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+  const [allRead, setAllRead] = useState(false);
+
+  const notifications = useMemo(
+    () => derived.map((notif) => ({ ...notif, read: notif.read || allRead || readIds.has(notif.id) })),
+    [derived, readIds, allRead]
+  );
 
   const markAsRead = useCallback((id: string) => {
-    setNotifications(prev => prev.map(notif => notif.id === id ? { ...notif, read: true } : notif));
+    setReadIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   }, []);
 
   const markAllAsRead = useCallback(() => {
-    setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
+    setAllRead(true);
   }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;

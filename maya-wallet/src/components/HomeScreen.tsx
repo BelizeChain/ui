@@ -5,10 +5,10 @@ import { Badge, useI18n } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
 import { GlassCard } from '@/components/ui';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
-import { 
-  PaperPlaneTilt, 
-  QrCode, 
-  FileText, 
+import {
+  PaperPlaneTilt,
+  QrCode,
+  FileText,
   CreditCard,
   Gift,
   Eye,
@@ -27,6 +27,9 @@ export function HomeScreen() {
   const { selectedAccount, balance, disconnect, isConnected } = useWallet();
   const { t } = useI18n();
   const [balanceVisible, setBalanceVisible] = useState(true);
+  // Demo activity timestamps are anchored once per mount instead of being
+  // recomputed on every render (react-hooks/purity).
+  const [demoBaseTime] = useState(() => Date.now());
 
   if (!isConnected || !selectedAccount) return null;
 
@@ -37,7 +40,7 @@ export function HomeScreen() {
       from: 'Maria Garcia',
       amount: '50.00',
       currency: 'DALLA',
-      timestamp: Date.now() - 3600000,
+      timestamp: demoBaseTime - 3600000,
     },
     {
       id: '2',
@@ -45,7 +48,7 @@ export function HomeScreen() {
       to: 'Tourist Board',
       amount: '15.00',
       currency: 'bBZD',
-      timestamp: Date.now() - 7200000,
+      timestamp: demoBaseTime - 7200000,
     },
     {
       id: '3',
@@ -53,7 +56,7 @@ export function HomeScreen() {
       from: 'Tourism Reward',
       amount: '8.50',
       currency: 'DALLA',
-      timestamp: Date.now() - 86400000,
+      timestamp: demoBaseTime - 86400000,
     },
   ];
 
@@ -256,7 +259,7 @@ function TransactionItem({ transaction }: TransactionItemProps) {
 
 function formatTimeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  
+
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;

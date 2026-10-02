@@ -32,22 +32,26 @@ export default function ReceivePage() {
     }
   }, [router, selectedAccount]);
 
+  // Hoisted so the memo's deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
+
   const formattedAddress = useMemo(() => {
-    if (!selectedAccount?.address) return '';
+    if (!address) return '';
     try {
       const { decodeAddress, encodeAddress } = require('@polkadot/util-crypto');
-      const bzAddr = encodeAddress(decodeAddress(selectedAccount.address), 105);
+      const bzAddr = encodeAddress(decodeAddress(address), 105);
       if (addressFormat === 'did') {
         return `did:belize:${bzAddr}`;
       }
       if (addressFormat === 'generic') {
-        return encodeAddress(decodeAddress(selectedAccount.address), 42);
+        return encodeAddress(decodeAddress(address), 42);
       }
       return bzAddr;
     } catch {
-      return selectedAccount.address;
+      return address;
     }
-  }, [selectedAccount?.address, addressFormat]);
+  }, [address, addressFormat]);
 
   if (!selectedAccount) {
     return null;

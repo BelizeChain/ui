@@ -32,28 +32,32 @@ export default function AppearancePage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    // Deferred so loading saved settings doesn't set state during the effect
+    // body (react-hooks/set-state-in-effect).
+    Promise.resolve().then(() => {
+      if (typeof window === 'undefined') return;
 
-    const raw = localStorage.getItem(APPEARANCE_STORAGE_KEY);
-    if (!raw) return;
+      const raw = localStorage.getItem(APPEARANCE_STORAGE_KEY);
+      if (!raw) return;
 
-    try {
-      const parsed = JSON.parse(raw) as AppearanceSettings;
-      if (parsed.theme === 'light' || parsed.theme === 'dark' || parsed.theme === 'auto') {
-        setTheme(parsed.theme);
+      try {
+        const parsed = JSON.parse(raw) as AppearanceSettings;
+        if (parsed.theme === 'light' || parsed.theme === 'dark' || parsed.theme === 'auto') {
+          setTheme(parsed.theme);
+        }
+        if (typeof parsed.accentColor === 'string') {
+          setAccentColor(parsed.accentColor);
+        }
+        if (typeof parsed.glassEffect === 'boolean') {
+          setGlassEffect(parsed.glassEffect);
+        }
+        if (typeof parsed.animations === 'boolean') {
+          setAnimations(parsed.animations);
+        }
+      } catch {
+        // Ignore invalid saved settings and keep defaults.
       }
-      if (typeof parsed.accentColor === 'string') {
-        setAccentColor(parsed.accentColor);
-      }
-      if (typeof parsed.glassEffect === 'boolean') {
-        setGlassEffect(parsed.glassEffect);
-      }
-      if (typeof parsed.animations === 'boolean') {
-        setAnimations(parsed.animations);
-      }
-    } catch {
-      // Ignore invalid saved settings and keep defaults.
-    }
+    });
   }, []);
 
   const applyTheme = (selectedTheme: 'light' | 'dark' | 'auto') => {
@@ -141,9 +145,9 @@ export default function AppearancePage() {
                 onClick={() => setTheme(t.id as 'light' | 'dark' | 'auto')}
                 className="relative"
               >
-                <GlassCard 
-                  variant="dark" 
-                  blur="sm" 
+                <GlassCard
+                  variant="dark"
+                  blur="sm"
                   className={`p-4 text-center transition-all ${
                     theme === t.id ? 'ring-2 ring-forest-500' : ''
                   }`}

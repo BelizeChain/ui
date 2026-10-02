@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import {
   Bell,
@@ -16,6 +16,14 @@ import { cn } from '@/lib/utils';
 export function NotificationBell() {
   const { notifications, unreadNotifications, markNotificationAsRead, markAllNotificationsAsRead } = useWallet();
   const [isOpen, setIsOpen] = useState(false);
+  // Live clock for relative timestamps — refreshed every minute so the labels
+  // stay current without recomputing Date.now() during render.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -47,7 +55,7 @@ export function NotificationBell() {
   };
 
   const formatTime = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    const seconds = Math.floor((now - timestamp) / 1000);
     if (seconds < 60) return `${seconds}s ago`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;

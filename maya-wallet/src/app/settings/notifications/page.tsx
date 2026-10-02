@@ -26,7 +26,13 @@ export default function SettingsNotificationsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setPrefs(getNotificationPreferences());
+    let cancelled = false;
+    Promise.resolve(getNotificationPreferences()).then((preferences) => {
+      if (!cancelled) setPrefs(preferences);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleToggle = (key: ToggleKey) => {

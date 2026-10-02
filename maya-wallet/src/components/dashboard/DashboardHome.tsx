@@ -12,9 +12,9 @@ import {
   getPoUWContributions,
 } from '@/services/pallets';
 import { useAccountStore } from '@/store/account';
-import { 
-  PaperPlaneTilt, 
-  QrCode, 
+import {
+  PaperPlaneTilt,
+  QrCode,
   ArrowsLeftRight,
   Eye,
   EyeSlash,
@@ -105,14 +105,18 @@ export function DashboardHome() {
 
   useEffect(() => {
     if (!account?.address) {
-      setRecentActivity([]);
-      setStats({
-        compliance: { status: 'none', level: 0 },
-        activeProposals: 0,
-        communityVotes: 0,
-        pouwRewards: 0,
-        monthlySpending: 0,
-        budgetLimit: 0,
+      // Deferred reset so the effect body doesn't set state directly
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(() => {
+        setRecentActivity([]);
+        setStats({
+          compliance: { status: 'none', level: 0 },
+          activeProposals: 0,
+          communityVotes: 0,
+          pouwRewards: 0,
+          monthlySpending: 0,
+          budgetLimit: 0,
+        });
       });
       return;
     }

@@ -38,11 +38,9 @@ jobs:
         run: npm ci
 
       - name: Lint Blue Hole Portal
-        continue-on-error: true
         run: npm run lint --workspace=blue-hole-portal
 
       - name: Type check Blue Hole Portal
-        continue-on-error: true
         run: npm run type-check --workspace=blue-hole-portal
 
   build:
@@ -63,7 +61,6 @@ jobs:
         run: npm run build --workspace=shared
 
       - name: Build Blue Hole Portal
-        continue-on-error: true
         run: npm run build --workspace=blue-hole-portal
         env:
           NEXT_PUBLIC_DEV_MODE: 'false'

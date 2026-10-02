@@ -153,6 +153,13 @@ export default function BNSPage() {
 
   const currentDomain = myDomains[selectedDomainIndex] || myDomains[0];
 
+  /** Immutable updater for the selected domain (react-hooks/immutability). */
+  const updateCurrentDomain = (update: (domain: DomainRecord) => DomainRecord) => {
+    setMyDomains((prev) =>
+      prev.map((domain, index) => (index === selectedDomainIndex ? update(domain) : domain))
+    );
+  };
+
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -231,10 +238,12 @@ export default function BNSPage() {
     setTimeout(() => {
       const cleanPrefix = newSubdomainPrefix.toLowerCase().replace(/[^a-z0-9-]/g, '');
       const fullSubdomain = `${cleanPrefix}.${currentDomain.name}${currentDomain.tld}`;
-      
+
       if (!currentDomain.subdomains.includes(fullSubdomain)) {
-        currentDomain.subdomains.push(fullSubdomain);
-        setMyDomains([...myDomains]);
+        updateCurrentDomain((domain) => ({
+          ...domain,
+          subdomains: [...domain.subdomains, fullSubdomain],
+        }));
         addNotification({
           type: 'success',
           message: `Anchored subdomain ${fullSubdomain} to ${currentDomain.name}${currentDomain.tld}!`,
@@ -250,13 +259,17 @@ export default function BNSPage() {
     e.preventDefault();
     if (!newRecordKey.trim() || !newRecordValue.trim() || !currentDomain) return;
 
-    currentDomain.records.push({
-      type: newRecordType,
-      key: newRecordKey.trim(),
-      value: newRecordValue.trim(),
-    });
-
-    setMyDomains([...myDomains]);
+    updateCurrentDomain((domain) => ({
+      ...domain,
+      records: [
+        ...domain.records,
+        {
+          type: newRecordType,
+          key: newRecordKey.trim(),
+          value: newRecordValue.trim(),
+        },
+      ],
+    }));
     setNewRecordKey('');
     setNewRecordValue('');
     addNotification({
@@ -269,16 +282,13 @@ export default function BNSPage() {
   const handleQuickAnchorBelizeID = () => {
     if (!currentDomain) return;
     const didVal = `did:belize:cit:2026:88942-${currentDomain.name}`;
-    currentDomain.didIdentifier = didVal;
-    
-    // Check if record exists
-    const existing = currentDomain.records.find((r) => r.type === 'DID');
-    if (existing) {
-      existing.value = didVal;
-    } else {
-      currentDomain.records.push({ type: 'DID', key: 'identity.w3c', value: didVal });
-    }
-    setMyDomains([...myDomains]);
+    updateCurrentDomain((domain) => ({
+      ...domain,
+      didIdentifier: didVal,
+      records: domain.records.some((r) => r.type === 'DID')
+        ? domain.records.map((r) => (r.type === 'DID' ? { ...r, value: didVal } : r))
+        : [...domain.records, { type: 'DID', key: 'identity.w3c', value: didVal }],
+    }));
     addNotification({
       type: 'success',
       message: `Bound BelizeID DID (${didVal}) to ${currentDomain.name}${currentDomain.tld}!`,
@@ -289,19 +299,24 @@ export default function BNSPage() {
   const handleQuickAnchorLandLedger = () => {
     if (!currentDomain) return;
     const deedParcel = 'BZ-AMB-2026-0782';
-    currentDomain.landLedgerParcelId = deedParcel;
-    
-    const existing = currentDomain.records.find((r) => r.type === 'RWA');
-    if (existing) {
-      existing.value = `${deedParcel} (Ambergris Caye Beachfront)`;
-    } else {
-      currentDomain.records.push({
-        type: 'RWA',
-        key: 'landledger.deed',
-        value: `${deedParcel} (Ambergris Caye Beachfront)`,
-      });
-    }
-    setMyDomains([...myDomains]);
+    updateCurrentDomain((domain) => ({
+      ...domain,
+      landLedgerParcelId: deedParcel,
+      records: domain.records.some((r) => r.type === 'RWA')
+        ? domain.records.map((r) =>
+            r.type === 'RWA'
+              ? { ...r, value: `${deedParcel} (Ambergris Caye Beachfront)` }
+              : r
+          )
+        : [
+            ...domain.records,
+            {
+              type: 'RWA',
+              key: 'landledger.deed',
+              value: `${deedParcel} (Ambergris Caye Beachfront)`,
+            },
+          ],
+    }));
     addNotification({
       type: 'success',
       message: `Anchored LandLedger Deed ${deedParcel} to ${currentDomain.name}${currentDomain.tld}!`,
@@ -315,16 +330,15 @@ export default function BNSPage() {
 
     setIsUpdatingCid(true);
     setTimeout(() => {
-      currentDomain.ipfsContentCid = newIpfsCid.trim();
-      
-      const existing = currentDomain.records.find((r) => r.type === 'IPFS');
-      if (existing) {
-        existing.value = newIpfsCid.trim();
-      } else {
-        currentDomain.records.push({ type: 'IPFS', key: 'dapp.root', value: newIpfsCid.trim() });
-      }
+      const cidValue = newIpfsCid.trim();
+      updateCurrentDomain((domain) => ({
+        ...domain,
+        ipfsContentCid: cidValue,
+        records: domain.records.some((r) => r.type === 'IPFS')
+          ? domain.records.map((r) => (r.type === 'IPFS' ? { ...r, value: cidValue } : r))
+          : [...domain.records, { type: 'IPFS', key: 'dapp.root', value: cidValue }],
+      }));
 
-      setMyDomains([...myDomains]);
       setIsUpdatingCid(false);
       setNewIpfsCid('');
       addNotification({

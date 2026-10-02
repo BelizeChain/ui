@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  useI18n, 
+import {
+  useI18n,
   Badge,
   getPakitClient,
   type PakitClient,
@@ -22,12 +22,12 @@ interface PakitDocMetadata {
   tags?: Record<string, string>;
   owner: string;
 }
-import { 
-  ArrowLeft, 
-  UploadSimple, 
-  FilePdf, 
-  FileImage, 
-  FileDoc, 
+import {
+  ArrowLeft,
+  UploadSimple,
+  FilePdf,
+  FileImage,
+  FileDoc,
   File as FileIcon,
   Eye,
   DownloadSimple,
@@ -64,56 +64,38 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load documents from Pakit on mount
-  useEffect(() => {
-    if (account?.address) {
-      loadDocuments();
-    }
-  }, [account?.address]);
+  // Fetch documents from Pakit. Pure fetch — callers own their state updates.
+  const fetchDocuments = async (): Promise<Document[]> => {
+    if (!account?.address) return [];
 
-  const loadDocuments = async () => {
-    if (!account?.address) return;
+    // [PAKIT] REAL PAKIT INTEGRATION - Using actual IPFS/Arweave backends!
+    const pakitClient = getPakitClient();
+    const pakitDocs = await pakitClient.listDocuments(account.address);
 
-    try {
-      setLoading(true);
-      
-      // [PAKIT] REAL PAKIT INTEGRATION - Using actual IPFS/Arweave backends!
-      const pakitClient = getPakitClient();
-      const pakitDocs = await pakitClient.listDocuments(account.address);
-      
-      // Convert Pakit documents to our UI format
-      const convertedDocs: Document[] = pakitDocs.map((doc: PakitDocMetadata) => ({
-        id: doc.cid,
-        name: doc.name,
-        type: detectDocumentType(doc.name, doc.tags),
-        category: doc.tags?.category || 'Other Documents',
-        size: formatFileSize(doc.size),
-        uploadedAt: new Date(doc.uploadedAt).toISOString().split('T')[0],
-        status: doc.tags?.verified === 'true' ? 'verified' : 'pending',
-        hash: doc.cid,
-        encrypted: doc.tags?.encrypted === 'true',
-        sharedWith: doc.tags?.sharedWith ? doc.tags.sharedWith.split(',') : [],
-      }));
-
-      setDocuments(convertedDocs);
-    } catch (error) {
-      console.error('Failed to load documents from Pakit:', error);
-      // Fallback to empty array on error
-      setDocuments([]);
-    } finally {
-      setLoading(false);
-    }
+    // Convert Pakit documents to our UI format
+    return pakitDocs.map((doc: PakitDocMetadata) => ({
+      id: doc.cid,
+      name: doc.name,
+      type: detectDocumentType(doc.name, doc.tags),
+      category: doc.tags?.category || 'Other Documents',
+      size: formatFileSize(doc.size),
+      uploadedAt: new Date(doc.uploadedAt).toISOString().split('T')[0],
+      status: doc.tags?.verified === 'true' ? 'verified' : 'pending',
+      hash: doc.cid,
+      encrypted: doc.tags?.encrypted === 'true',
+      sharedWith: doc.tags?.sharedWith ? doc.tags.sharedWith.split(',') : [],
+    }));
   };
 
   // Helper: Detect document type from filename and tags
   const detectDocumentType = (
-    filename: string, 
+    filename: string,
     tags?: Record<string, string>
   ): 'id' | 'certificate' | 'license' | 'other' => {
     if (tags?.type) {
       return tags.type as any;
     }
-    
+
     const lower = filename.toLowerCase();
     if (lower.includes('id') || lower.includes('passport') || lower.includes('ssn')) {
       return 'id';
@@ -134,6 +116,28 @@ export default function DocumentsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Load documents from Pakit on mount
+  useEffect(() => {
+    if (!account?.address) return;
+    let cancelled = false;
+
+    fetchDocuments()
+      .then((docs) => {
+        if (!cancelled) setDocuments(docs);
+      })
+      .catch((error) => {
+        console.error('Failed to load documents from Pakit:', error);
+        if (!cancelled) setDocuments([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address]);
+
   const categories = ['all', 'Identity', 'Vital Records', 'Licenses', 'Photos', 'Other'];
 
   const filteredDocuments = selectedCategory === 'all'
@@ -145,11 +149,11 @@ export default function DocumentsPage() {
     if (!files || files.length === 0 || !account?.address) return;
 
     setIsUploading(true);
-    
+
     try {
       // [PAKIT] REAL PAKIT UPLOAD - Using actual IPFS/Arweave backends!
       const pakitClient = getPakitClient();
-      
+
       for (const file of Array.from(files)) {
         const uploadResult = await pakitClient.upload(file, {
           compress: true,
@@ -173,7 +177,8 @@ export default function DocumentsPage() {
       }
 
       // Reload document list from Pakit
-      await loadDocuments();
+      const refreshed = await fetchDocuments().catch(() => []);
+      setDocuments(refreshed);
     } catch (error) {
       console.error('Pakit upload failed:', error);
       alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -189,17 +194,17 @@ export default function DocumentsPage() {
       // [PAKIT] REAL PAKIT SHARE LINK - Generate actual shareable link!
       const pakitClient = getPakitClient();
       const shareResult = await pakitClient.generateShareLink(
-        doc.hash, 
+        doc.hash,
         7 * 24 * 60 * 60 // 7 days expiration
       );
-      
+
       await navigator.clipboard.writeText(shareResult.url);
       console.log('[PAKIT] Share link generated via Pakit:', shareResult);
-      
-      const expiryDate = shareResult.expiresAt 
+
+      const expiryDate = shareResult.expiresAt
         ? new Date(shareResult.expiresAt * 1000).toLocaleDateString()
         : 'Never';
-      
+
       alert(`Share link copied to clipboard!\n\nURL: ${shareResult.url}\nExpires: ${expiryDate}`);
     } catch (error) {
       console.error('Pakit share failed:', error);
@@ -212,7 +217,7 @@ export default function DocumentsPage() {
       // [PAKIT] REAL PAKIT DOWNLOAD - Retrieve from IPFS/Arweave!
       const pakitClient = getPakitClient();
       const blob = await pakitClient.download(doc.hash);
-      
+
       // Create download link
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -222,7 +227,7 @@ export default function DocumentsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       console.log('[PAKIT] Document downloaded from Pakit:', { name: doc.name, cid: doc.hash });
     } catch (error) {
       console.error('Pakit download failed:', error);
@@ -232,7 +237,7 @@ export default function DocumentsPage() {
 
     const handleDelete = async (doc: Document) => {
     if (!account?.address) return;
-    
+
     const confirmed = confirm(`Are you sure you want to delete "${doc.name}"?\n\nNote: If stored on Arweave, the data is permanent and cannot be fully deleted.`);
     if (!confirmed) return;
 
@@ -240,11 +245,12 @@ export default function DocumentsPage() {
       // [PAKIT] REAL PAKIT DELETE - Remove from cache (Arweave data is permanent)
       const pakitClient = getPakitClient();
       await pakitClient.delete(doc.hash, account.address);
-      
+
       console.log('[PAKIT] Document deleted from Pakit cache:', { name: doc.name, cid: doc.hash });
-      
+
       // Reload from Pakit to reflect changes
-      await loadDocuments();
+      const refreshed = await fetchDocuments().catch(() => []);
+      setDocuments(refreshed);
     } catch (error) {
       console.error('Pakit delete failed:', error);
       alert(`Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -330,17 +336,17 @@ export default function DocumentsPage() {
             htmlFor="file-upload"
             className={`
               flex items-center justify-center gap-3 p-4 rounded-xl border-2 border-dashed
-              ${isUploading 
-                ? 'border-gray-300 bg-gray-50 cursor-wait' 
+              ${isUploading
+                ? 'border-gray-300 bg-gray-50 cursor-wait'
                 : 'border-caribbean-300 bg-caribbean-50 hover:bg-caribbean-100 cursor-pointer'
               }
               transition-all
             `}
           >
-            <UploadSimple 
-              size={24} 
-              className={isUploading ? 'text-gray-500' : 'text-caribbean-400'} 
-              weight="bold" 
+            <UploadSimple
+              size={24}
+              className={isUploading ? 'text-gray-500' : 'text-caribbean-400'}
+              weight="bold"
             />
             <span className={`font-semibold ${isUploading ? 'text-gray-600' : 'text-caribbean-500'}`}>
               {isUploading ? 'Uploading...' : `Upload ${t.identity.documents}`}
@@ -405,20 +411,20 @@ export default function DocumentsPage() {
                       <h3 className="font-semibold text-gray-900 truncate">{doc.name}</h3>
                       {getStatusBadge(doc.status)}
                     </div>
-                    
+
                     <div className="space-y-1">
                       <p className="text-sm text-gray-600">{doc.category}</p>
                       <p className="text-xs text-gray-500">
                         {doc.size} • Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
                       </p>
-                      
+
                       {doc.encrypted && (
                         <p className="text-xs text-emerald-400 font-medium flex items-center gap-1">
                           <Lock size={12} weight="fill" />
                           <span>End-to-end encrypted</span>
                         </p>
                       )}
-                      
+
                       {doc.sharedWith.length > 0 && (
                         <p className="text-xs text-gray-500">
                           Shared with {doc.sharedWith.join(', ')}

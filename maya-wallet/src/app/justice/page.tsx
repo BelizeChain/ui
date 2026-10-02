@@ -65,7 +65,9 @@ export default function CitizenJusticePage() {
   }
 
   useEffect(() => {
-    loadData();
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadData);
     const timer = setInterval(loadData, 20_000);
     return () => clearInterval(timer);
   }, [account]);

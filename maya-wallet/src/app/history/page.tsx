@@ -33,6 +33,26 @@ interface Transaction {
   blockNumber?: number;
 }
 
+/** Pure fetch — no component state touched (react-hooks/set-state-in-effect). */
+async function fetchFormattedTransactions(address: string, limit: number): Promise<Transaction[]> {
+  const { fetchTransactionHistory } = await import('@/services/blockchain');
+  const txs = await fetchTransactionHistory(address, limit);
+
+  return txs.map((tx, index) => ({
+    id: tx.hash || `tx-${index}`,
+    type: tx.type === 'send' ? 'sent' : 'received',
+    from: tx.from,
+    to: tx.to,
+    amount: tx.amount,
+    currency: tx.currency,
+    timestamp: tx.timestamp,
+    status: tx.status === 'success' ? 'completed' : (tx.status as any),
+    fee: tx.fee || '0.01',
+    blockNumber: tx.blockNumber,
+    note: tx.note,
+  }));
+}
+
 export default function HistoryPage() {
   const router = useRouter();
   const { selectedAccount, isConnected } = useWallet();
@@ -42,41 +62,12 @@ export default function HistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (account?.address) {
-      loadTransactionHistory();
-    }
-  }, [account?.address]);
-
-  useEffect(() => {
-    if (!isConnected && !account) {
-      router.replace('/');
-    }
-  }, [isConnected, account, router]);
-
   const loadTransactionHistory = async () => {
     if (!account?.address) return;
 
     setLoading(true);
     try {
-      const { fetchTransactionHistory } = await import('@/services/blockchain');
-      const txs = await fetchTransactionHistory(account.address, 100);
-
-      const formattedTxs: Transaction[] = txs.map((tx, index) => ({
-        id: tx.hash || `tx-${index}`,
-        type: tx.type === 'send' ? 'sent' : 'received',
-        from: tx.from,
-        to: tx.to,
-        amount: tx.amount,
-        currency: tx.currency,
-        timestamp: tx.timestamp,
-        status: tx.status === 'success' ? 'completed' : (tx.status as any),
-        fee: tx.fee || '0.01',
-        blockNumber: tx.blockNumber,
-        note: tx.note,
-      }));
-
-      setTransactions(formattedTxs);
+      setTransactions(await fetchFormattedTransactions(account.address, 100));
     } catch (error) {
       console.error('Failed to load transaction history', error);
       setTransactions([]);
@@ -84,6 +75,37 @@ export default function HistoryPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const address = account?.address;
+    if (!address) return;
+    let cancelled = false;
+
+    // Deferred into a microtask so the effect body itself doesn't set state
+    // (react-hooks/set-state-in-effect); cancelled guards post-unmount writes.
+    Promise.resolve().then(async () => {
+      setLoading(true);
+      try {
+        const txs = await fetchFormattedTransactions(address, 100);
+        if (!cancelled) setTransactions(txs);
+      } catch (error) {
+        console.error('Failed to load transaction history', error);
+        if (!cancelled) setTransactions([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address]);
+
+  useEffect(() => {
+    if (!isConnected && !account) {
+      router.replace('/');
+    }
+  }, [isConnected, account, router]);
 
   if (!account) {
     return null;

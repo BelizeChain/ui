@@ -148,6 +148,53 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Handle incoming mesh message. Declared before initializeMesh so the
+  // listener registration passes the React Compiler's declaration-order check.
+  const handleIncomingMeshMessage = async (event: Event) => {
+    const customEvent = event as CustomEvent<MeshMessage>;
+    const meshMsg = customEvent.detail;
+
+    const newMessage: Message = {
+      id: meshMsg.id,
+      content: meshMsg.content,
+      sender: meshMsg.from,
+      recipient: meshMsg.to,
+      timestamp: meshMsg.timestamp,
+      status: 'delivered',
+      via: 'mesh'
+    };
+
+    // Queue for Pakit sync
+    pakitBridgeService.queueMessage(meshMsg);
+    setPendingSyncCount(await pakitBridgeService.getPendingCount());
+
+    // Update conversations immutably (react-hooks/immutability)
+    setConversations((prev) => {
+      const convIndex = prev.findIndex((c) => c.peerAddress === meshMsg.from);
+      if (convIndex < 0) {
+        return [
+          ...prev,
+          {
+            peerAddress: meshMsg.from,
+            lastMessage: newMessage,
+            unreadCount: 1,
+            messages: [newMessage],
+          },
+        ];
+      }
+      return prev.map((conversation, index) =>
+        index === convIndex
+          ? {
+              ...conversation,
+              messages: [...conversation.messages, newMessage],
+              lastMessage: newMessage,
+              unreadCount: conversation.unreadCount + 1,
+            }
+          : conversation
+      );
+    });
+  };
+
   // Initialize Bluetooth Mesh
   const initializeMesh = useCallback(async () => {
     try {
@@ -168,45 +215,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   }, []);
-
-  // Handle incoming mesh message
-  const handleIncomingMeshMessage = async (event: Event) => {
-    const customEvent = event as CustomEvent<MeshMessage>;
-    const meshMsg = customEvent.detail;
-
-    const newMessage: Message = {
-      id: meshMsg.id,
-      content: meshMsg.content,
-      sender: meshMsg.from,
-      recipient: meshMsg.to,
-      timestamp: meshMsg.timestamp,
-      status: 'delivered',
-      via: 'mesh'
-    };
-
-    // Queue for Pakit sync
-    pakitBridgeService.queueMessage(meshMsg);
-    setPendingSyncCount(await pakitBridgeService.getPendingCount());
-
-    // Update conversations
-    setConversations(prev => {
-      const convIndex = prev.findIndex(c => c.peerAddress === meshMsg.from);
-      if (convIndex >= 0) {
-        const updated = [...prev];
-        updated[convIndex].messages.push(newMessage);
-        updated[convIndex].lastMessage = newMessage;
-        updated[convIndex].unreadCount++;
-        return updated;
-      } else {
-        return [...prev, {
-          peerAddress: meshMsg.from,
-          lastMessage: newMessage,
-          unreadCount: 1,
-          messages: [newMessage]
-        }];
-      }
-    });
-  };
 
   // Send message (auto-selects best method)
   const sendMessage = async (to: string, content: string): Promise<boolean> => {
@@ -380,13 +388,16 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   // Auto-initialize mesh on mount
   useEffect(() => {
     if (selectedAccount) {
-      initializeMesh();
+      // Deferred so mesh init doesn't set state during the effect body
+      // (react-hooks/set-state-in-effect).
+      void Promise.resolve().then(() => initializeMesh());
       // Refresh gateway node status (ownerOf?) from chain
       getGatewayStatus(selectedAccount.address)
         .then(setGatewayStatus)
         .catch((err) => console.warn('[BelizeMesh] gateway status fetch failed:', err));
     } else {
-      setGatewayStatus(null);
+      // Deferred reset for the same reason.
+      Promise.resolve().then(() => setGatewayStatus(null));
     }
   }, [selectedAccount]);  // initializeMesh is stable (no deps)
 

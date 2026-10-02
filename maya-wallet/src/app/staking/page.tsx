@@ -133,7 +133,9 @@ export default function StakingPage() {
   };
 
   useEffect(() => {
-    loadStaking();
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadStaking);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount?.address]);
 

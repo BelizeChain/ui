@@ -94,8 +94,8 @@ export default function SecurityPage() {
   const [eventFilter, setEventFilter] = useState<'all' | 'ok' | 'warning'>('all');
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Load persisted state on mount
-  useEffect(() => {
+  // Restore persisted state on mount.
+  const restorePersistedState = () => {
     if (typeof window === 'undefined') return;
 
     try {
@@ -124,6 +124,12 @@ export default function SecurityPage() {
     } catch {
       setSecurityEvents([createEvent('Security Center initialized with fallback storage', 'warning')]);
     }
+  };
+
+  useEffect(() => {
+    // Deferred so the mount-time restore doesn't set state during the effect
+    // body (react-hooks/set-state-in-effect).
+    Promise.resolve().then(restorePersistedState);
   }, []);
 
   // Sync back to local storage

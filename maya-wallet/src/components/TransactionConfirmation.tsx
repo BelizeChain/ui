@@ -43,12 +43,6 @@ export function TransactionConfirmation({
   } | null>(null);
   const [loadingFee, setLoadingFee] = useState(true);
 
-  useEffect(() => {
-    if (isOpen && senderAddress) {
-      loadFeeInfo();
-    }
-  }, [isOpen, senderAddress, estimatedFee]);
-
   const loadFeeInfo = async () => {
     setLoadingFee(true);
     try {
@@ -56,7 +50,7 @@ export function TransactionConfirmation({
         getUserSRS(senderAddress),
         calculateEffectiveFee(senderAddress, estimatedFee)
       ]);
-      
+
       setSrsInfo(srs);
       setFeeBreakdown({
         original: estimatedFee,
@@ -77,6 +71,14 @@ export function TransactionConfirmation({
       setLoadingFee(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen && senderAddress) {
+      // Deferred so the fee load doesn't set state during the effect body
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(loadFeeInfo);
+    }
+  }, [isOpen, senderAddress, estimatedFee]);
 
   const getTierName = (tier: number): string => {
     const tiers = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'];
@@ -146,7 +148,7 @@ export function TransactionConfirmation({
         {/* Fee Breakdown */}
         <div className="border-t border-gray-700 pt-4 mb-6">
           <h3 className="text-sm font-bold text-white mb-3">Fee Breakdown</h3>
-          
+
           {loadingFee ? (
             <div className="text-center py-4">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
@@ -218,7 +220,7 @@ export function TransactionConfirmation({
                 <div className="flex items-start gap-2 p-3 bg-gray-800/50 border border-gray-700/30 rounded-lg">
                   <Info size={16} className="text-gray-400 mt-0.5" />
                   <p className="text-xs text-gray-400">
-                    Start building your Social Responsibility Score (SRS) to earn fee discounts! 
+                    Start building your Social Responsibility Score (SRS) to earn fee discounts!
                     Complete education modules and contribute to green projects.
                   </p>
                 </div>

@@ -2,19 +2,25 @@
 
 import Link from 'next/link';
 import { ArrowLeft, Moon, Sun, Sparkle, CheckCircle } from 'phosphor-react';
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+
+// Static subscription: this page only needs to know when it mounted on the client.
+const subscribeNoop = () => () => {};
 
 export default function SettingsAppearancePage() {
-  const [theme, setThemeState] = useState<'dark' | 'midnight' | 'cyberpunk'>('dark');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
+  // Theme is read lazily so the stored value is adopted on the first client
+  // render. `mounted` stays false for the hydration render (server snapshot)
+  // and flips to true on the client — no effect or cascading update needed.
+  const [theme, setThemeState] = useState<'dark' | 'midnight' | 'cyberpunk'>(() => {
+    if (typeof window === 'undefined') return 'dark';
     const stored = localStorage.getItem('maya-theme');
-    if (stored === 'dark' || stored === 'midnight' || stored === 'cyberpunk') {
-      setThemeState(stored as any);
-    }
-  }, []);
+    return stored === 'dark' || stored === 'midnight' || stored === 'cyberpunk' ? stored : 'dark';
+  });
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
 
   const setTheme = (newTheme: 'dark' | 'midnight' | 'cyberpunk') => {
     setThemeState(newTheme);

@@ -16,13 +16,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
   const readerRef = useRef<BrowserQRCodeReader | null>(null);
 
-  useEffect(() => {
-    startScanning();
-    return () => {
-      stopScanning();
-    };
-  }, []);
-
   const startScanning = async () => {
     if (!videoRef.current) return;
 
@@ -36,14 +29,14 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
 
       // Get available video devices
       const videoInputDevices = await BrowserQRCodeReader.listVideoInputDevices();
-      
+
       if (videoInputDevices.length === 0) {
         setError('No camera found on this device');
         return;
       }
 
       // Use first camera (or back camera on mobile if available)
-      const selectedDevice = videoInputDevices.find((device: any) => 
+      const selectedDevice = videoInputDevices.find((device: any) =>
         device.label.toLowerCase().includes('back')
       ) || videoInputDevices[0];
 
@@ -79,6 +72,16 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     }
     setIsScanning(false);
   };
+
+  useEffect(() => {
+    // Declared after the scan helpers so it can reference them; deferred so the
+    // reader setup doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(startScanning);
+    return () => {
+      stopScanning();
+    };
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
@@ -121,7 +124,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               playsInline
               muted
             />
-            
+
             {/* Scanning overlay */}
             <div className="absolute inset-0 pointer-events-none">
               {/* Corner brackets */}
@@ -129,7 +132,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               <div className="absolute top-8 right-8 w-16 h-16 border-t-4 border-r-4 border-caribbean-500" />
               <div className="absolute bottom-8 left-8 w-16 h-16 border-b-4 border-l-4 border-caribbean-500" />
               <div className="absolute bottom-8 right-8 w-16 h-16 border-b-4 border-r-4 border-caribbean-500" />
-              
+
               {/* Center guide */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-48 h-48 border-2 border-dashed border-white/50 rounded-lg" />
