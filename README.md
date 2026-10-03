@@ -1,7 +1,7 @@
 # 🇧🇿 BelizeChain UI Suite
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/BelizeChain/belizechain)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](#-license)
 [![Built with Next.js](https://img.shields.io/badge/Built%20with-Next.js%2014-000000?logo=next.js)](https://nextjs.org/)
 
 Production-ready user interface suite for the BelizeChain sovereign blockchain infrastructure.
@@ -123,11 +123,11 @@ Reusable component library with 15+ components and custom hooks.
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for development guidelines.
+See CONTRIBUTING.md for development guidelines.
 
 ## 📄 License
 
-MIT License - see [LICENSE](../LICENSE) for details.
+MIT License - see LICENSE for details.
 
 ---
 

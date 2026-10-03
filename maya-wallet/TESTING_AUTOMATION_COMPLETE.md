@@ -43,7 +43,7 @@
 }
 ```
 
-#### **Custom Fixtures** ([`tests/fixtures.ts`](tests/fixtures.ts))
+#### **Custom Fixtures** ([`tests/fixtures/`](tests/fixtures/))
 - **mockWallet**: Simulates Polkadot.js extension
   - Alice account pre-configured (5G...)
   - 1,000,000 DALLA balance

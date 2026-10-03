@@ -1,7 +1,7 @@
 # 🇧🇿 BelizeChain UI Suite - Production Environment
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/BelizeChain/belizechain)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](#-license)
 [![Built with Next.js](https://img.shields.io/badge/Built%20with-Next.js%2014-000000?logo=next.js)](https://nextjs.org/)
 
 Production-ready user interface suite for the BelizeChain sovereign blockchain infrastructure.
@@ -386,18 +386,18 @@ npm run build
 
 ## 📚 Documentation
 
-- [BelizeChain Architecture](../docs/architecture/)
-- [Developer Guide](../docs/developer-guides/DEVELOPMENT_GUIDE.md)
-- [API Reference](../docs/technical-reference/)
-- [Deployment Guide](../docs/deployment/)
+- [BelizeChain Architecture](../belizechain/docs/architecture/)
+- [Developer Guide](../belizechain/docs/developer-guides/DEVELOPMENT_GUIDE.md)
+- [API Reference](../belizechain/docs/technical-reference/)
+- [Deployment Guide](../belizechain/docs/deployment/)
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+See CONTRIBUTING.md for guidelines.
 
 ## 📄 License
 
-MIT License - see [LICENSE](../LICENSE) for details.
+MIT License - see LICENSE for details.
 
 ## 🙏 Acknowledgments
 
