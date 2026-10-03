@@ -16,7 +16,6 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui';
-import { useBlockchain } from '@/lib/blockchain/hooks';
 import { useWalletStore } from '@/store/wallet';
 import {
   TREASURY_ADDRESS,

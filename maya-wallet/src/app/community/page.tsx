@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { PostCard, BadgeDisplay, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
-import { useGovernanceProposalsSubscription } from '@/hooks/useBlockchainEvents';
 import { CreatePostModal } from '@/components/CreatePostModal';
 import { CommentsModal } from '@/components/CommentsModal';
 import { useToast } from '@/contexts/ToastContext';

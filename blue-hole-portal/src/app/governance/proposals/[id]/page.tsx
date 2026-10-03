@@ -9,7 +9,6 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
-import { useBlockchain } from '@/lib/blockchain/hooks';
 import {
   voteOnProposal,
   type Proposal as ChainProposal,

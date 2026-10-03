@@ -540,8 +540,6 @@ export class FSCExporter {
     const kycRisk = Math.min(30, Math.round(kycRiskRaw));
 
     // --- AML Risk (0–40) ---
-      + amlAlerts.rapidTransactions
-      + amlAlerts.crossBorderTransactions;
     const txCount = Math.max(txSummary.totalTransactions, 1);
     // Weight: high-value ×3, rapid ×2, cross-border ×1 (structuring & layering are higher risk).
     const weightedAlerts =

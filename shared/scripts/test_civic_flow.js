@@ -73,7 +73,7 @@ async function main() {
 
   // Keyrings
   const treasury = keyring.addFromUri('0xe4d85ddb2340e8080e54bf953ba60fd823038cbeff12259389cbc6a14b8e765c');
-  
+
   // 5 Citizens
   const citizenA = keyring.addFromUri('//CitizenA_Belize');
   const citizenB = keyring.addFromUri('//CitizenB_Belize');
@@ -139,7 +139,7 @@ async function main() {
   const commitmentPreimage = u8aConcat(domainTag, citizenA.publicKey, secret);
   const commitment = blake2AsU8a(commitmentPreimage);
   const evidenceHash = blake2AsU8a(stringToU8a('EVIDENCE: Multi-million dollar land title fraud disclosure in San Pedro'));
-  
+
   console.log(`Secret generated (hex): 0x${secret.toString('hex')}`);
   console.log(`Commitment (hex): ${u8aToHex(commitment)}`);
 

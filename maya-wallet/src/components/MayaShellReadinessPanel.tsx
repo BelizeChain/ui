@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   getRuntimeConfig,
-  isLocalRuntimeConfig,
   useNewBlocks,
   useServiceProbes,
 } from '@belizechain/shared';

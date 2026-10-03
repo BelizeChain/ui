@@ -1,7 +1,7 @@
 /**
  * Shared WalletConnect Component
  * Reusable wallet connection modal for all BelizeChain portals
- * 
+ *
  * Features:
  * - Polkadot.js extension detection
  * - Multiple account selection
@@ -48,17 +48,17 @@ export function WalletConnect({
   size = 'md',
   portalName = 'BelizeChain'
 }: WalletConnectProps) {
-  const { 
-    isConnected, 
-    selectedAccount, 
-    accounts, 
-    isLoading, 
+  const {
+    isConnected,
+    selectedAccount,
+    accounts,
+    isLoading,
     error,
-    connect, 
+    connect,
     disconnect,
-    selectAccount 
+    selectAccount
   } = useWallet();
-  
+
   const i18n = useI18n();
   const t = i18n.t; // Get translations object
   const [showModal, setShowModal] = useState(false);
@@ -172,16 +172,16 @@ export function WalletConnect({
               <p className="text-sand-700">
                 {t.wallet.selectProvider}
               </p>
-              
+
               <Button
                 variant="outline"
                 className="w-full justify-start"
                 onClick={handleConnect}
                 isLoading={isLoading}
               >
-                <img 
-                  src="/icons/polkadot-js.svg" 
-                  alt="Polkadot.js" 
+                <img
+                  src="/icons/polkadot-js.svg"
+                  alt="Polkadot.js"
                   className="w-6 h-6 mr-3"
                   onError={(e) => {
                     // Fallback if image doesn't load

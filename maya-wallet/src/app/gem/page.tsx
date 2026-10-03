@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { getRuntimeConfig } from '@belizechain/shared';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import {

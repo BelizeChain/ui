@@ -238,12 +238,12 @@ export async function getBridges(): Promise<Bridge[]> {
   try {
     const api = await initializeApi();
     const bridges: any = await api.query.interoperability?.bridges?.entries?.() || [];
-    
+
     if (bridges && bridges.length > 0) {
       return bridges.map(([key, value]: [any, any]) => {
         const id = key.args[0].toString();
         const data = value.unwrap();
-        
+
         return {
           id,
           name: data.name.toString(),
@@ -286,7 +286,7 @@ export async function initiateBridgeTransfer(
   amount: string
 ): Promise<{ hash: string; transferId: string; estimatedFee: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const amountInPlanck = BigInt(Math.floor(parseFloat(amount) * 1e12));
@@ -304,7 +304,7 @@ export async function initiateBridgeTransfer(
         if (status.isInBlock) {
           let transferId = `BRG-${Date.now().toString().slice(-6)}`;
           let estimatedFee = '0.05';
-          
+
           events.forEach(({ event }) => {
             if (api.events.interoperability?.BridgeTransactionInitiated?.is(event)) {
               const [txId] = event.data;
@@ -344,7 +344,7 @@ export async function getUserBridgeTransfers(
   try {
     const api = await initializeApi();
     const allTransfers: any = await api.query.interoperability?.bridgeTransactions?.entries?.() || [];
-    
+
     if (allTransfers && allTransfers.length > 0) {
       return allTransfers
         .filter(([, value]: [any, any]) => {
@@ -368,7 +368,7 @@ export async function getUserBridgeTransfers(
             asset = op.asset?.toString() || 'DALLA';
             amount = formatBalance(op.amount?.toString() || '0');
           }
-          
+
           return {
             transferId,
             from: data.initiator.toString(),

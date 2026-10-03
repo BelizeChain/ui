@@ -21,7 +21,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useWalletStore } from '@/store/wallet';
 import { useBlockchain } from '@/lib/blockchain/hooks';
-import { useSystem } from '@/hooks/useSystem';
 import { useGovernance } from '@/hooks/useGovernance';
 import { useOptimisticVoting } from '@/hooks/useOptimisticVoting';
 import { useOptimisticApprovals } from '@/hooks/useOptimisticApprovals';

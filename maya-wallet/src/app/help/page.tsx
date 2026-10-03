@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GlassCard } from '@/components/ui';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,

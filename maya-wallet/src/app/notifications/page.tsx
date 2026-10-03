@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useI18n } from '@belizechain/shared';
 import {
   ArrowLeft,
   Bell,
