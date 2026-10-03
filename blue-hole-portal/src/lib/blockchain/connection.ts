@@ -10,7 +10,6 @@
  */
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
-import { TypeRegistry } from '@polkadot/types';
 import type { ApiOptions } from '@polkadot/api/types';
 import { getBlockchainWsEndpoints } from '@belizechain/shared';
 

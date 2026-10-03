@@ -45,9 +45,8 @@ export function useSystem() {
         setError(null);
 
         // Query chain info
-        const [chain, nodeName, nodeVersion] = await Promise.all([
+        const [chain, nodeVersion] = await Promise.all([
           api.rpc.system.chain(),
-          api.rpc.system.name(),
           api.rpc.system.version(),
         ]);
 
@@ -146,7 +145,6 @@ export function useRecentBlocks(count: number = 10) {
         for (let i = 0; i < count && currentBlock - i >= 0; i++) {
           blockPromises.push(
             api.rpc.chain.getBlockHash(currentBlock - i).then(async (hash) => {
-              const block = await api.rpc.chain.getBlock(hash);
               return {
                 number: currentBlock - i,
                 hash: hash.toString(),

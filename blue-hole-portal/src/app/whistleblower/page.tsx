@@ -12,7 +12,6 @@ import {
   ArrowClockwise,
   MagnifyingGlass,
   PlusCircle,
-  WarningOctagon,
   EyeSlash,
   X,
 } from 'phosphor-react';

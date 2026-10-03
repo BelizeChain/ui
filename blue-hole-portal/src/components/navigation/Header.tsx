@@ -11,9 +11,6 @@ import {
   CaretDown,
   Wallet,
   CheckCircle,
-  Warning,
-  Activity,
-  Cube,
   CircleNotch,
   Copy,
   Check,
@@ -39,8 +36,7 @@ interface HeaderProps {
 export function Header({ onMobileMenuOpen, sidebarCollapsed = false }: HeaderProps) {
   const router = useRouter();
   const { selectedAccount, accounts, balances, selectAccount, disconnectWallet, fetchBalances } = useWalletStore();
-  const { status, isReady, error } = useBlockchain();
-  const { systemInfo } = useSystem();
+  const { status } = useBlockchain();
   const { proposals } = useGovernance();
   const { optimisticVotes } = useOptimisticVoting();
   const { optimisticApprovals } = useOptimisticApprovals();

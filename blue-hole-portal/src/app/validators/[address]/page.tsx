@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Cube, TrendUp, Coins, Users, CheckCircle, Warning, Calendar, ChartBar } from 'phosphor-react';
+import { ArrowLeft, Cube, TrendUp, Coins, Users, CheckCircle, Warning } from 'phosphor-react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { GlassCard } from '@/components/ui/glass-card';
 import { useStaking } from '@/hooks/useStaking';

@@ -7,8 +7,8 @@
 import { initializeApi } from '../blockchain';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { blake2AsHex, randomAsU8a, decodeAddress } from '@polkadot/util-crypto';
-import { u8aConcat, stringToU8a, u8aToHex, hexToU8a } from '@polkadot/util';
-import type { WhistleblowerReport, ReportCategory, ReportStatus, WhistleblowerTicket } from '@belizechain/shared';
+import { u8aConcat, stringToU8a, u8aToHex } from '@polkadot/util';
+import type { ReportCategory, ReportStatus } from '@belizechain/shared';
 
 const COMMITMENT_DOMAIN = 'BelizeChainWhistleblowerV1';
 

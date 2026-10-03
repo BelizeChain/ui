@@ -454,10 +454,7 @@ class BlockchainService {
 
     const api = await this.getApi();
 
-    const [validators, currentEra] = await Promise.all([
-      api.query.staking?.validators?.entries() || [],
-      api.query.staking?.currentEra() || 0,
-    ]);
+    const validators = await api.query.staking?.validators?.entries() || [];
 
     if (!validators.length) {
       return [];

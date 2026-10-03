@@ -47,7 +47,6 @@ test.describe('Governance Integration @integration', () => {
 
   test('should handle district council data', async ({ page }) => {
     // BelizeChain has district-based governance
-    const districtMention = await page.locator(':text("District"), :text("Council"), :text("Cayo"), :text("Belize")').count();
     
     // Either shows districts or "no data" message
     const pageReady = await page.locator(':text("District"), :text("No data"), :text("Loading"), :text("No Active Proposals")').count();

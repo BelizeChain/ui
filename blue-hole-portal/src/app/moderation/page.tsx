@@ -13,7 +13,6 @@ import {
   MagnifyingGlass,
   Prohibit,
   ArrowSquareOut,
-  Funnel,
   Activity,
   X,
 } from 'phosphor-react';
@@ -26,7 +25,7 @@ import {
   reviewContent,
   submitNawalAssessment,
 } from '@/services/pallets/moderation';
-import type { ModerationItem, ModerationRuling } from '@belizechain/shared';
+import type { ModerationItem } from '@belizechain/shared';
 
 export default function ModerationPortalPage() {
   const { selectedAccount } = useWalletStore();

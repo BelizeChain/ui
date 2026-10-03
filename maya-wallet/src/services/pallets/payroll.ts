@@ -3,8 +3,6 @@
  * Handles government and private payroll management, salary slips, deductions
  */
 
-import { ApiPromise } from '@polkadot/api';
-import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
 export interface PayrollRecord {

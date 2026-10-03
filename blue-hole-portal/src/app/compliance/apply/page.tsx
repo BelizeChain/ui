@@ -2,9 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, User, IdentificationCard, MapPin, Upload, 
-  ShieldCheck, Warning, CheckCircle, FileText, Lock, X
+import {
+  ArrowLeft,
+  User,
+  MapPin,
+  Upload,
+  Warning,
+  CheckCircle,
+  FileText,
+  Lock,
+  X,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';

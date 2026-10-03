@@ -240,7 +240,6 @@ export function TradingChartCanvas({
       setScrollOffset(newOffset);
     }
 
-    const mainPlotHeight = rect.height - TIME_AXIS_HEIGHT - RSI_PANE_HEIGHT;
     if (x >= 0 && x <= rect.width - PRICE_AXIS_WIDTH && y >= 0 && y <= rect.height - TIME_AXIS_HEIGHT) {
       setMousePos({ x, y });
       const plotWidth = rect.width - PRICE_AXIS_WIDTH;

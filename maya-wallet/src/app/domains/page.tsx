@@ -10,7 +10,6 @@ import {
   Link as LinkIcon,
   ArrowsClockwise,
   CheckCircle,
-  XCircle
 } from 'phosphor-react';
 
 interface Domain {
@@ -284,7 +283,7 @@ function DomainCard({ domain }: { domain: Domain }) {
 function RegisterTab({ onSuccess }: { onSuccess: () => void }) {
   const [domainName, setDomainName] = useState('');
   const [selectedTier, setSelectedTier] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   return (
     <div className="bg-gray-800 rounded-xl shadow-lg p-8">

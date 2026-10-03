@@ -29,7 +29,6 @@ function truncateAddress(address: string): string {
 export function MayaShellReadinessPanel({ className = '' }: { className?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const runtimeConfig = getRuntimeConfig();
-  const usesLocalRuntime = isLocalRuntimeConfig(runtimeConfig);
   const { blockNumber } = useNewBlocks();
   const { probes, isLoading: probesLoading, onlineCount, summary } = useServiceProbes();
   const { isConnected, isConnecting, error, selectedAccount } = useWallet();

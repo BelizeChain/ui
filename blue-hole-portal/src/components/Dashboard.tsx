@@ -1037,7 +1037,6 @@ function GovernanceTab() {
         ) : (
           <div className="space-y-2">
             {[...passedProposals.slice(0, 3), ...rejectedProposals.slice(0, 2)].map((proposal) => {
-              const totalVotes = (proposal.votesFor || 0) + (proposal.votesAgainst || 0);
               const passed = proposal.status === 'passed' || proposal.status === 'executed';
 
               return (

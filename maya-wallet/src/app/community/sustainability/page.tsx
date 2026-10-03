@@ -1,24 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   Leaf,
-  TrendUp,
-  Users,
-  CalendarBlank,
-  CheckCircle,
   ArrowLeft,
-  TreeEvergreen,
-  Sparkle,
   ShieldCheck,
   Sun,
-  Coins,
-  Receipt,
-  DownloadSimple,
   Check,
 } from 'phosphor-react';
 
@@ -41,7 +32,7 @@ export default function SustainabilityPage() {
   const [activeTab, setActiveTab] = useState<'blue-carbon' | 'solar-mesh' | 'eco-badges'>('blue-carbon');
   const [contributingId, setContributingId] = useState<string | null>(null);
 
-  const [projects, setProjects] = useState<GreenProject[]>([
+  const [projects] = useState<GreenProject[]>([
     {
       id: 'GP-01',
       title: 'Ambergris Caye Mangrove Biosphere Reforestation',

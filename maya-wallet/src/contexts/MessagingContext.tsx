@@ -7,12 +7,10 @@ import { bluetoothMeshService, type MeshMessage } from '@/services/bluetooth-mes
 import { pakitBridgeService } from '@/services/pakit-bridge.service';
 import { blockchainProofService, type EmergencyBroadcast } from '@/services/blockchain-proof.service';
 import { getGatewayStatus, settleMeshTransaction, type MeshGatewayStatus, type MeshSettlementRequest } from '@/services/pallets/mesh';
-import { getDisplayName } from '@/services/pallets/identity';
 import { initializeApi } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
 
 // Lazy load mesh services to avoid SSR issues
-let bluetoothMeshReady = false;
 
 type MessageMode = 'online' | 'mesh' | 'auto';
 
@@ -220,7 +218,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = async (to: string, content: string): Promise<boolean> => {
     try {
       let success = false;
-      let viaMethod: Message['via'] = 'mesh';
 
       try {
         // BelizeMesh v1 transport routing:
@@ -250,7 +247,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
           const receipt = await settleMeshTransaction(selectedAccount.address, settlement);
           success = receipt.hash.startsWith('0x');
-          viaMethod = 'chain';
           setConversations(prev => {
             const convIndex = prev.findIndex(c => c.peerAddress === to);
             const newMessage: Message = {
@@ -309,7 +305,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           recipient: to,
           timestamp: new Date(),
           status: 'sent',
-          via: viaMethod
+          via: 'mesh'
         };
 
         setConversations(prev => {

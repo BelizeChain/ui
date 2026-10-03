@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitTransfer, estimateFee } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
@@ -13,10 +13,7 @@ import {
   Users,
   Check,
   ClipboardText,
-  Confetti,
-  Warning,
   PaperPlaneTilt,
-  QrCode,
   ShieldCheck,
 } from 'phosphor-react';
 import { useForm } from 'react-hook-form';

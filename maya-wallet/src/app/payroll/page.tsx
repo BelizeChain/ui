@@ -15,26 +15,13 @@ import {
 import {
   Briefcase,
   Users,
-  CalendarBlank,
-  CurrencyDollar,
-  CheckCircle,
-  Clock,
-  Plus,
-  TrendUp,
   ArrowLeft,
   Coins,
   ShieldCheck,
   Receipt,
   Lightning,
-  FileText,
-  Bank,
-  Check,
-  ShareNetwork,
-  ArrowsClockwise,
-  Fingerprint,
   DownloadSimple,
   X,
-  Buildings,
   UserPlus,
 } from 'phosphor-react';
 
@@ -125,14 +112,14 @@ export default function PayrollPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [employmentRecord, setEmploymentRecord] = useState<PayrollRecord | null>(null);
+  const [, setEmploymentRecord] = useState<PayrollRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'my-payslips' | 'ssb-pension' | 'advance' | 'employer-batch'>('my-payslips');
   const [advanceAmount, setAdvanceAmount] = useState('500.00');
-  const [isSubmittingAdvance, setIsSubmittingAdvance] = useState(false);
+  const [isSubmittingAdvance] = useState(false);
 
   // Employer Roster State
   const [roster, setRoster] = useState<EmployeeRoster[]>(INITIAL_ROSTER);
-  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+  const [isProcessingBatch] = useState(false);
 
   // New Employee Modal / Form
   const [showAddEmployee, setShowAddEmployee] = useState(false);

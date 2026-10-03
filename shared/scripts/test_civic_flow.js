@@ -48,7 +48,6 @@ async function sendTx(tx, signer, label) {
         }
       });
     } catch (err) {
-      if (unsub) unsub();
       reject(err);
     }
   });

@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   IdentificationCard,
   Phone,
-  EnvelopeSimple,
   Buildings,
   Clock,
 } from 'phosphor-react';

@@ -15,7 +15,6 @@ import {
   Gear,
   X,
 } from 'phosphor-react';
-import { cn } from '@/lib/utils';
 
 interface CommandItem {
   id: string;

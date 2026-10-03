@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
@@ -14,24 +13,12 @@ import {
 import {
   Vault,
   Users,
-  CheckCircle,
-  Clock,
-  XCircle,
-  ArrowUpRight,
-  ArrowDownLeft,
   Wallet,
   ChartLineUp,
   ShieldCheck,
   Coins,
-  Sparkle,
-  Check,
-  Warning,
   Scales,
   ArrowLeft,
-  Receipt,
-  Plus,
-  FileText,
-  X,
 } from 'phosphor-react';
 
 interface MultiSigSigner {
@@ -62,7 +49,7 @@ export default function TreasuryPage() {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'disbursements' | 'multisig' | 'liquidity'>('overview');
 
-  const [signers, setSigners] = useState<MultiSigSigner[]>([
+  const [signers] = useState<MultiSigSigner[]>([
     {
       name: 'Wicked (Founder & Lead Architect)',
       address: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
@@ -93,9 +80,9 @@ export default function TreasuryPage() {
 
   // CONFIG-002: real treasury spend proposals from the governance pallet.
   const [disbursements, setDisbursements] = useState<TreasurySpendProposalView[]>([]);
-  const [treasuryLoading, setTreasuryLoading] = useState(true);
-  const [treasuryError, setTreasuryError] = useState('');
-  const [treasuryBalance, setTreasuryBalance] = useState<string | null>(null);
+  const [, setTreasuryLoading] = useState(true);
+  const [, setTreasuryError] = useState('');
+  const [, setTreasuryBalance] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;

@@ -3,20 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  User,
   Shield,
-  Bell,
-  Palette,
-  Question,
-  Info,
-  SignOut,
   CaretRight,
-  Key,
-  FileText,
-  Globe,
-  UserList,
-  ChartBar,
-  GearSix,
   IdentificationCard,
   Briefcase,
   House,
@@ -28,7 +16,6 @@ import {
   GitBranch,
   Code,
   LockKey,
-  CurrencyDollar,
   ChartLineUp,
   Coins,
   TrendUp,

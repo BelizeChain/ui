@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -12,20 +12,11 @@ import {
 } from '@/services/pallets/governance';
 import {
   Users,
-  ChartLine,
   Plus,
-  CheckCircle,
-  Warning,
-  X,
   ArrowLeft,
   Scales,
-  Coins,
   ThumbsUp,
   ThumbsDown,
-  Sparkle,
-  HourglassMedium,
-  ShieldCheck,
-  Check,
 } from 'phosphor-react';
 
 interface Referendum {
@@ -52,8 +43,7 @@ export default function GovernancePage() {
 
   // CONFIG-002: real referenda from governance.referendumInfoOf.
   const [referendums, setReferendums] = useState<ChainReferendum[]>([]);
-  const [govLoading, setGovLoading] = useState(true);
-  const [govError, setGovError] = useState('');
+  const [, setGovError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -223,7 +213,7 @@ export default function GovernancePage() {
                         </span>
                         <span className="text-slate-500 text-[11px] font-mono">Referendum #{r.index}</span>
                       </div>
-                      <h3 className="font-bold text-white text-sm">{r === null ? "" : "On-chain Referendum #${r.index}".replace("${r.index}", String(r.index))}</h3>
+                      <h3 className="font-bold text-white text-sm">{r === null ? "" : `On-chain Referendum #${r.index}`}</h3>
                     </div>
 
                     <span

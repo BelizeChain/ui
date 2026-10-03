@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { CaretLeft, CaretRight, CaretDoubleLeft, CaretDoubleRight } from 'phosphor-react';
 import { cn } from '@/lib/utils';
 

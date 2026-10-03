@@ -10,22 +10,17 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Coins,
-  Users,
   ShoppingCart,
   Handshake,
-  CalendarBlank,
-  FunnelSimple,
-  Spinner
+  Spinner,
 } from 'phosphor-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { TransactionIndexer, type Transaction } from '@belizechain/shared';
 import { initializeApi } from '@/services/blockchain';
 
 export default function ActivityPage() {
-  const router = useRouter();
   const { selectedAccount } = useWallet();
   const [activeFilter, setActiveFilter] = useState<'all' | 'sent' | 'received' | 'staking'>('all');
-  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'all'>('all');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

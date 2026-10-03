@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { GlassCard } from '@/components/ui';
 import {
@@ -10,9 +10,8 @@ import {
   Sun,
   MonitorPlay,
   CheckCircle,
-  Circle,
   Sparkle,
-  Image as ImageIcon
+  Image as ImageIcon,
 } from 'phosphor-react';
 
 const APPEARANCE_STORAGE_KEY = 'maya-appearance-settings';

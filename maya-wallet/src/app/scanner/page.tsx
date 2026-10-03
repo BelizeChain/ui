@@ -11,17 +11,11 @@ import {
   ArrowRight,
   Scan,
   CheckCircle,
-  XCircle,
-  Coins,
   Storefront,
   QrCode,
-  Sparkle,
-  Copy,
   Receipt,
-  Lightning,
   TreeEvergreen,
   Broadcast,
-  Check,
 } from 'phosphor-react';
 
 export default function ScannerPage() {
@@ -40,7 +34,7 @@ export default function ScannerPage() {
   const [tipPct, setTipPct] = useState<number>(15);
   const [invoiceCreated, setInvoiceCreated] = useState(false);
   const [invoiceId, setInvoiceId] = useState('');
-  const [paymentReceived, setPaymentReceived] = useState(false);
+  const [paymentReceived] = useState(false);
 
   const startScanner = async () => {
     try {
@@ -81,7 +75,6 @@ export default function ScannerPage() {
 
   const handleGenerateInvoice = (e: React.FormEvent) => {
     e.preventDefault();
-    const id = `INV-BZ-${Date.now().toString(36).toUpperCase()}`;
     setInvoiceId(`INV-BZ-${Date.now().toString(36).toUpperCase()}`);
     setInvoiceCreated(true);
     // CONFIG-002: no fake auto-settlement. The invoice QR is real (encodes

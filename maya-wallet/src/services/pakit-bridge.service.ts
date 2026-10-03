@@ -311,7 +311,7 @@ class PakitBridgeService {
           );
           if (failed) {
             const [dispatchError] = failed.event.data as any;
-            let message = 'Proof submission failed';
+            let message: string;
             if (dispatchError.isModule) {
               const decoded = api.registry.findMetaError(dispatchError.asModule);
               message = getUserFriendlyErrorMessage(decoded);

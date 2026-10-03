@@ -3,7 +3,6 @@
  * Handles cross-chain bridges to Ethereum, Base, Arbitrum, Tron, Solana, Sui, Near, Bitcoin, and Polkadot ecosystems
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
@@ -477,14 +476,14 @@ export function validateCrossChainAddress(address: string, chainId: string): { i
 
     case 'tron':
       // Starts with T, 34 Base58 characters
-      if (/^T[1-9A-HJ-NP-za-km-z]{33}$/.test(trimmed)) {
+      if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(trimmed)) {
         return { isValid: true };
       }
       return { isValid: false, message: 'Invalid TRON address format. Must start with "T" and contain 34 Base58 characters.' };
 
     case 'solana':
       // Base58, typically 32 to 44 characters
-      if (/^[1-9A-HJ-NP-za-km-z]{32,44}$/.test(trimmed)) {
+      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
         return { isValid: true };
       }
       return { isValid: false, message: 'Invalid Solana address format. Must be 32-44 Base58 characters.' };

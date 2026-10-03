@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { GlassCard } from './glass-card';
 import { cn } from '@/lib/utils';
 import { ArrowFatUp, ArrowFatDown, ChatDots, Share, MapPin, Users, Scales, Leaf } from 'phosphor-react';
 import Link from 'next/link';

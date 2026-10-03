@@ -1,32 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   ChartLineUp,
-  TrendUp,
-  TrendDown,
-  CurrencyDollar,
-  ShoppingCart,
-  Users,
-  Calendar,
   ArrowLeft,
-  Coins,
   MapPin,
-  Broadcast,
-  Sparkle,
-  ShieldCheck,
   Warning,
 } from 'phosphor-react';
 
 export default function AnalyticsPage() {
   const { selectedAccount, isConnected } = useWallet();
-  const { addNotification } = useUIStore();
 
-  const [timeframe, setTimeframe] = useState<'24h' | '7d' | '30d' | '1y'>('30d');
 
   if (!isConnected || !selectedAccount) {
     return <ConnectWalletPrompt message="Connect your Maya Wallet to view BelizeChain on-chain macroeconomic analytics." fullScreen />;

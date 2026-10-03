@@ -2,34 +2,22 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import { stakeDalla, claimStakingRewards } from '@/services/pallets/staking';
 import {
   getStakingInfo,
-  getPoUWContributions,
   type StakingInfo,
-  type PoUWContribution,
 } from '@/services/pallets/staking';
 import {
   ArrowLeft,
   ArrowRight,
   Lightning,
-  TrendUp,
-  Info,
   CheckCircle,
-  Clock,
-  Coins,
-  ChartLine,
-  Warning,
-  Gift,
   ShieldCheck,
-  Cpu,
   Sparkle,
-  ArrowsClockwise,
-  Check,
   CircleNotch,
   HardDrives,
   Brain,

@@ -2,30 +2,24 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import { registerDomain, setPrimaryDomain, isDomainAvailable, listDomainForSale } from '@/services/pallets/bns';
+import { registerDomain } from '@/services/pallets/bns';
 import {
   Globe,
   MagnifyingGlass,
-  ShoppingCart,
-  LockKey,
   Plus,
   CheckCircle,
   Clock,
   ArrowLeft,
   X,
-  UploadSimple,
-  Tag,
   Storefront,
   CloudArrowUp,
   Sparkle,
   Copy,
   Coins,
   Check,
-  ShareNetwork,
   ArrowsClockwise,
   ShieldCheck,
   Fingerprint,

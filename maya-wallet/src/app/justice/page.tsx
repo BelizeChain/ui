@@ -4,14 +4,11 @@ import React, { useState, useEffect } from 'react';
 import {
   Scales,
   ShieldCheck,
-  WarningCircle,
   PlusCircle,
-  Hourglass,
   ArrowClockwise,
   CheckCircle,
   XCircle,
   ArrowSquareOut,
-  FileText,
   Heartbeat,
   X,
 } from 'phosphor-react';

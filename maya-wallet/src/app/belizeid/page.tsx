@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import QRCode from 'qrcode.react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
@@ -13,28 +12,16 @@ import {
   type KYCStatus,
 } from '@/services/pallets/identity';
 import {
-  IdentificationCard,
   ShieldCheck,
-  Fingerprint,
-  QrCode,
-  Warning,
-  CheckCircle,
-  Clock,
-  Plus,
   Download,
-  Share,
   Copy,
   ArrowLeft,
   ArrowRight,
   X,
   Sparkle,
-  LockKey,
   Globe,
-  MapPin,
-  Buildings,
   Check,
   EyeSlash,
-  Key,
   ShieldChevron,
   House,
 } from 'phosphor-react';
@@ -58,7 +45,7 @@ export default function BelizeIDPage() {
   // CONFIG-002: real on-chain BelizeID + KYC status (identity pallet).
   const [belizeID, setBelizeID] = useState<BelizeID | null>(null);
   const [kycStatus, setKycStatus] = useState<KYCStatus | null>(null);
-  const [idLoading, setIdLoading] = useState(true);
+  const [, setIdLoading] = useState(true);
   const [idError, setIdError] = useState('');
   const [selectedCred, setSelectedCred] = useState<VerifiableCredential | null>(null);
   const [zkProofGenerated, setZkProofGenerated] = useState<{
@@ -66,7 +53,7 @@ export default function BelizeIDPage() {
     proof: string;
     publicInputs: Record<string, string>;
   } | null>(null);
-  const [isGeneratingProof, setIsGeneratingProof] = useState(false);
+  const [isGeneratingProof] = useState(false);
 
   const didString = `did:belize:${selectedAccount?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'}`;
 

@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -21,34 +20,21 @@ import {
 import {
   Brain,
   Lightning,
-  ChartLine,
   CheckCircle,
-  Clock,
-  Cpu,
   Globe,
-  Users,
-  TrendUp,
-  Medal,
-  TreeEvergreen,
   Robot,
   ArrowLeft,
-  CircleNotch,
   Coins,
   Download,
-  Terminal,
-  ShieldCheck,
-  Sparkle,
-  SlidersHorizontal,
   Play,
-  Check,
 } from 'phosphor-react';
 
 export default function NawalPage() {
-  const { selectedAccount, isConnected, balance } = useWallet();
+  const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'training' | 'pouw' | 'genomes' | 'benchmark'>('training');
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [stats, setStats] = useState<NawalParticipantStats | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<NawalSystemMetrics | null>(null);
   const [rounds, setRounds] = useState<NawalRoundStatus[]>([]);

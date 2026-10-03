@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   LockKey,
   Broadcast,
-  CheckCircle,
 } from 'phosphor-react';
 import { useMessaging } from '@/contexts/MessagingContext';
 

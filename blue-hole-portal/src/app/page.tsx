@@ -2,12 +2,11 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  ChartLine, 
-  Coin, 
-  Users, 
-  FileText, 
-  ShieldCheck, 
+import {
+  ChartLine,
+  Coin,
+  FileText,
+  ShieldCheck,
   Activity,
   Warning,
   BookOpen,
@@ -52,14 +51,14 @@ function formatBBZD(amount: bigint): string {
 
 export default function NationalDashboard() {
   const router = useRouter();
-  const { status, error, reconnect } = useBlockchain();
+  const { error, reconnect } = useBlockchain();
   const { selectedAccount, connectWallet } = useWalletStore();
   
   // Blockchain data hooks
   const { treasuryBalance, isLoading: economyLoading } = useEconomy();
   const { stats: stakingStats, isLoading: stakingLoading } = useStaking();
   const { proposals: governanceProposals, isLoading: governanceLoading } = useGovernance();
-  const { systemInfo, networkStats, isLoading: systemLoading } = useSystem();
+  const { systemInfo, isLoading: systemLoading } = useSystem();
 
   const isLoadingData = economyLoading || stakingLoading || governanceLoading || systemLoading;
 

@@ -6,8 +6,6 @@
  * bBZD peg is 1:1 with BZD (fixed by Central Bank, no price feed needed).
  */
 
-import { ApiPromise } from '@polkadot/api';
-import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
 export interface VerifiedMerchant {

@@ -5,7 +5,6 @@
  * Real-time WebSocket subscriptions for all pallet events
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { initializeApi } from './blockchain';
 
 export interface EventSubscription {
@@ -115,7 +114,7 @@ export async function subscribeToStakingRewards(
       
       // PoUW rewards
       if (api.events.staking?.PoUWRewarded?.is(event)) {
-        const [rewardAddress, amount, contributionId] = event.data;
+        const [rewardAddress, amount] = event.data;
         
         if (rewardAddress.toString() === address) {
           callback({

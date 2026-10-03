@@ -278,8 +278,10 @@ export function getUserFriendlyError(error: unknown): FriendlyError {
     // Error with a message string
     const message = err.message || err.toString?.() || '';
     if (message) {
-      // Check for `Section.Name` patterns in the error message
-      const moduleMatch = message.match(/(\w+)\.(\w+)/);
+      // Check for `Section.Name` patterns in the error message.
+      // Bounded quantifiers keep this linear — `(\w+)\.(\w+)` backtracks
+      // quadratically on long dot-free strings (js/polynomial-redos).
+      const moduleMatch = message.match(/(\w{1,64})\.(\w{1,64})/);
       if (moduleMatch) {
         const key = `${moduleMatch[1]}.${moduleMatch[2]}`.toLowerCase();
         if (MODULE_ERRORS[key]) return MODULE_ERRORS[key];

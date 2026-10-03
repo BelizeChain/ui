@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle, XCircle, Clock, ThumbsUp, ThumbsDown, Minus,
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { useWalletStore } from '@/store/wallet';
 import { useBlockchain } from '@/lib/blockchain/hooks';
 import {
-  getProposalById,
   voteOnProposal,
   type Proposal as ChainProposal,
 } from '@/services/pallets/governance';
@@ -95,7 +94,6 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const { id: idParam } = use(params);
   const proposalId = Number.parseInt(idParam, 10);
   const router = useRouter();
-  const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
   const { proposal: chainProposal, isLoading: loading, error: loadError, refetch } = useProposal(proposalId);
   const proposal = chainProposal ? chainToUiProposal(chainProposal) : null;

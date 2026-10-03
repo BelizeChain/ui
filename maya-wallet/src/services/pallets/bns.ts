@@ -3,7 +3,6 @@
  * Handles .bz domain registration, resolution, marketplace, and DAG-based hosting
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 

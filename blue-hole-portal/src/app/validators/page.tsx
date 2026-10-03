@@ -1,31 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users,
   ShieldCheck,
-  TrendUp,
   Coin,
   Lightning,
   CheckCircle,
   Warning,
   Plus,
-  ChartLine,
   Clock,
   Spinner,
-  ArrowLeft,
   X,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
-import { blockchainService } from '@/services/blockchain';
 
 import { useStaking, type Validator } from '@/hooks/useStaking';
 
 export default function ValidatorsPage() {
   const router = useRouter();
-  const { validators, stats, isLoading: loading, error, refetch } = useStaking();
+  const { validators, isLoading: loading, error, refetch } = useStaking();
   const [sortBy, setSortBy] = useState<'stake' | 'pouw' | 'pqw' | 'uptime'>('stake');
 
   const sortedValidators = [...validators].sort((a, b) => {

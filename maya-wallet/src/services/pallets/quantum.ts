@@ -3,7 +3,6 @@
  * Handles quantum workload orchestration via Kinich backend
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 

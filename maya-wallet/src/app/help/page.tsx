@@ -17,7 +17,6 @@ import {
 } from 'phosphor-react';
 
 export default function HelpPage() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
 
   const categories = [

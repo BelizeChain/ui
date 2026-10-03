@@ -12,24 +12,18 @@ import {
   PaperPlaneTilt,
   PlusCircle,
   CheckCircle,
-  Clock,
   ShieldCheck,
   ShieldWarning,
   LockKey,
   Coins,
   Broadcast,
   WifiHigh,
-  WifiSlash,
   User,
-  Users,
   ArrowLeft,
   Receipt,
   ArrowDownLeft,
   X,
-  CaretRight,
   Radio,
-  Cpu,
-  Info,
 } from 'phosphor-react';
 
 interface ChatMessage {
@@ -50,7 +44,6 @@ interface ChatMessage {
 // view — real send flows through /messages/compose (MessagingContext), which
 // routes BLE mesh + Pakit sync and on-chain settlement. Compose page wired
 // 2026-09-17.
-const MESSAGES_PAGE_DEMO_NOTICE = true;
 
 /**
  * Millisecond clock for settlement nonces and message ids.
@@ -336,7 +329,7 @@ export default function MessagesPage() {
   // Micro-pay form state
   const [transferAmount, setTransferAmount] = useState('25.00');
   const [transferMemo, setTransferMemo] = useState('');
-  const [isSendingTransfer, setIsSendingTransfer] = useState(false);
+  const [, setIsSendingTransfer] = useState(false);
 
   // Payment request form state
   const [requestAmount, setRequestAmount] = useState('10.00');
@@ -454,7 +447,6 @@ export default function MessagesPage() {
     const nonce = nowMs() % 0xffffffff; // monotonic-enough per-session nonce
     const payload = `${selectedAccount.address}|${recipientAddress}|${transferAmount || amountDalla}|${nonce}`;
     const sigHash = blake2AsHex(payload, 256) as `0x${string}`;
-    const senderNodeId = 'CEIB'; // CEIB gateway owned by the founder account on live chain
     const nodeId = (hex: string): string => hex.slice(0, 4); // already 4 bytes as string
     return {
       txType: 'transferDalla' as const,

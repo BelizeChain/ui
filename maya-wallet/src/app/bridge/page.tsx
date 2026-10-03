@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -19,19 +18,14 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowsLeftRight,
-  Info,
   ShieldCheck,
   CheckCircle,
   Clock,
   Warning,
   GlobeHemisphereWest,
-  CaretDown,
-  Lightning,
   Sparkle,
   X,
   ArrowSquareOut,
-  SlidersHorizontal,
-  FileText,
   LockKey,
 } from 'phosphor-react';
 

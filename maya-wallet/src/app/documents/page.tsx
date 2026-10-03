@@ -5,12 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   useI18n,
-  Badge,
   getPakitClient,
   type PakitClient,
 } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
-import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 
 // Pakit DocumentMetadata type (from PakitClient)
 interface PakitDocMetadata {
@@ -39,7 +37,6 @@ import {
   Folder,
   Lock,
 } from 'phosphor-react';
-import { GlassCard } from '@/components/ui';
 
 interface Document {
   id: string;
@@ -55,14 +52,13 @@ interface Document {
 }
 
 export default function DocumentsPage() {
-  const router = useRouter();
   const { selectedAccount } = useWallet();
   const { t } = useI18n();
   const account = selectedAccount as any;
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   // Fetch documents from Pakit. Pure fetch — callers own their state updates.
   const fetchDocuments = async (): Promise<Document[]> => {

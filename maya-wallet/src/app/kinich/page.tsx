@@ -1,14 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   getQuantumBackends,
-  getQuantumStats,
   generateCircuitTemplate,
   validateQASM,
   rotatePqcKey,
@@ -21,23 +19,14 @@ import {
 } from '@/services/pallets';
 import {
   Atom,
-  Lightning,
-  ChartLine,
   Coins,
-  CheckCircle,
-  Clock,
-  Warning,
   Play,
   X,
-  Cpu,
   ArrowLeft,
-  CircleNotch,
   ShieldCheck,
   Code,
-  Terminal,
   ArrowsClockwise,
   Sparkle,
-  SlidersHorizontal,
   Check,
   Cube,
   FileZip,
@@ -50,15 +39,15 @@ export default function KinichPage() {
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'pqc' | 'compression' | 'backends' | 'qasm' | 'proofs'>('compression');
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [backends, setBackends] = useState<QuantumBackend[]>([]);
   const [pqcStatus, setPqcStatus] = useState<PqcKeyStatus | null>(null);
   const [isRotatingPqc, setIsRotatingPqc] = useState(false);
 
   // QASM Editor State
   const [qasmCode, setQasmCode] = useState<string>(generateCircuitTemplate(2, 'Bell'));
-  const [shots, setShots] = useState<number>(1024);
-  const [selectedBackend, setSelectedBackend] = useState<string>('Simulator-24Q');
+  const [shots] = useState<number>(1024);
+  const [selectedBackend] = useState<string>('Simulator-24Q');
   const [isRunningCircuit, setIsRunningCircuit] = useState<boolean>(false);
   const [circuitResult, setCircuitResult] = useState<{
     counts: Record<string, number>;

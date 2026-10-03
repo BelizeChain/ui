@@ -11,7 +11,6 @@ import {
   ArrowClockwise,
   MagnifyingGlass,
   FileText,
-  Bank,
   Sliders,
   X,
 } from 'phosphor-react';
@@ -80,7 +79,6 @@ export default function JusticePortalPage() {
   });
 
   const pendingCount = disputes.filter((d) => ['Pending', 'UnderReview'].includes(d.status)).length;
-  const ruledCount = disputes.filter((d) => d.status === 'Ruled').length;
   const appealedCount = disputes.filter((d) => d.status === 'Appealed').length;
 
   async function handleRulingSubmit(e: React.FormEvent) {

@@ -3,7 +3,6 @@
  * Handles community governance, local initiatives, and grassroots proposals
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
@@ -198,7 +197,7 @@ export async function createCommunityGroup(
     category: string;
   }
 ): Promise<{ hash: string; groupId: string }> {
-  const api = await initializeApi();
+  await initializeApi();  // connection init; result unused
   
   try {
     void data;
@@ -219,7 +218,7 @@ export async function joinCommunityGroup(
   address: string,
   groupId: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
+  await initializeApi();  // connection init; result unused
   
   try {
     const injector = await web3FromAddress(address);
@@ -388,7 +387,7 @@ export async function contributeToCommunityFund(
   fundId: string,
   amount: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
+  await initializeApi();  // connection init; result unused
   
   try {
     const injector = await web3FromAddress(address);
@@ -462,7 +461,7 @@ export async function rsvpToEvent(
   address: string,
   eventId: string
 ): Promise<{ hash: string }> {
-  const api = await initializeApi();
+  await initializeApi();  // connection init; result unused
   
   try {
     const injector = await web3FromAddress(address);

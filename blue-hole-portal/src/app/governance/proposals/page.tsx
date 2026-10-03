@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText,
@@ -128,7 +128,6 @@ import { useGovernance } from '@/hooks/useGovernance';
 
 export default function GovernanceProposalsPage() {
   const router = useRouter();
-  const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
   const { proposals: chainProposals, isLoading: loading, refetch } = useGovernance();
   const proposals = chainProposals.map(chainToUiProposal);

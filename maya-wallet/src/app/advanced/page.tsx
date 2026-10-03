@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   RuntimeEnvironmentBadge,
@@ -11,13 +11,11 @@ import { GlassCard } from '@/components/ui';
 import {
   ArrowLeft,
   GearSix,
-  WifiHigh,
   Database,
-  ShieldCheck,
   Warning,
   Info,
   CheckCircle,
-  Code
+  Code,
 } from 'phosphor-react';
 
 export default function AdvancedPage() {
@@ -26,7 +24,6 @@ export default function AdvancedPage() {
   const [rpcEndpoint, setRpcEndpoint] = useState(runtimeConfig.blockchainWsUrl);
   const [debugMode, setDebugMode] = useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
-  const [cacheEnabled, setCacheEnabled] = useState(true);
 
   const rpcEndpoints = [
     {

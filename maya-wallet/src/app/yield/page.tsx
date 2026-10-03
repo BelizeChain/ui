@@ -6,19 +6,13 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
-  TrendUp,
   Sparkle,
   Coins,
-  ShieldCheck,
   ArrowLeft,
   ArrowsClockwise,
   ChartLineUp,
-  Lightning,
-  TreeEvergreen,
-  LockKey,
   CheckCircle,
   Check,
-  CurrencyDollar,
   X,
   Plus,
 } from 'phosphor-react';

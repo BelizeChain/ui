@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Coin,
@@ -11,7 +11,6 @@ import {
   Users,
   ArrowsLeftRight,
   FileText,
-  ChartLine,
   ShieldCheck,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -21,8 +20,6 @@ import { useBlockchain } from '@/lib/blockchain/hooks';
 import { useWalletStore } from '@/store/wallet';
 import {
   TREASURY_ADDRESS,
-  getTreasuryBalance,
-  getTreasurySpendProposals,
   voteOnProposal,
   type TreasurySpendProposalView,
 } from '@/services/pallets/treasury';
@@ -52,11 +49,6 @@ interface SpendProposal {
 
 import { useEconomy } from '@/hooks/useEconomy';
 
-const EMPTY_METRICS: TreasuryMetrics = {
-  dallaBalance: '0',
-  totalSpendProposals: 0,
-  activeSpendProposals: 0,
-};
 
 /** Active on-chain proposal states map to the UI's "Pending" bucket. */
 const ACTIVE_STATUSES = new Set(['Voting', 'Active', 'Pending']);
@@ -99,7 +91,6 @@ function toUiSpendProposal(p: TreasurySpendProposalView): SpendProposal {
 
 export default function TreasuryPage() {
   const router = useRouter();
-  const { isReady } = useBlockchain();
   const { selectedAccount } = useWalletStore();
   const { treasuryBalance, proposals: chainProposals, isLoading: loading, refetch } = useEconomy();
   

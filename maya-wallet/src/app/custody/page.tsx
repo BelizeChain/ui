@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -9,19 +9,10 @@ import {
   ShieldCheck,
   ArrowLeft,
   LockKey,
-  Users,
   Clock,
-  Warning,
-  CheckCircle,
-  FileText,
   DownloadSimple,
   Check,
-  X,
   Buildings,
-  Plus,
-  Coins,
-  Sparkle,
-  Eye,
 } from 'phosphor-react';
 
 interface VaultTransaction {
@@ -42,7 +33,6 @@ export default function CustodyPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [activeVault, setActiveVault] = useState<'sovereign-treasury' | 'ministry-finance' | 'fsc-escrow'>('sovereign-treasury');
 
   const [transactions, setTransactions] = useState<VaultTransaction[]>([
     {

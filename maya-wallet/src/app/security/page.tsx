@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   LockKey,
@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Warning,
   Key,
-  Clock,
   CheckCircle,
   FileText,
   ArrowLeft,
@@ -17,11 +16,6 @@ import {
   Trash,
   Plus,
   DownloadSimple,
-  Shield,
-  Sparkle,
-  SlidersHorizontal,
-  Info,
-  ArrowsClockwise,
 } from 'phosphor-react';
 
 export type RecoveryContact = {

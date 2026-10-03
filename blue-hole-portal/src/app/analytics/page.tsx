@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChartLine, Coin, Users, Lightning, Cube, Warning } from 'phosphor-react';
+import { ChartLine, Coin, Users, Cube, Warning } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { connectionManager } from '@/lib/blockchain/connection';
 import { getTreasuryBalance } from '@/services/pallets/treasury';

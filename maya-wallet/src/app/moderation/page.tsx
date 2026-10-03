@@ -4,13 +4,10 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldWarning,
   ShieldCheck,
-  WarningOctagon,
   Flag,
-  Brain,
   ArrowClockwise,
   CheckCircle,
   XCircle,
-  Sparkle,
 } from 'phosphor-react';
 import { useWallet } from '@/contexts/WalletContext';
 import {

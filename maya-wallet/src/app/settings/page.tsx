@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import {
   ArrowLeft,
@@ -9,7 +9,6 @@ import {
   Palette,
   Globe,
   Shield,
-  Moon,
   ChartBar,
   Download,
   SignOut,
@@ -38,7 +37,6 @@ export default function SettingsPage() {
   const [tourismRewards, setTourismRewards] = useState(true);
   const [governanceUpdates, setGovernanceUpdates] = useState(false);
   const [biometric, setBiometric] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
   const [analytics, setAnalytics] = useState(true);
   const [currency, setCurrency] = useState('DALLA');
   const [language, setLanguage] = useState('en');

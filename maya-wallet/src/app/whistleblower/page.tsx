@@ -7,13 +7,11 @@ import {
   DownloadSimple,
   UploadSimple,
   Key,
-  LockKey,
   CheckCircle,
   XCircle,
   Coins,
   ArrowClockwise,
   EyeSlash,
-  Warning,
   Copy,
 } from 'phosphor-react';
 import { useWallet } from '@/contexts/WalletContext';

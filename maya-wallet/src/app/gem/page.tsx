@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { GlassCard } from '@/components/ui';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { getRuntimeConfig } from '@belizechain/shared';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -25,25 +24,20 @@ import {
 } from '@/services/gem';
 import {
   FileCode,
-  Code,
   Rocket,
   Package,
   Heart,
   Users,
   Play,
-  Download,
   Copy,
-  CheckCircle,
   Lightning,
-  Diamond,
-  ArrowLeft
+  ArrowLeft,
 } from 'phosphor-react';
 
 /** Stable no-op subscription used with useSyncExternalStore for mount detection. */
 const subscribeNoop = () => () => {};
 
 export default function GemPage() {
-  const router = useRouter();
   const { selectedAccount } = useWallet();
   // Hoisted so the callbacks' deps match the compiler-inferred dependency
   // (react-hooks/preserve-manual-memoization).

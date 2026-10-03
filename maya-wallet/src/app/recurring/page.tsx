@@ -6,19 +6,13 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
-  CalendarBlank,
   Plus,
-  Trash,
   Pause,
   Play,
-  Repeat,
   ArrowLeft,
-  Coins,
   Lightning,
   Drop,
-  WifiHigh,
   Globe,
-  CheckCircle,
   X,
 } from 'phosphor-react';
 
@@ -79,7 +73,7 @@ export default function RecurringPaymentsPage() {
   const [subRecipient, setSubRecipient] = useState('');
   const [subAmount, setSubAmount] = useState('');
   const [subCurrency, setSubCurrency] = useState<'bBZD' | 'DALLA'>('bBZD');
-  const [subInterval, setSubInterval] = useState<'Daily' | 'Weekly' | 'Monthly'>('Monthly');
+  const [subInterval] = useState<'Daily' | 'Weekly' | 'Monthly'>('Monthly');
 
   const handleToggleActive = (id: string) => {
     setSubscriptions((prev) =>

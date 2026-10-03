@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Moon, Sun, Sparkle, CheckCircle } from 'phosphor-react';
+import { ArrowLeft, Moon, Sparkle, CheckCircle } from 'phosphor-react';
 import { useState, useSyncExternalStore } from 'react';
 
 // Static subscription: this page only needs to know when it mounted on the client.

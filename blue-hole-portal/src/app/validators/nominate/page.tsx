@@ -2,9 +2,15 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, MagnifyingGlass, ShieldCheck, Coin, TrendUp, 
-  Warning, CheckCircle, Clock, Lightning
+import {
+  ArrowLeft,
+  MagnifyingGlass,
+  ShieldCheck,
+  Coin,
+  Warning,
+  CheckCircle,
+  Clock,
+  Lightning,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +40,7 @@ const BOND_PERIOD = 28;
 
 export default function NominatePage() {
   const router = useRouter();
-  const { selectedAccount, balances } = useWalletStore();
+  const { balances } = useWalletStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedValidator, setSelectedValidator] = useState<Validator | null>(null);
   const [nominationAmount, setNominationAmount] = useState('');

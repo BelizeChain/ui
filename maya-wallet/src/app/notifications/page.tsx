@@ -29,7 +29,6 @@ const iconMap = {
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { t } = useI18n();
   const [notifications, setNotifications] = useState<WalletNotification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 

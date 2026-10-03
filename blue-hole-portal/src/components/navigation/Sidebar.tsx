@@ -12,7 +12,6 @@ import {
   MagnifyingGlass,
   Code,
   Gear,
-  List,
   X,
   CaretLeft,
   CaretRight,
@@ -282,7 +281,6 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
   // Real-time data
   const { proposals } = useGovernance();
-  const { stats: complianceStats } = useCompliance();
 
   // Calculate badge counts
   const badgeCounts = {

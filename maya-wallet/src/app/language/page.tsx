@@ -13,7 +13,6 @@ import {
 } from 'phosphor-react';
 
 export default function LanguagePage() {
-  const router = useRouter();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [selectedRegion, setSelectedRegion] = useState('BZ');
   const [selectedTimezone, setSelectedTimezone] = useState('America/Belize');

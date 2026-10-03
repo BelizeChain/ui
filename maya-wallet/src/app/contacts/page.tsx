@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GlassCard } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -11,14 +11,12 @@ import {
   Plus,
   Star,
   StarFour,
-  User,
   CheckCircle,
   Circle,
-  PaperPlaneTilt
+  PaperPlaneTilt,
 } from 'phosphor-react';
 
 export default function ContactsPage() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'recent'>('all');
 

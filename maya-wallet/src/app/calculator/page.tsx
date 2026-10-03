@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -8,18 +8,13 @@ import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   Calculator,
   ArrowLeft,
-  Coins,
   CurrencyDollar,
   TrendUp,
-  Percent,
   Receipt,
-  Sparkle,
-  ChartLineUp,
 } from 'phosphor-react';
 
 export default function CalculatorPage() {
   const { selectedAccount, isConnected } = useWallet();
-  const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'fx-swap' | 'staking-apy' | 'ssb-tax'>('fx-swap');
 

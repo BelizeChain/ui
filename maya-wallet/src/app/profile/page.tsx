@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import {
   ArrowLeft,
@@ -10,10 +10,7 @@ import {
   CheckCircle,
   IdentificationCard,
   Phone,
-  EnvelopeSimple,
-  MapPin,
   Check,
-  Warning,
   ShieldCheck,
 } from 'phosphor-react';
 import Link from 'next/link';

@@ -7,23 +7,14 @@ import { useUIStore } from '@/store/ui';
 import {
   Code,
   Key,
-  ShareNetwork,
   FileCode,
   Copy,
-  CheckCircle,
-  Book,
-  TestTube,
   ArrowLeft,
   Terminal,
-  Broadcast,
-  Lightning,
   Sparkle,
-  Cpu,
   Check,
   Drop,
-  Clock,
   ArrowsClockwise,
-  Coins,
 } from 'phosphor-react';
 
 export default function DeveloperPage() {
@@ -39,7 +30,7 @@ export default function DeveloperPage() {
   // Faucet state
   const [faucetAddress, setFaucetAddress] = useState(selectedAccount?.address || '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt');
   const [isClaimingFaucet, setIsClaimingFaucet] = useState(false);
-  const [faucetCooldown, setFaucetCooldown] = useState<number | null>(null);
+  const [faucetCooldown] = useState<number | null>(null);
 
   // SDK Language selector
   const [sdkLang, setSdkLang] = useState<'typescript' | 'rust' | 'python' | 'solidity'>('typescript');
@@ -92,7 +83,6 @@ export default function DeveloperPage() {
 
   const codeSnippets = {
     typescript: `import { ApiPromise, WsProvider } from '@polkadot/api';
-import { Keyring } from '@polkadot/keyring';
 
 async function main() {
   // Connect to BelizeChain Ceiba Node

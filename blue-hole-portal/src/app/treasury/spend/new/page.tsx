@@ -2,9 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, CheckCircle, Coin, Users, FileText, Warning, 
-  Upload, X, Plus, CalendarBlank, ShieldCheck
+import {
+  ArrowLeft,
+  CheckCircle,
+  Users,
+  FileText,
+  Warning,
+  ShieldCheck,
 } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';

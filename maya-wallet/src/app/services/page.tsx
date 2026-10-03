@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { walletLogger, useI18n } from '@belizechain/shared';
-import { GlassCard } from '@/components/ui';
 import { 
   ArrowLeft, 
   Lightning,
@@ -35,7 +34,6 @@ interface Service {
 }
 
 export default function ServicesPage() {
-  const router = useRouter();
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');

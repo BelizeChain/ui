@@ -1,5 +1,3 @@
-import * as React from 'react';
-import { GlassCard } from './glass-card';
 import { Progress } from './progress';
 import { cn } from '@/lib/utils';
 import { MapPin, Clock, CheckCircle, XCircle, FileText } from 'phosphor-react';

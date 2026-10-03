@@ -3,7 +3,6 @@
  * Handles Proof of Useful Work (PoUW), federated learning rewards, and validator operations
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 

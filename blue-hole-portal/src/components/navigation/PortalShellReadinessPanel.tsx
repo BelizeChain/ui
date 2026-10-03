@@ -32,9 +32,9 @@ export function PortalShellReadinessPanel({ className = '' }: { className?: stri
   const runtimeConfig = getRuntimeConfig();
   const usesLocalRuntime = isLocalRuntimeConfig(runtimeConfig);
   const { probes, isLoading: probesLoading, onlineCount, summary } = useServiceProbes();
-  const { status, error, reconnect } = useBlockchain();
+  const { status, reconnect } = useBlockchain();
   const { systemInfo } = useSystem();
-  const { selectedAccount, isConnecting, error: walletError, connectWallet } = useWalletStore();
+  const { selectedAccount, isConnecting, connectWallet } = useWalletStore();
 
   const isNetworkOk = status === 'ready' || status === 'connected';
   const isWalletOk = !!selectedAccount;

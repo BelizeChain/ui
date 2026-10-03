@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -10,17 +10,11 @@ import {
   ShieldCheck,
   IdentificationCard,
   FileText,
-  CheckCircle,
-  Shield,
   Bank,
   Check,
   Download,
   Scales,
-  Clock,
-  Warning,
   Eye,
-  Coins,
-  Sparkle,
 } from 'phosphor-react';
 
 export default function CompliancePage() {

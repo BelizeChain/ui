@@ -12,30 +12,17 @@ import {
   House,
   MapPin,
   FileText,
-  CheckCircle,
-  Clock,
-  Leaf,
   ArrowsLeftRight,
-  Upload,
-  Eye,
   ArrowLeft,
   Coins,
   ShieldCheck,
   DownloadSimple,
-  TreeEvergreen,
   Receipt,
-  Sparkle,
   Check,
   Compass,
   Buildings,
-  TrendUp,
   X,
-  ShareNetwork,
-  Tag,
-  Lightning,
-  ArrowsClockwise,
   Fingerprint,
-  QrCode,
   LockKey,
 } from 'phosphor-react';
 
@@ -165,10 +152,10 @@ export default function LandLedgerPage() {
 
   // On-Chain State
   const [chainTitles, setChainTitles] = useState<LandTitle[]>([]);
-  const [isLoadingChain, setIsLoadingChain] = useState(false);
+  const [, setIsLoadingChain] = useState(false);
 
   // Tax Payment State
-  const [payingTaxId, setPayingTaxId] = useState<string | null>(null);
+  const [payingTaxId] = useState<string | null>(null);
 
   // Transfer Escrow Form State
   const [transferParcelId, setTransferParcelId] = useState('BZ-AMB-482A');

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
@@ -16,14 +15,9 @@ import {
   MapPin,
   FileText,
   CheckCircle,
-  Clock,
   ArrowsLeftRight,
   ShieldCheck,
-  TreeEvergreen,
   X,
-  Plus,
-  CurrencyDollar,
-  Sparkle,
   Download,
   GlobeHemisphereWest,
   Bank,
@@ -32,8 +26,7 @@ import {
 } from 'phosphor-react';
 
 export default function LandPage() {
-  const router = useRouter();
-  const { selectedAccount, isConnected, balance } = useWallet();
+  const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'parcels' | 'map' | 'taxes' | 'encumbrances'>('parcels');
@@ -46,14 +39,14 @@ export default function LandPage() {
   const [selectedPropertyForTransfer, setSelectedPropertyForTransfer] = useState<landLedgerService.LandTitle | null>(null);
   const [transferRecipient, setTransferRecipient] = useState('');
   const [transferPrice, setTransferPrice] = useState('');
-  const [transferCurrency, setTransferCurrency] = useState<'DALLA' | 'bBZD'>('DALLA');
+  const [transferCurrency] = useState<'DALLA' | 'bBZD'>('DALLA');
   const [isTransferring, setIsTransferring] = useState(false);
 
   // Detail Modal
   const [selectedDetailProperty, setSelectedDetailProperty] = useState<landLedgerService.LandTitle | null>(null);
 
   // Tax Settlement Modal
-  const [payingTaxPropertyId, setPayingTaxPropertyId] = useState<string | null>(null);
+  const [, setPayingTaxPropertyId] = useState<string | null>(null);
 
   const fetchLandData = async () => {
     if (!selectedAccount?.address) {

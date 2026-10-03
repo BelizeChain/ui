@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
@@ -10,23 +10,14 @@ import {
   GraduationCap,
   Trophy,
   Clock,
-  Users,
   CheckCircle,
   ArrowLeft,
   ArrowRight,
-  BookOpen,
-  Code,
-  Broadcast,
-  Atom,
   Sparkle,
-  Coins,
   ShieldCheck,
   Check,
   DownloadSimple,
   X,
-  CaretRight,
-  Lightning,
-  Fingerprint,
 } from 'phosphor-react';
 
 interface QuizQuestion {
@@ -49,7 +40,7 @@ interface CourseModule {
 }
 
 export default function EducationModulesPage() {
-  const { selectedAccount, isConnected, balance } = useWallet();
+  const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
   const [activeCategory, setActiveCategory] = useState<string>('ALL');

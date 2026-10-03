@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import QRCode from 'qrcode.react';
 import { useWallet } from '@/contexts/WalletContext';
@@ -25,25 +24,15 @@ import {
   WifiSlash,
   QrCode,
   CheckCircle,
-  Clock,
-  ArrowsClockwise,
   Coins,
-  ShieldCheck,
-  TreeEvergreen,
   X,
-  Lightning,
-  Sparkle,
   DeviceMobile,
   Download,
-  Users,
   Radio,
-  FileText,
   Cpu,
   Warning,
   GlobeHemisphereWest,
-  Bicycle,
   SlidersHorizontal,
-  BatteryCharging,
   WifiHigh,
 } from 'phosphor-react';
 
@@ -68,12 +57,12 @@ const NEARBY_PEERS_SIMULATION: NearbyPeer[] = [
 ];
 
 export default function MeshPage() {
-  const { selectedAccount, isConnected, balance } = useWallet();
+  const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'vouchers' | 'hardware' | 'mining' | 'alerts' | 'coverage' | 'operator'>('vouchers');
   const [pending, setPending] = useState<PendingProof[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<Set<string>>(new Set());
 
   // Offline Voucher Creator
@@ -87,7 +76,7 @@ export default function MeshPage() {
   const [isRedeeming, setIsRedeeming] = useState(false);
 
   // Hardware Console State
-  const [radio, setRadio] = useState<MeshRadioHardware>({
+  const [radio] = useState<MeshRadioHardware>({
     id: 'RADIO-915-BZ',
     name: 'Heltec LoRa 32 V3 (ESP32-S3)',
     hardwareType: 'HeltecV3',
@@ -107,8 +96,6 @@ export default function MeshPage() {
   const [isClaimingMining, setIsClaimingMining] = useState(false);
 
   // BLE Nearby Peers State
-  const [isScanningPeers, setIsScanningPeers] = useState(false);
-  const [discoveredPeers, setDiscoveredPeers] = useState<NearbyPeer[]>(NEARBY_PEERS_SIMULATION);
   const [showNfcModal, setShowNfcModal] = useState(false);
 
   useEffect(() => {

@@ -3,7 +3,6 @@
  * Handles interactions with the local Nawal AI Federated Learning Server & PoUW Staking
  */
 
-import { initializeApi } from '../blockchain';
 
 const NAWAL_API_URL = process.env.NEXT_PUBLIC_NAWAL_API_URL || 'http://localhost:8080/api/v1/fl';
 

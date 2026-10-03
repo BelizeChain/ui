@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { MagnifyingGlass, FunnelSimple, X, CalendarBlank, SortAscending } from 'phosphor-react';
+import { MagnifyingGlass, FunnelSimple, X, CalendarBlank } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { cn } from '@/lib/utils';
 

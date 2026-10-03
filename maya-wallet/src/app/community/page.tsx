@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { GlassCard, PostCard, ProposalCard, BadgeDisplay, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
+import { PostCard, BadgeDisplay, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
 import { useGovernanceProposalsSubscription } from '@/hooks/useBlockchainEvents';
 import { CreatePostModal } from '@/components/CreatePostModal';
 import { CommentsModal } from '@/components/CommentsModal';
@@ -17,13 +17,11 @@ import {
   PencilSimple,
   ChartBar,
   Medal,
-  TrendUp,
   User,
   ShieldCheck,
   ChartLineUp,
   Trophy,
   Star,
-  RocketLaunch,
   UsersThree,
   Scales,
   ThumbsUp,
@@ -31,12 +29,9 @@ import {
   CheckCircle,
   ArrowRight,
   MapPin,
-  Sparkle,
   TreeEvergreen,
-  Coins,
   Shield,
   Clock,
-  MagnifyingGlass,
 } from 'phosphor-react';
 
 interface ReferendumItem {
@@ -54,9 +49,8 @@ interface ReferendumItem {
 }
 
 export default function CommunityPage() {
-  const { selectedAccount, balance } = useWallet();
+  const { selectedAccount } = useWallet();
   const [activeTab, setActiveTab] = useState('feed');
-  const liveProposals = useGovernanceProposalsSubscription();
   const { showToast } = useToast();
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [districtFilter, setDistrictFilter] = useState<string>('All');
@@ -138,7 +132,7 @@ export default function CommunityPage() {
   // Active Civic Referendums
   // CONFIG-002: live referenda from the governance pallet (no fake BIP list).
   const [referendums, setReferendums] = useState<ChainReferendum[]>([]);
-  const [communityGovLoading, setCommunityGovLoading] = useState(true);
+  const [, setCommunityGovLoading] = useState(true);
 
   React.useEffect(() => {
     let cancelled = false;

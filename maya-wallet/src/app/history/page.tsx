@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { formatDisplayNumber } from '@/lib/utils';
 import {
@@ -12,11 +11,8 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
-  CheckCircle,
-  Warning,
   Copy,
   Check,
-  ArrowsLeftRight,
 } from 'phosphor-react';
 
 interface Transaction {

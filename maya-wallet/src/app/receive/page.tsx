@@ -1,18 +1,15 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import {
   ArrowLeft,
-  QrCode as QrCodeIcon,
   Copy,
   ShareNetwork,
   Check,
   Lightbulb,
-  ShieldCheck,
-  CurrencyDollar,
 } from 'phosphor-react';
 import QRCode from 'qrcode.react';
 

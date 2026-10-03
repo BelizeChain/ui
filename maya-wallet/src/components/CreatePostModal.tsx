@@ -1,16 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
-import { GlassCard } from './ui';
+import { useState } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import {
   X,
-  ImageSquare,
   MapPin,
-  Globe,
   Users,
   Leaf,
-  Scales
+  Scales,
 } from 'phosphor-react';
 import { cn } from '@/lib/utils';
 

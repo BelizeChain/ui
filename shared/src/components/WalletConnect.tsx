@@ -148,7 +148,7 @@ export function WalletConnect({
         <div className="space-y-4">
           {error && (
             <Alert variant="error">
-              {error || t.wallet.connectionError}
+              {error}
             </Alert>
           )}
 

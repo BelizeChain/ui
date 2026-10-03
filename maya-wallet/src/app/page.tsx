@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { MayaShellReadinessPanel } from '@/components/MayaShellReadinessPanel';
@@ -32,9 +32,7 @@ import {
   Bank,
   Clock,
   X,
-  CheckCircle,
   SlidersHorizontal,
-  CaretRight,
 } from 'phosphor-react';
 
 /** Format a unix-seconds timestamp as a short relative-time label. */
@@ -62,7 +60,7 @@ function buildSparkline(series: number[]): number[] {
 }
 
 export default function HomeNew() {
-  const { balance, balanceLoading, isConnected, connect, selectedAccount } = useWallet();
+  const { balance, isConnected, connect, selectedAccount } = useWallet();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [selectedTrend, setSelectedTrend] = useState<string | null>(null);
   const [showAllAssets, setShowAllAssets] = useState(false);

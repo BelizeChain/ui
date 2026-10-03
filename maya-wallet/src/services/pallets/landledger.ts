@@ -3,7 +3,6 @@
  * Handles land titles, property records, and document storage proofs
  */
 
-import { ApiPromise } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
@@ -277,7 +276,7 @@ export async function registerDocument(
     sizeBytes: number;
   }
 ): Promise<{ hash: string; documentId: string }> {
-  const api = await initializeApi();
+  await initializeApi();  // connection init; result unused
   
   try {
     const injector = await web3FromAddress(address);

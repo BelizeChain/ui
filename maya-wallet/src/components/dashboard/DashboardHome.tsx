@@ -19,14 +19,13 @@ import {
   Eye,
   EyeSlash,
   CheckCircle,
-  Warning,
   TrendUp,
   Gift,
   ChartLine,
   Users,
   CaretRight,
   Bell,
-  Scan
+  Scan,
 } from 'phosphor-react';
 import Link from 'next/link';
 
