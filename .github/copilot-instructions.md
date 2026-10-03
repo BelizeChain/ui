@@ -15,13 +15,13 @@
 ## Deployment Target: Ceiba Self-Hosted
 - **Active ops source of truth**: `../belizechain/docs/operations/CEIBA_OPERATIONS_RUNBOOK.md`, `../belizechain/docs/deployment/PHASE2_CEIBA_SERVICES_PLAN.md`, and `../infra/docker-compose.ceiba.yml`
 - **Current host**: Ceiba (`ssh wicked@100.81.45.25` over Tailscale)
-- **Current frontend routing contract**: HTTPS via Ceiba nginx reverse proxy (`/`, `/rpc`, `/ws`, `/api/nawal`, `/api/kinich`, `/api/pakit`, `/ipfs`)
-- **Current infra note**: `infra/docker-compose.ceiba.yml` now points the single public `ui` service at `belizechain/blue-hole-portal:latest`; exposing Maya Wallet separately still requires an explicit infra and routing change
+- **Current frontend routing contract**: HTTPS via Ceiba nginx reverse proxy (`/`, `/rpc`, `/ws`, `/wallet`, `/api/nawal`, `/api/kinich`, `/api/pakit`, `/ipfs`)
+- **Current infra note**: `infra/docker-compose.ceiba.yml` serves Blue Hole Portal as the public `ui` service and Maya Wallet as the separate `maya` service (`belizechain/maya-wallet:20260918-ceiba`) on nginx `/wallet/` — both verified live 2026-10-03. Rollout/rollback contract: `../infra/docs/B1_MAYA_EXPOSURE_2026-06-13.md`
 
-## Deployment Status: Phase 2 — TODO
+## Deployment Status: Phase 2 — Maya Wallet LIVE (2026-09-21); remaining items below
 ### What needs to be done:
 1. **Keep repo tooling on Node 24** — local `.nvmrc`, Dockerfile, workflows, and package metadata should stay aligned.
-2. **Decide whether Maya Wallet needs a separate Ceiba route/image contract** — the single public `ui` slot now serves Blue Hole Portal.
+2. **Maya Wallet Ceiba route/image contract** — DONE: `maya` service + `/wallet/` route live; see `../infra/docs/B1_MAYA_EXPOSURE_2026-06-13.md` for the rollout/rollback procedure.
 3. **If promoting another app from this repo to Ceiba**:
    - build an explicit image per app target from this Dockerfile
    - pin the chosen image in `infra/.env` / `infra/docker-compose.ceiba.yml`
