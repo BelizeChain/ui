@@ -125,10 +125,17 @@ function buildInitialStatuses(targets: ServiceTarget[]): ServiceProbeStatus[] {
   }));
 }
 
+/**
+ * Build-time mount path of the running app, empty when served from the site root.
+ * Both apps expose `/api/probes` beneath it, so this is the exact prefix to use.
+ * Sniffing `window.location.pathname` instead would misfire on any route that
+ * happens to start with the base path — and the wallet has a real `/wallet` route.
+ */
+const APP_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+
 async function fetchServerProbes(): Promise<Record<string, { ok: boolean; status: string; url?: string }> | null> {
   try {
-    const isWallet = typeof window !== 'undefined' && window.location.pathname.startsWith('/wallet');
-    const endpoint = isWallet ? '/wallet/api/probes' : '/api/probes';
+    const endpoint = `${APP_BASE_PATH}/api/probes`;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 2500);
     const res = await fetch(endpoint, {
