@@ -15,13 +15,13 @@
 ## Deployment Target: Ceiba Self-Hosted
 - **Active ops source of truth**: `../belizechain/docs/operations/CEIBA_OPERATIONS_RUNBOOK.md`, `../belizechain/docs/deployment/PHASE2_CEIBA_SERVICES_PLAN.md`, and `../infra/docker-compose.ceiba.yml`
 - **Current host**: Ceiba (`ssh wicked@100.81.45.25` over Tailscale)
-- **Current frontend routing contract**: HTTPS via Ceiba nginx reverse proxy (`/`, `/rpc`, `/ws`, `/wallet`, `/api/nawal`, `/api/kinich`, `/api/pakit`, `/ipfs`)
-- **Current infra note**: `infra/docker-compose.ceiba.yml` serves Blue Hole Portal as the public `ui` service and Maya Wallet as the separate `maya` service (`belizechain/maya-wallet:20260918-ceiba`) on nginx `/wallet/` — both verified live 2026-10-03. Rollout/rollback contract: `../infra/docs/B1_MAYA_EXPOSURE_2026-06-13.md`
+- **Current frontend routing contract**: HTTPS via the Oracle edge → Ceiba nginx, which routes `/` **by hostname** through the `$root_backend` map in `../infra/nginx/nginx.conf`. Every name also serves `/rpc`, `/ws`, `/api/nawal`, `/api/kinich`, `/api/pakit`, `/ipfs`.
+- **Current infra note**: apex and `www` serve the `org` site; `testnet.*` and `portal.*` serve Blue Hole Portal (`ui`); `wallet.*` serves Maya Wallet (`maya`) **at the root**; `explorer.*` serves the explorer. Both UI images are built **without** absolute URLs, so they derive `/rpc`, `/ws` and `/api/*` from `window.location.origin` — that is why every name must serve those paths. The old `/wallet/` path 301s to `wallet.belizechain.org`. Rollout/rollback contract: `../infra/deploy/CEIBA_UI_ROLLOUT.md` (current); `../infra/docs/B1_MAYA_EXPOSURE_2026-06-13.md` is the historical first cut.
 
 ## Deployment Status: Phase 2 — Maya Wallet LIVE (2026-09-21); remaining items below
 ### What needs to be done:
 1. **Keep repo tooling on Node 24** — local `.nvmrc`, Dockerfile, workflows, and package metadata should stay aligned.
-2. **Maya Wallet Ceiba route/image contract** — DONE: `maya` service + `/wallet/` route live; see `../infra/docs/B1_MAYA_EXPOSURE_2026-06-13.md` for the rollout/rollback procedure.
+2. **Maya Wallet Ceiba route/image contract** — DONE: the `maya` service serves `wallet.belizechain.org` at the root (built with `NEXT_PUBLIC_BASE_PATH` unset, and with `-f Dockerfile.maya`); see `../infra/deploy/CEIBA_UI_ROLLOUT.md` for the rollout/rollback procedure.
 3. **If promoting another app from this repo to Ceiba**:
    - build an explicit image per app target from this Dockerfile
    - pin the chosen image in `infra/.env` / `infra/docker-compose.ceiba.yml`
