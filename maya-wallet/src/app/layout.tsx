@@ -4,6 +4,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { AppHeader } from '@/components/AppHeader';
+import { LoginGate } from '@/components/LoginGate';
+import { readSession } from '@/lib/auth/session';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,11 +24,20 @@ export const viewport: Viewport = {
   themeColor: '#0066CC',
 };
 
-export default function RootLayout({
+/**
+ * Server component so the session cookie can be read here.
+ *
+ * The whole app is gated: without a valid session the wallet UI is never
+ * rendered. Reading cookies makes every route dynamic, which is what a gated
+ * app wants.
+ */
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await readSession();
+
   return (
     <html lang="en">
       <head>
@@ -51,9 +62,15 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Providers>
-          <AppHeader />
-          {children}
-          <BottomNavigation />
+          {session ? (
+            <>
+              <AppHeader />
+              {children}
+              <BottomNavigation />
+            </>
+          ) : (
+            <LoginGate />
+          )}
         </Providers>
       </body>
     </html>

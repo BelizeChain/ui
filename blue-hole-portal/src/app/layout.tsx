@@ -1,22 +1,25 @@
-'use client';
-
-import { useState } from 'react';
 import { Inter } from 'next/font/google';
-import { Providers } from './providers';
 import './globals.css';
-import { Sidebar } from '@/components/navigation/Sidebar';
-import { Header } from '@/components/navigation/Header';
-import { CommandPalette } from '@/components/navigation/CommandPalette';
-import { WalletConnectGuide } from '@/components/WalletConnectGuide';
+import { AppShell } from '@/components/AppShell';
+import { LoginGate } from '@/components/LoginGate';
+import { readSession } from '@/lib/auth/session';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export default function RootLayout({
+/**
+ * Server component so the session cookie can be read here.
+ *
+ * This is the authorization boundary for the whole Portal: when there is no
+ * valid session the dashboard is never rendered at all, rather than rendered
+ * and hidden client-side. Reading cookies makes every route dynamic, which is
+ * what a gated app wants.
+ */
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const session = await readSession();
 
   return (
     <html lang="en">
@@ -28,37 +31,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
-            {/* Desktop Sidebar */}
-            <div className="hidden lg:block">
-              <Sidebar />
-            </div>
-
-            {/* Mobile Sidebar */}
-            <div className="lg:hidden">
-              <Sidebar />
-            </div>
-
-            {/* Main Content */}
-            <div className="transition-all duration-300 lg:pl-64">
-              {/* Header */}
-              <Header
-                sidebarCollapsed={false}
-                onMobileMenuOpen={() => setMobileMenuOpen(!mobileMenuOpen)}
-              />
-
-              {/* Page Content */}
-              <main className="min-h-screen pt-16">{children}</main>
-            </div>
-
-            {/* Command Palette (Cmd+K) */}
-            <CommandPalette />
-
-            {/* Wallet Connect Prompt overlay */}
-            <WalletConnectGuide />
-          </div>
-        </Providers>
+        {session ? <AppShell>{children}</AppShell> : <LoginGate />}
       </body>
     </html>
   );
