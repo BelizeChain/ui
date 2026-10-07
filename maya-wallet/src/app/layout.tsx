@@ -25,6 +25,22 @@ export const viewport: Viewport = {
 };
 
 /**
+ * Force dynamic rendering — do NOT remove.
+ *
+ * Calling `cookies()` alone did not opt this route out of static generation. `/`
+ * was prerendered at build time, when no cookie exists, so the frozen HTML
+ * contained the login gate and was then served from cache (s-maxage=31536000) to
+ * signed-in and anonymous visitors alike — both got an identical ETag. Sign-in
+ * therefore succeeded, set a valid session, reloaded, and appeared to do
+ * nothing.
+ *
+ * This also makes Next send `Cache-Control: private, no-cache, no-store`, which a
+ * gated page requires so no browser or proxy can replay a previously rendered
+ * response.
+ */
+export const dynamic = 'force-dynamic';
+
+/**
  * Server component so the session cookie can be read here.
  *
  * The whole app is gated: without a valid session the wallet UI is never
