@@ -80,24 +80,9 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
     console.debug('Failed to fetch on-chain BelizeID:', error);
   }
 
-  // Bootstrap sovereign identity for founder account
-  if (address === '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt' || address.startsWith('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24')) {
-    return {
-      id: 'BZ-2026-00001',
-      firstName: 'Wicked',
-      lastName: 'Founder',
-      dateOfBirth: '1990-09-21',
-      nationality: 'Belizean',
-      address: '1 Ceiba Boulevard, Belize City',
-      district: 'Belize',
-      ssnVerified: true,
-      passportVerified: true,
-      kycStatus: 'Verified',
-      registrationDate: Math.floor(Date.now() / 1000) - 86400 * 90,
-      expiryDate: Math.floor(Date.now() / 1000) + 86400 * 365 * 5,
-    };
-  }
-
+  // No fabricated identity. A bootstrap record used to be returned for two
+  // hardcoded addresses, handing back a verified-looking BelizeID (name, DOB,
+  // address, kycStatus 'Verified') that no issuer had ever attested.
   return null;
 }
 

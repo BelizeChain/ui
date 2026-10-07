@@ -556,16 +556,13 @@ class BlockchainService {
     if (cached !== null) return cached;
 
     const api = await this.getApi();
-    
-    // Treasury account is typically derived from a well-known seed
-    const treasuryAccount = await api.query.economy?.treasuryAccount?.() || null;
-    
-    if (!treasuryAccount) {
-      return 0n;
-    }
 
-    const treasuryAddress = treasuryAccount.toString();
-    const balance = await this.getBalance(treasuryAddress);
+    // `economy.treasuryAccount` does not exist on this runtime, so the previous
+    // lookup always returned null and reported a treasury balance of 0 no matter
+    // what the chain actually held. The pallet holding the national reserve is
+    // governance.
+    const reserve: any = await api.query.governance?.nationalTreasuryReserve?.();
+    const balance = reserve && !reserve.isEmpty ? BigInt(reserve.toString()) : 0n;
 
     this.setCache('treasury:balance', balance, 10000); // 10 second cache
     return balance;

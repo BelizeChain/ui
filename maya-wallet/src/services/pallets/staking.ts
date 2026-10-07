@@ -246,69 +246,37 @@ export async function getPoUWContributions(address: string, limit: number = 20):
  */
 export async function getActiveValidators(): Promise<Validator[]> {
   const api = await initializeApi();
-  
+
   try {
-    const validators: any = await api.query.staking?.validators?.entries?.() || [];
-    const currentEra: any = await api.query.staking?.currentEra?.();
-    
-    const validatorList = await Promise.all(
-      validators.map(async ([key, prefs]: [any, any]) => {
-        const address = key.args[0].toString();
-        const exposure: any = await api.query.staking?.erasStakers?.(currentEra, address) || { total: 0, own: 0, others: [] };
-        const points: any = await api.query.staking?.erasRewardPoints?.(currentEra) || { individual: new Map() };
-        
-        return {
-          address,
-          commission: prefs?.commission ? prefs.commission.toNumber() / 10000000 : 0, // Convert from perbill
-          totalStake: formatBalance(exposure.total.toString()),
-          ownStake: formatBalance(exposure.own.toString()),
-          nominatorCount: exposure.others.length,
-          isActive: true,
-          rewardPoints: points.individual.get(address)?.toNumber() || 0,
-        };
-      })
-    );
+    const entries: any = await api.query.staking?.validators?.entries?.() || [];
 
-    if (validatorList.length > 0) {
-      return validatorList.sort((a, b) => parseFloat(b.totalStake) - parseFloat(a.totalStake));
-    }
+    // Field names come from this chain's PoUW staking pallet, which is NOT the
+    // classic Substrate staking pallet: it has no eras, no nominator split and no
+    // commission. Reading `erasStakers`/`erasRewardPoints` here silently yielded
+    // 0.00 for every stake.
+    const validatorList: Validator[] = entries.map(([key, raw]: [any, any]) => {
+      const data: any = raw?.unwrap ? raw.unwrap() : raw;
+      const stake = data?.stake?.toString() ?? '0';
+
+      return {
+        address: key.args[0].toString(),
+        // No commission concept in this pallet — reported as 0, never invented.
+        commission: 0,
+        totalStake: formatBalance(stake),
+        // One bonded stake per validator; there are no nominators to split from.
+        ownStake: formatBalance(stake),
+        nominatorCount: 0,
+        isActive: true,
+        rewardPoints: Number(data?.totalContributions?.toString() ?? 0),
+        name: data?.location?.toString() || undefined,
+      };
+    });
+
+    return validatorList.sort((a, b) => parseFloat(b.totalStake) - parseFloat(a.totalStake));
   } catch (error) {
-    console.warn('Failed to fetch on-chain validators, using bootstrap validators:', error);
+    console.error('Failed to fetch on-chain validators:', error);
+    return [];
   }
-
-  // Fallback bootstrap validators for BelizeChain PoUW network
-  return [
-    {
-      address: '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt',
-      name: 'Ceiba Mainnet Validator #1 (Belize City)',
-      commission: 3.0,
-      totalStake: '2,500,000.00',
-      ownStake: '1,000,000.00',
-      nominatorCount: 42,
-      isActive: true,
-      rewardPoints: 12450,
-    },
-    {
-      address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      name: 'Maya PoUW Node (Cayo District)',
-      commission: 2.5,
-      totalStake: '1,850,000.00',
-      ownStake: '750,000.00',
-      nominatorCount: 38,
-      isActive: true,
-      rewardPoints: 9820,
-    },
-    {
-      address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-      name: 'Placencia Edge Compute Node',
-      commission: 4.0,
-      totalStake: '980,000.00',
-      ownStake: '400,000.00',
-      nominatorCount: 19,
-      isActive: true,
-      rewardPoints: 6140,
-    },
-  ];
 }
 
 /**

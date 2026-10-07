@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { GlassCard } from '@/components/ui';
 import Link from 'next/link';
+import { getContacts, type Contact } from '@/services/contacts';
 import {
   ArrowLeft,
   UserList,
@@ -11,31 +12,82 @@ import {
   Star,
   StarFour,
   CheckCircle,
-  Circle,
   PaperPlaneTilt,
 } from 'phosphor-react';
+
+/** Row shape this screen renders, derived from a stored contact. */
+interface ContactRow {
+  id: string;
+  name: string;
+  address: string;
+  avatar: string;
+  favorite: boolean;
+  lastSeen: string;
+  lastUsed?: Date;
+  verified: boolean;
+}
+
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Two-letter initials for the avatar bubble. */
+function initialsOf(name: string): string {
+  const letters = name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('');
+  return letters.toUpperCase() || '?';
+}
+
+function describeLastUsed(lastUsed?: Date): string {
+  if (!lastUsed) return 'Not used yet';
+  const seconds = Math.floor((Date.now() - new Date(lastUsed).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+/**
+ * Adapt a stored contact to the row this screen renders.
+ *
+ * `verified` is always false — the contact record carries no verification field,
+ * and this list previously asserted "verified" for eight invented people at
+ * addresses that were not even valid SS58.
+ */
+function toContactRow(contact: Contact): ContactRow {
+  return {
+    id: contact.id,
+    name: contact.nickname || contact.name,
+    address: contact.address,
+    avatar: initialsOf(contact.name),
+    favorite: contact.favorite,
+    lastSeen: describeLastUsed(contact.lastUsed),
+    lastUsed: contact.lastUsed,
+    verified: false,
+  };
+}
 
 export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'recent'>('all');
+  const [contacts, setContacts] = useState<ContactRow[]>([]);
 
-  const contacts = [
-    { name: 'Sarah Johnson', address: '5FHn...kD8w', avatar: 'SJ', favorite: true, lastSeen: '2 hours ago', verified: true },
-    { name: 'Michael Chen', address: '5Ghj...nM9x', avatar: 'MC', favorite: true, lastSeen: 'Yesterday', verified: true },
-    { name: 'Elena Rodriguez', address: '5Hjk...oP3y', avatar: 'ER', favorite: false, lastSeen: '3 days ago', verified: true },
-    { name: 'David Park', address: '5Ikl...pQ4z', avatar: 'DP', favorite: false, lastSeen: '1 week ago', verified: false },
-    { name: 'Lisa Williams', address: '5Jlm...qR5a', avatar: 'LW', favorite: true, lastSeen: 'Online', verified: true },
-    { name: 'James Taylor', address: '5Kmn...rS6b', avatar: 'JT', favorite: false, lastSeen: '2 weeks ago', verified: true },
-    { name: 'Maria Garcia', address: '5Lno...sT7c', avatar: 'MG', favorite: false, lastSeen: '5 hours ago', verified: true },
-    { name: 'Robert Lee', address: '5Mop...tU8d', avatar: 'RL', favorite: true, lastSeen: 'Yesterday', verified: false }
-  ];
+  // Contacts are stored in local storage, so they can only be read on the client.
+  useEffect(() => {
+    setContacts(getContacts().map(toContactRow));
+  }, []);
 
   const filteredContacts = contacts.filter(contact => {
-    const matchesSearch = contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         contact.address.toLowerCase().includes(searchQuery.toLowerCase());
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = contact.name.toLowerCase().includes(query) ||
+                         contact.address.toLowerCase().includes(query);
     const matchesFilter = activeFilter === 'all' ||
                          (activeFilter === 'favorites' && contact.favorite) ||
-                         (activeFilter === 'recent' && ['Online', '2 hours ago', 'Yesterday', '5 hours ago'].includes(contact.lastSeen));
+                         (activeFilter === 'recent' &&
+                           !!contact.lastUsed &&
+                           Date.now() - new Date(contact.lastUsed).getTime() < RECENT_WINDOW_MS);
     return matchesSearch && matchesFilter;
   });
 
@@ -90,7 +142,7 @@ export default function ContactsPage() {
           {[
             { id: 'all', label: 'All', count: contacts.length },
             { id: 'favorites', label: 'Favorites', count: contacts.filter(c => c.favorite).length },
-            { id: 'recent', label: 'Recent', count: 4 }
+            { id: 'recent', label: 'Recent', count: contacts.filter(c => c.lastUsed && Date.now() - new Date(c.lastUsed).getTime() < RECENT_WINDOW_MS).length }
           ].map((filter) => (
             <button
               key={filter.id}
@@ -133,10 +185,9 @@ export default function ContactsPage() {
                       )}
                     </div>
                     <p className="text-xs text-gray-400 font-mono">{contact.address}</p>
-                    <p className={`text-xs mt-1 ${
-                      contact.lastSeen === 'Online' ? 'text-emerald-400' : 'text-gray-400'
-                    }`}>
-                      {contact.lastSeen === 'Online' ? <><Circle size={10} weight="fill" className="inline text-emerald-400 mr-1" /> Online</> : `Last seen ${contact.lastSeen}`}
+                    {/* Presence is not tracked, so no "Online" state is claimed. */}
+                    <p className="text-xs mt-1 text-gray-400">
+                      {contact.lastUsed ? `Last used ${contact.lastSeen}` : 'No activity yet'}
                     </p>
                   </div>
                 </div>

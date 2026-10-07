@@ -286,44 +286,12 @@ export async function getMarketplaceListings(limit: number = 100): Promise<Domai
         .slice(0, limit);
     }
   } catch (error) {
-    console.warn('Failed to fetch marketplace listings, using bootstrap listings:', error);
+    console.warn('Failed to fetch marketplace listings:', error);
   }
 
-  return [
-    {
-      domain: 'crypto.bz',
-      name: 'crypto.bz',
-      seller: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      price: '5,000.00',
-      currency: 'DALLA',
-      category: 'Premium',
-      views: 142,
-      offers: 3,
-      listedAt: Math.floor(Date.now() / 1000) - 86400 * 5,
-    },
-    {
-      domain: 'belize.bz',
-      name: 'belize.bz',
-      seller: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-      price: '12,500.00',
-      currency: 'DALLA',
-      category: 'National',
-      views: 389,
-      offers: 7,
-      listedAt: Math.floor(Date.now() / 1000) - 86400 * 12,
-    },
-    {
-      domain: 'pay.bz',
-      name: 'pay.bz',
-      seller: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      price: '3,200.00',
-      currency: 'DALLA',
-      category: 'Fintech',
-      views: 98,
-      offers: 2,
-      listedAt: Math.floor(Date.now() / 1000) - 86400 * 3,
-    },
-  ];
+  // No fabricated listings. This returned three invented domains with made-up
+  // prices, view counts and offer counts, so an empty marketplace appeared busy.
+  return [];
 }
 
 /**
@@ -451,47 +419,11 @@ export async function getUserDomains(address: string): Promise<Domain[]> {
       if (userList.length > 0) return userList;
     }
   } catch (error) {
-    console.warn('Failed to fetch on-chain domains, using bootstrap user domains:', error);
+    console.warn('Failed to fetch on-chain domains:', error);
   }
 
-  // Founder domains
-  if (address === '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt' || address.startsWith('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24')) {
-    return [
-      {
-        name: 'wicked.bz',
-        owner: address,
-        resolvedAddress: address,
-        resolution: address,
-        registrationDate: Math.floor(Date.now() / 1000) - 86400 * 60,
-        expiryDate: Math.floor(Date.now() / 1000) + 86400 * 305,
-        expires: new Date(Date.now() + 86400000 * 305).toLocaleDateString(),
-        isPremium: true,
-        status: 'active',
-        hosting: 'DAG',
-        ssl: true,
-        metadata: {
-          description: 'BelizeChain Founder & Core Developer Sovereign Domain',
-        },
-      },
-      {
-        name: 'ceiba.bz',
-        owner: address,
-        resolvedAddress: address,
-        resolution: address,
-        registrationDate: Math.floor(Date.now() / 1000) - 86400 * 45,
-        expiryDate: Math.floor(Date.now() / 1000) + 86400 * 320,
-        expires: new Date(Date.now() + 86400000 * 320).toLocaleDateString(),
-        isPremium: false,
-        status: 'active',
-        hosting: 'DAG',
-        ssl: true,
-        metadata: {
-          description: 'Ceiba Validator Node Web Portal',
-        },
-      },
-    ];
-  }
-
+  // No fabricated domains. Two "Founder" domains (wicked.bz, ceiba.bz) used to be
+  // returned for two hardcoded addresses.
   return [];
 }
 

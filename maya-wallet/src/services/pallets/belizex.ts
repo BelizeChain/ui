@@ -95,39 +95,14 @@ export async function getTradingPairs(api?: ApiPromise): Promise<TradingPair[]> 
       }
     }
   } catch (err) {
-    console.warn('Unable to query on-chain belizeX pairs directly, using bootstrap pairs:', err);
+    console.warn('Unable to query on-chain belizeX trading pairs:', err);
   }
 
-  // Default pairs for bootstrapping liquidity (1 DALLA = $1.00 USD, 1 bBZD = $0.50 USD)
-  return [
-    {
-      baseAsset: 'DALLA',
-      quoteAsset: 'BBZD',
-      baseReserve: 1_000_000n * PLANCK,
-      quoteReserve: 2_000_000n * PLANCK, // 1 DALLA ($1.00) = 2.00 bBZD ($0.50)
-      totalLpTokens: 1_414_213n * PLANCK,
-      feeRateBps: 30, // 0.3%
-      active: true,
-    },
-    {
-      baseAsset: 'DALLA',
-      quoteAsset: 'WUSDC',
-      baseReserve: 1_000_000n * PLANCK,
-      quoteReserve: 1_000_000n * PLANCK, // 1 DALLA ($1.00) = 1.00 WUSDC ($1.00)
-      totalLpTokens: 1_000_000n * PLANCK,
-      feeRateBps: 30,
-      active: true,
-    },
-    {
-      baseAsset: 'BBZD',
-      quoteAsset: 'WUSDC',
-      baseReserve: 2_000_000n * PLANCK,
-      quoteReserve: 1_000_000n * PLANCK, // 1 bBZD = 0.50 WUSDC ($0.50 USD)
-      totalLpTokens: 1_414_213n * PLANCK,
-      feeRateBps: 10, // 0.1% for stable pairs
-      active: true,
-    },
-  ];
+  // No fabricated pairs. This used to return three invented pairs with made-up
+  // reserves and LP token counts (e.g. 1,000,000 DALLA) whenever the query failed
+  // or came back empty, which made an empty DEX look funded. Callers show an
+  // unreachable state instead.
+  return [];
 }
 
 export async function findPair(

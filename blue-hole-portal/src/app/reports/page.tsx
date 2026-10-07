@@ -133,7 +133,7 @@ export default function FinancialReportsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      alert('PDF report generation initiated! (Using JSON format for demo)');
+        alert('Report exported as JSON. PDF rendering is not implemented yet.');
       setShowBuilder(false);
     } catch (error) {
       console.error('Failed to generate PDF:', error);

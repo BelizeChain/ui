@@ -59,20 +59,6 @@ export const BELIZE_DISTRICT_COVERAGE: DistrictCoverage[] = [
   { district: 'Corozal & Orange Walk', activeRepeaters: 8, signalStrength: 'Good', gatewayOnline: true, waterCoverageKm: 12 },
 ];
 
-export const BOOTSTRAP_EMERGENCY_ALERTS: EmergencyAlert[] = [
-  {
-    id: 'NEMO-ALERT-2026-08',
-    title: 'Tropical Weather Advisory - Western Caribbean',
-    message: 'NEMO and National Met Service advise all marine interests and Cayes to monitor coastal wave heights. LoRa mesh emergency repeaters are active nationwide.',
-    severity: 'Advisory',
-    issuer: 'NEMO Belize',
-    targetDistricts: ['Ambergris Caye & Cayes', 'Belize District', 'Stann Creek (Placencia)'],
-    issuedAt: Math.floor(Date.now() / 1000) - 3600 * 4,
-    expiresAt: Math.floor(Date.now() / 1000) + 86400 * 2,
-    verifiedOnMesh: true,
-  },
-];
-
 /**
  * Get active emergency alerts received via LoRa mesh
  */
@@ -98,9 +84,13 @@ export async function getEmergencyAlerts(): Promise<EmergencyAlert[]> {
       });
     }
   } catch (err) {
-    console.warn('Querying bootstrap emergency alerts:', err);
+    console.error('Failed to query emergency alerts:', err);
   }
-  return BOOTSTRAP_EMERGENCY_ALERTS;
+
+  // No fabricated alerts. A hardcoded NEMO advisory used to be returned whenever
+  // the query failed or came back empty. An emergency feed must never invent an
+  // alert that no authority issued.
+  return [];
 }
 
 /**

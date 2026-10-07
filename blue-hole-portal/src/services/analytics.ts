@@ -1,14 +1,14 @@
 /**
  * Analytics & Data Processing Service
  * Production-grade data analytics for government dashboard
- * MOSTLY REAL DATA — Treasury analytics query real chain state.
- * KNOWN PARTIAL: getDepartmentSpending() derives from executed treasury
- * proposals (no dedicated department-tracking pallet yet); totalRevenue is
- * a placeholder 0n until the revenue pallet exists. See UI_WIRING_STATUS_CURRENT.md.
+ * Treasury analytics query real chain state (`governance.nationalTreasuryReserve`,
+ * `governance.departmentTreasuryBalances`).
+ * KNOWN GAP: `totalRevenue` and `revenueByMonth` are zero/empty because this
+ * runtime has no revenue-tracking pallet — they are reported as zero, not guessed.
  */
 
 import { blockchainService } from './blockchain';
-import type { ProposalInfo, ValidatorInfo } from './blockchain';
+import type { ValidatorInfo } from './blockchain';
 
 // ============================================================================
 // Types & Interfaces
@@ -181,8 +181,8 @@ class AnalyticsService {
       amount: p.amount,
     })));
 
-    // Mock department spending (will be real once we have department tracking on-chain)
-    const departmentSpending = await this.getDepartmentSpending(executedProposals);
+    // Real department balances from the governance pallet.
+    const departmentSpending = await this.getDepartmentSpending();
 
     // Calculate cash flow forecast
     const cashFlowForecast = this.calculateCashFlowForecast(
@@ -191,10 +191,12 @@ class AnalyticsService {
     );
 
     return {
-      totalRevenue: 0n, // Will be tracked once revenue pallet is implemented
+      // No revenue-tracking pallet exists on this runtime, so these are genuinely
+      // zero rather than unknown-and-invented.
+      totalRevenue: 0n,
       totalExpenses,
       currentBalance: treasuryBalance,
-      revenueByMonth: [], // Will be populated from revenue pallet
+      revenueByMonth: [],
       expensesByMonth,
       departmentSpending,
       cashFlowForecast,
@@ -218,49 +220,44 @@ class AnalyticsService {
       .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }
 
-  private async getDepartmentSpending(proposals: ProposalInfo[]): Promise<DepartmentSpending[]> {
-    // Extract department from beneficiary field (simplified)
-    const departments = new Map<string, bigint>();
-    
-    proposals.forEach(p => {
-      if (p.status === 'executed' || p.status === 'approved') {
-        // Parse department from beneficiary description
-        const dept = this.extractDepartment(p.beneficiary);
-        const current = departments.get(dept) || 0n;
-        departments.set(dept, current + p.amount);
-      }
-    });
+  /**
+   * Department spending, read from the governance pallet.
+   *
+   * This previously invented an equal split of a hardcoded 100,000,000 DALLA
+   * budget across whichever departments happened to appear in executed
+   * proposals, and its own inline comment called it "Mock department spending".
+   * `governance.departmentTreasuryBalances` is the real source and is currently
+   * empty, which is the honest answer: no department has been funded yet.
+   *
+   * The pallet tracks a department *balance*, not an allocation-vs-spend pair, so
+   * `spent` and `percentage` cannot be derived and are reported as 0 rather than
+   * guessed.
+   */
+  private async getDepartmentSpending(): Promise<DepartmentSpending[]> {
+    try {
+      const api = await blockchainService.getApi();
+      const entries: any = await api.query.governance?.departmentTreasuryBalances?.entries?.() ?? [];
 
-    // Convert to array with allocations (will use real budget data once available)
-    const deptArray: DepartmentSpending[] = [];
-    const totalAllocated = 100_000_000n * BigInt(1e12); // 100M DALLA total budget
+      return entries
+        .map(([key, value]: [any, any]) => {
+          const department = key.args.map((arg: any) => arg.toHuman()).join(':') || 'Unnamed';
+          const balance = BigInt(value.toString());
 
-    for (const [department, spent] of departments.entries()) {
-      const allocated = totalAllocated / BigInt(departments.size); // Equal allocation for now
-      const remaining = allocated > spent ? allocated - spent : 0n;
-      const percentage = Number((spent * 100n) / allocated);
-
-      deptArray.push({
-        department,
-        allocated,
-        spent,
-        remaining,
-        percentage,
-      });
+          return {
+            department,
+            allocated: balance,
+            spent: 0n,
+            remaining: balance,
+            percentage: 0,
+          };
+        })
+        .sort((a: DepartmentSpending, b: DepartmentSpending) =>
+          b.remaining > a.remaining ? 1 : b.remaining < a.remaining ? -1 : 0,
+        );
+    } catch (error) {
+      console.error('Failed to read department treasury balances:', error);
+      return [];
     }
-
-    return deptArray.sort((a, b) => Number(b.spent - a.spent));
-  }
-
-  private extractDepartment(beneficiary: string): string {
-    // Simple department extraction logic
-    const lower = beneficiary.toLowerCase();
-    if (lower.includes('health')) return 'Ministry of Health';
-    if (lower.includes('education')) return 'Ministry of Education';
-    if (lower.includes('infrastructure') || lower.includes('road')) return 'Ministry of Infrastructure';
-    if (lower.includes('tourism')) return 'Ministry of Tourism';
-    if (lower.includes('defense') || lower.includes('security')) return 'Ministry of Defense';
-    return 'General Administration';
   }
 
   private calculateCashFlowForecast(
@@ -283,7 +280,8 @@ class AnalyticsService {
       thirtyDay: thirtyDay > 0n ? thirtyDay : 0n,
       sixtyDay: sixtyDay > 0n ? sixtyDay : 0n,
       ninetyDay: ninetyDay > 0n ? ninetyDay : 0n,
-      projectedRevenue: 0n, // Will be real once revenue tracking exists
+      // No revenue-tracking pallet, so projected revenue is genuinely zero.
+      projectedRevenue: 0n,
       projectedExpenses: avgMonthlyExpensePlanck * 3n,
     };
   }

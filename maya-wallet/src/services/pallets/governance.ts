@@ -204,41 +204,13 @@ export async function getActiveProposals(): Promise<Proposal[]> {
       return results;
     }
   } catch (error) {
-    console.warn('Failed to fetch on-chain proposals, using bootstrap referenda:', error);
+    console.warn('Failed to fetch on-chain proposals:', error);
   }
 
-  return [
-    {
-      index: 101,
-      hash: 'proposal-101',
-      proposer: '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt',
-      value: '250,000.00',
-      beneficiary: '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt',
-      bond: '500.00',
-      title: 'Belize Digital Infrastructure & Mesh Network Expansion',
-      description: 'Funding allocation for expanding decentralized mesh WiFi and IPFS edge nodes across Cayo and Stann Creek districts.',
-      category: 'Infrastructure',
-      status: 'Voting',
-      voteCount: { ayes: 842, nays: 18 },
-      voteEnd: Date.now() + 86400000 * 5,
-      createdAt: Date.now() - 86400000 * 2,
-    },
-    {
-      index: 102,
-      hash: 'proposal-102',
-      proposer: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      value: '100,000.00',
-      beneficiary: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      bond: '250.00',
-      title: 'PoUW Eco-Tourism AI Model Training Incentive',
-      description: 'Incentive pool in DALLA for edge nodes computing biodiversity and coral reef telemetry models on Nawal AI.',
-      category: 'Community',
-      status: 'Voting',
-      voteCount: { ayes: 620, nays: 41 },
-      voteEnd: Date.now() + 86400000 * 7,
-      createdAt: Date.now() - 86400000 * 1,
-    },
-  ];
+  // No fabricated referenda. Two invented proposals with made-up vote counts
+  // (ayes 842/620) used to be returned whenever the query failed or came back
+  // empty, making an idle governance pallet look like it had live votes.
+  return [];
 }
 
 /**
