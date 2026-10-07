@@ -23,6 +23,9 @@
 1. **Keep repo tooling on Node 24** — local `.nvmrc`, Dockerfile, workflows, and package metadata should stay aligned.
 2. **Maya Wallet Ceiba route/image contract** — DONE: the `maya` service serves `wallet.belizechain.org` at the root (built with `NEXT_PUBLIC_BASE_PATH` unset, and with `-f Dockerfile.maya`); see `../infra/deploy/CEIBA_UI_ROLLOUT.md` for the rollout/rollback procedure.
 3. **If promoting another app from this repo to Ceiba**:
+   - both deployed apps are gated behind a signed session in their **root layout** (a server component), so a new app must either do the same or consciously opt out
+   - Portal requires BelizeID KYC level 2+; Maya Wallet gates on key ownership only (no KYC) so citizens can onboard
+   - `AUTH_SESSION_SECRET` is read at **runtime** (unlike `NEXT_PUBLIC_*`, which is baked at build time); it fails closed when unset
    - build an explicit image per app target from this Dockerfile
    - pin the chosen image in `infra/.env` / `infra/docker-compose.ceiba.yml`
    - validate reverse-proxy routing against the shared runtime config helper in `shared/src/lib/runtime-config.ts`
