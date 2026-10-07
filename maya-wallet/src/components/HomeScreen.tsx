@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Badge, useI18n } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
 import { GlassCard } from '@/components/ui';
+import { fetchTransactionHistory, type Transaction } from '@/services/blockchain';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
   PaperPlaneTilt,
@@ -27,38 +28,32 @@ export function HomeScreen() {
   const { selectedAccount, balance, disconnect, isConnected } = useWallet();
   const { t } = useI18n();
   const [balanceVisible, setBalanceVisible] = useState(true);
-  // Demo activity timestamps are anchored once per mount instead of being
-  // recomputed on every render (react-hooks/purity).
-  const [demoBaseTime] = useState(() => Date.now());
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const address = selectedAccount?.address;
+
+  // Real activity read from the chain. This previously rendered three hardcoded
+  // transfers ("Maria Garcia", "Tourist Board") that no account had ever made.
+  // These hooks must stay above the isConnected early return below.
+  useEffect(() => {
+    if (!address) {
+      setRecentActivity([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchTransactionHistory(address, 5)
+      .then((history) => {
+        if (!cancelled) setRecentActivity(history.map(toActivityItem));
+      })
+      .catch((error) => {
+        console.error('Failed to load recent activity:', error);
+        if (!cancelled) setRecentActivity([]);
+      });
+
+    return () => { cancelled = true; };
+  }, [address]);
 
   if (!isConnected || !selectedAccount) return null;
-
-  const transactions = [
-    {
-      id: '1',
-      type: 'received',
-      from: 'Maria Garcia',
-      amount: '50.00',
-      currency: 'DALLA',
-      timestamp: demoBaseTime - 3600000,
-    },
-    {
-      id: '2',
-      type: 'sent',
-      to: 'Tourist Board',
-      amount: '15.00',
-      currency: 'bBZD',
-      timestamp: demoBaseTime - 7200000,
-    },
-    {
-      id: '3',
-      type: 'received',
-      from: 'Tourism Reward',
-      amount: '8.50',
-      currency: 'DALLA',
-      timestamp: demoBaseTime - 86400000,
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-24">
@@ -179,12 +174,12 @@ export function HomeScreen() {
         </div>
 
         <div className="space-y-3">
-          {transactions.map((tx) => (
+          {recentActivity.map((tx) => (
             <TransactionItem key={tx.id} transaction={tx} />
           ))}
         </div>
 
-        {transactions.length === 0 && (
+        {recentActivity.length === 0 && (
           <GlassCard variant="dark-medium" blur="lg" className="text-center py-8">
             <p className="text-gray-300">{t.wallet.noTransactions}</p>
             <p className="text-sm text-gray-400 mt-1">
@@ -216,8 +211,32 @@ function QuickAction({ icon, label, href }: QuickActionProps) {
   );
 }
 
+/** One row of recent activity, as this screen renders it. */
+interface ActivityItem {
+  id: string;
+  type: 'sent' | 'received';
+  from?: string;
+  to?: string;
+  amount: string;
+  currency: string;
+  timestamp: number;
+}
+
+/** Adapt a chain transaction record to the row shape above. */
+function toActivityItem(tx: Transaction): ActivityItem {
+  return {
+    id: tx.hash,
+    type: tx.type === 'receive' ? 'received' : 'sent',
+    from: tx.from,
+    to: tx.to,
+    amount: tx.amount,
+    currency: tx.currency,
+    timestamp: tx.timestamp,
+  };
+}
+
 interface TransactionItemProps {
-  transaction: any;
+  transaction: ActivityItem;
 }
 
 function TransactionItem({ transaction }: TransactionItemProps) {

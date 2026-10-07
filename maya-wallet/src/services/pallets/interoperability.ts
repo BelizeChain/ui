@@ -6,6 +6,17 @@
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
+/**
+ * Display name for this chain.
+ *
+ * Taken from the build-time value rather than hardcoded. This source previously
+ * labelled the chain "BelizeChain Mainnet" in every environment, which is wrong
+ * on the Ceiba testnet. `NEXT_PUBLIC_*` is inlined by the build, so the value is
+ * identical on the server and the client and cannot cause a hydration mismatch —
+ * unlike reading `window.location` at module scope.
+ */
+const NETWORK_NAME = process.env.NEXT_PUBLIC_NETWORK_NAME ?? 'BelizeChain Testnet';
+
 export interface ChainMetadata {
   id: string;
   name: string;
@@ -22,7 +33,7 @@ export interface ChainMetadata {
 export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
   {
     id: 'belizechain',
-    name: 'BelizeChain Mainnet',
+    name: NETWORK_NAME,
     symbol: 'Ɗ',
     category: 'Substrate',
     icon: 'BZ',
@@ -325,13 +336,62 @@ export async function initiateBridgeTransfer(
       }).catch(reject);
     });
   } catch (error) {
-    console.warn('Extrinsic fallback simulation for development testing:', error);
-    return {
-      hash: `0x7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a${Date.now().toString(16)}`,
-      transferId: `BRG-${Date.now().toString().slice(-6)}`,
-      estimatedFee: '0.05',
-    };
+    // Never invent a hash. bridge/page.tsx renders an explicit "Awaiting" state
+    // when this throws, whereas a fabricated txHash would look like a real
+    // submission and leave the user believing funds had moved.
+    console.error('Bridge transfer failed:', error);
+    throw error;
   }
+}
+
+const BRIDGE_STATUSES = ['Pending', 'Processing', 'Completed', 'Failed', 'Refunded'] as const;
+type BridgeStatus = (typeof BRIDGE_STATUSES)[number];
+
+/** Normalise a pallet status into the UI union rather than casting it blindly. */
+function toBridgeStatus(raw: string | undefined): BridgeStatus {
+  if (raw === 'Finalized' || raw === 'Executed') {
+    return 'Completed';
+  }
+  return BRIDGE_STATUSES.find((status) => status === raw) ?? 'Pending';
+}
+
+/**
+ * Shape one `interoperability.bridgeTransactions` entry as the UI expects.
+ *
+ * Shared by the history read and the single-transfer read so the two cannot
+ * drift in how they decode the same record.
+ */
+function mapBridgeTransaction(id: number, entry: any): BridgeTransfer {
+  const data = entry.unwrap();
+
+  let to = '';
+  let targetChain = 'Base';
+  let asset = 'DALLA';
+  let amount = '0';
+
+  if (data.operation?.isLockAndMint) {
+    const op = data.operation.asLockAndMint;
+    to = op.targetAddress?.toUtf8?.() || op.targetAddress?.toString() || '';
+    targetChain = op.targetChain?.toString() || 'Base';
+    asset = op.asset?.toString() || 'DALLA';
+    amount = formatBalance(op.amount?.toString() || '0');
+  }
+
+  return {
+    transferId: `BRG-${id}`,
+    from: data.initiator.toString(),
+    to,
+    fromChain: NETWORK_NAME,
+    toChain: targetChain,
+    asset,
+    amount,
+    fee: formatBalance(data.fee?.toString() || '0'),
+    status: toBridgeStatus(data.status?.toString()),
+    initiatedAt: data.initiatedAt?.toNumber() || Math.floor(Date.now() / 1000),
+    completedAt: data.completedAt?.isSome ? data.completedAt.unwrap().toNumber() : undefined,
+    confirmations: data.collectedSignatures?.toNumber() || 0,
+    requiredConfirmations: data.requiredSignatures?.toNumber() || 3,
+  };
 }
 
 /**
@@ -352,41 +412,7 @@ export async function getUserBridgeTransfers(
           const data = value.unwrap();
           return data.initiator?.toString() === address;
         })
-        .map(([key, value]: [any, any]) => {
-          const transferId = `BRG-${key.args[0].toString()}`;
-          const data = value.unwrap();
-
-          let to = '';
-          let targetChain = 'Base';
-          let asset = 'DALLA';
-          let amount = '0';
-
-          if (data.operation?.isLockAndMint) {
-            const op = data.operation.asLockAndMint;
-            to = op.targetAddress?.toUtf8?.() || op.targetAddress?.toString() || '';
-            targetChain = op.targetChain?.toString() || 'Base';
-            asset = op.asset?.toString() || 'DALLA';
-            amount = formatBalance(op.amount?.toString() || '0');
-          }
-
-          return {
-            transferId,
-            from: data.initiator.toString(),
-            to,
-            fromChain: 'BelizeChain Mainnet',
-            toChain: targetChain,
-            asset,
-            amount,
-            fee: formatBalance(data.fee?.toString() || '0'),
-            status: (data.status?.toString() === 'Finalized' || data.status?.toString() === 'Executed')
-              ? 'Completed'
-              : (data.status?.toString() as any || 'Pending'),
-            initiatedAt: data.initiatedAt?.toNumber() || Math.floor(Date.now() / 1000),
-            completedAt: data.completedAt?.isSome ? data.completedAt.unwrap().toNumber() : undefined,
-            confirmations: data.collectedSignatures?.toNumber() || 0,
-            requiredConfirmations: data.requiredSignatures?.toNumber() || 3,
-          };
-        })
+        .map(([key, value]: [any, any]) => mapBridgeTransaction(Number(key.args[0].toString()), value))
         .sort((a: { initiatedAt: number }, b: { initiatedAt: number }) => b.initiatedAt - a.initiatedAt)
         .slice(0, limit);
     }
@@ -394,63 +420,10 @@ export async function getUserBridgeTransfers(
     console.warn('Failed to query on-chain bridge transfers:', error);
   }
 
-  // Founder recent multi-chain history bootstrap
-  if (address === '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt' || address.startsWith('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24')) {
-    return [
-      {
-        transferId: 'BRG-880124',
-        from: address,
-        to: '0x71C28B7b4b1D144A4F8b4De961FfD2A85F075F4e',
-        fromChain: 'BelizeChain Mainnet',
-        toChain: 'Base (Coinbase L2)',
-        asset: 'DALLA',
-        amount: '50,000.00',
-        fee: '0.05',
-        status: 'Completed',
-        initiatedAt: Math.floor(Date.now() / 1000) - 3600 * 2,
-        completedAt: Math.floor(Date.now() / 1000) - 3600 * 2 + 75,
-        sourceHash: '0x8f2a...91b0',
-        destinationHash: '0x3c1d...44e8',
-        confirmations: 64,
-        requiredConfirmations: 64,
-      },
-      {
-        transferId: 'BRG-880092',
-        from: address,
-        to: 'TJ8yK9vTfG7v3rL2mNx4vWkP9mQ1sR8y',
-        fromChain: 'BelizeChain Mainnet',
-        toChain: 'TRON (USDT Hub)',
-        asset: 'USDT',
-        amount: '12,500.00',
-        fee: '0.02',
-        status: 'Completed',
-        initiatedAt: Math.floor(Date.now() / 1000) - 86400 * 1,
-        completedAt: Math.floor(Date.now() / 1000) - 86400 * 1 + 90,
-        sourceHash: '0x7a1e...54c2',
-        destinationHash: 'f49a...88b2',
-        confirmations: 19,
-        requiredConfirmations: 19,
-      },
-      {
-        transferId: 'BRG-879941',
-        from: address,
-        to: '0x991E24d081fB6c1a89c42E43f9aC78a74e54D9c1',
-        fromChain: 'BelizeChain Mainnet',
-        toChain: 'Arbitrum One',
-        asset: 'bBZD',
-        amount: '25,000.00',
-        fee: '0.05',
-        status: 'Completed',
-        initiatedAt: Math.floor(Date.now() / 1000) - 86400 * 3,
-        completedAt: Math.floor(Date.now() / 1000) - 86400 * 3 + 120,
-        sourceHash: '0x2d1f...11a9',
-        destinationHash: '0x9e8a...00f4',
-        confirmations: 128,
-        requiredConfirmations: 128,
-      },
-    ];
-  }
-
+  // No fabricated history: a real query returns what the chain holds, and an
+  // empty result is the honest answer for an account with no bridge activity.
+  // (A hardcoded bootstrap list used to be returned for specific addresses,
+  // presenting invented "Completed" transfers worth tens of thousands.)
   return [];
 }
 
@@ -541,36 +514,30 @@ export async function getBridgeByChain(chain: string): Promise<Bridge | null> {
 }
 
 /**
- * Get bridge transfer status
+ * Get bridge transfer status.
+ *
+ * Reads the real record. This previously returned a hardcoded completed
+ * transfer for any id at all, including ids that had never existed.
  */
 export async function getBridgeTransfer(transferId: string): Promise<BridgeTransfer | null> {
-  return {
-    transferId,
-    from: '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt',
-    to: '0x71C28B7b4b1D144A4F8b4De961FfD2A85F075F4e',
-    fromChain: 'BelizeChain Mainnet',
-    toChain: 'Base (Coinbase L2)',
-    asset: 'DALLA',
-    amount: '50,000.00',
-    fee: '0.05',
-    status: 'Completed',
-    initiatedAt: Math.floor(Date.now() / 1000) - 300,
-    completedAt: Math.floor(Date.now() / 1000) - 250,
-    confirmations: 64,
-    requiredConfirmations: 64,
-  };
-}
+  const id = Number.parseInt(transferId.replace(/^BRG-/, ''), 10);
+  if (!Number.isFinite(id)) {
+    return null;
+  }
 
-/**
- * Get cross-chain assets
- */
-export async function getCrossChainAssets(): Promise<CrossChainAsset[]> {
-  return [
-    { symbol: 'DALLA', name: 'DALLA', originChain: 'BelizeChain', totalLocked: '1,500,000.00', totalMinted: '1,500,000.00', isWrapped: false },
-    { symbol: 'bBZD', name: 'Belize Dollar Stable', originChain: 'BelizeChain', totalLocked: '2,000,000.00', totalMinted: '2,000,000.00', isWrapped: false },
-    { symbol: 'USDT', name: 'Tether USD', originChain: 'TRON / Ethereum', totalLocked: '5,000,000.00', totalMinted: '5,000,000.00', isWrapped: true },
-    { symbol: 'USDC', name: 'USD Coin', originChain: 'Base / Ethereum', totalLocked: '3,200,000.00', totalMinted: '3,200,000.00', isWrapped: true },
-  ];
+  try {
+    const api = await initializeApi();
+    // The generated query types for this pallet are loose, so the Option wrapper
+    // is asserted here — the same idiom the history read above uses.
+    const entry: any = await api.query.interoperability.bridgeTransactions(id);
+    if (!entry || entry.isNone) {
+      return null;
+    }
+    return mapBridgeTransaction(id, entry);
+  } catch (error) {
+    console.error('Failed to read bridge transfer', transferId, error);
+    return null;
+  }
 }
 
 /**
@@ -600,26 +567,6 @@ export async function cancelBridgeTransfer(address: string, transferId: string):
 export async function claimBridgeRefund(address: string, transferId: string): Promise<{ hash: string; refundAmount: string }> {
   void address; void transferId;
   throw new Error('Bridge refund claims are processed automatically by relayer unlock handlers.');
-}
-
-/**
- * Get bridge statistics
- */
-export async function getBridgeStats(bridgeId: string): Promise<{
-  totalVolume: string;
-  totalTransfers: number;
-  successRate: number;
-  averageTime: number;
-  dailyVolume: string;
-}> {
-  void bridgeId;
-  return {
-    totalVolume: '14,850,000.00',
-    totalTransfers: 1420,
-    successRate: 99.8,
-    averageTime: 1.5,
-    dailyVolume: '320,000.00',
-  };
 }
 
 /**

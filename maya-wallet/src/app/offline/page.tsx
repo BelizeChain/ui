@@ -24,6 +24,16 @@ import {
   Cpu,
 } from 'phosphor-react';
 
+/**
+ * Genesis hash used when the live read is unavailable.
+ *
+ * Must match the chain the payload will ultimately be submitted to, so treat this
+ * as a build-tagged fallback rather than a constant to trust: a re-genesis changes
+ * it, and this chain has been re-genesised before. Verified against Ceiba on
+ * 2026-10-07 (spec 109).
+ */
+const FALLBACK_GENESIS = '0xb2664568b41503c0661d576c08198ef3152b04ea76fee2c8a59216e88830b5ef';
+
 export default function OfflineSigningPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
@@ -77,12 +87,14 @@ export default function OfflineSigningPage() {
     e.preventDefault();
     if (!recipient || !amount) return;
 
-    let genesis = '0x8b66304f267a91ed4af49cd5ccf2b32900de780f2355402d3f217b2057c9c59c';
-    try {
-      const api = await initializeApi();
-      genesis = api.genesisHash.toHex();
-    } catch {
-      // Authoritative testnet genesis hash
+let genesis = FALLBACK_GENESIS;
+      let genesisFromChain = false;
+      try {
+        const api = await initializeApi();
+        genesis = api.genesisHash.toHex();
+        genesisFromChain = true;
+      } catch (error) {
+        console.warn('Could not read the live genesis hash; using the build fallback', error);
     }
 
     // 87-byte compressed scale encoded transaction payload
@@ -104,8 +116,10 @@ export default function OfflineSigningPage() {
     setCompressedLoRaBytes(loraHex);
     setStep('qr');
     addNotification({
-      type: 'success',
-      message: 'Generated compressed offline transaction payload with live genesis anchor!',
+      type: genesisFromChain ? 'success' : 'warning',
+      message: genesisFromChain
+        ? 'Generated compressed offline transaction payload with live genesis anchor.'
+        : 'Generated offline payload using the build-tagged genesis hash — verify it matches the target chain before signing.',
     });
   };
 
