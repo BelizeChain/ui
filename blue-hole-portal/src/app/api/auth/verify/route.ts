@@ -26,10 +26,32 @@ export const runtime = 'nodejs';
 /** Minimum BelizeID level for Portal access. Configurable so it can be raised without a rebuild. */
 const REQUIRED_KYC_LEVEL = Number.parseInt(process.env.AUTH_REQUIRED_KYC_LEVEL ?? '2', 10);
 
+/**
+ * Log a rejected sign-in and build its response.
+ *
+ * Every rejection is logged on purpose. Without this the route answered with a
+ * bare status code and left nothing in the container log, so a failed sign-in
+ * was indistinguishable from a successful one when read from the access log —
+ * the reason had to be recovered by rebuilding and replaying the flow by hand.
+ *
+ * `context` goes to the log only, so the response body keeps exactly the shape
+ * it had before; `body` is for the rare rejection that carries more than an
+ * error code to the client.
+ */
+function reject(
+  reason: string,
+  status: number,
+  context: Record<string, unknown> = {},
+  body: Record<string, unknown> = {},
+) {
+  console.warn('[auth] verify rejected:', reason, { status, ...context });
+  return NextResponse.json({ error: reason, ...body }, { status });
+}
+
 export async function POST(request: NextRequest) {
   const secret = getSessionSecret();
   if (!secret) {
-    return NextResponse.json({ error: 'auth_not_configured' }, { status: 503 });
+    return reject('auth_not_configured', 503);
   }
 
   const body = (await request.json().catch(() => null)) as
@@ -40,24 +62,24 @@ export async function POST(request: NextRequest) {
   const signature = body?.signature;
 
   if (typeof address !== 'string' || typeof signature !== 'string' || !address || !signature) {
-    return NextResponse.json({ error: 'address_and_signature_required' }, { status: 400 });
+    return reject('address_and_signature_required', 400);
   }
 
   const challengeToken = request.cookies.get(NONCE_COOKIE)?.value;
   if (!challengeToken) {
-    return NextResponse.json({ error: 'no_active_challenge' }, { status: 400 });
+    return reject('no_active_challenge', 400, { address });
   }
 
   const challenge = await open<NonceChallenge>(challengeToken, secret);
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   if (!challenge || challenge.exp <= nowSeconds) {
-    return NextResponse.json({ error: 'challenge_expired' }, { status: 400 });
+    return reject('challenge_expired', 400, { address });
   }
 
   // The challenge is bound to one address; signing it with another must not pass.
   if (challenge.a !== address) {
-    return NextResponse.json({ error: 'address_mismatch' }, { status: 400 });
+    return reject('address_mismatch', 400, { address, challenge: challenge.a });
   }
 
   const message = buildSignMessage(address, challenge.n, challenge.iat);
@@ -70,7 +92,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!signatureValid) {
-    return NextResponse.json({ error: 'invalid_signature' }, { status: 401 });
+    return reject('invalid_signature', 401, { address });
   }
 
   const { level, degraded } = await lookupKycLevel(address);
@@ -78,15 +100,14 @@ export async function POST(request: NextRequest) {
   if (degraded) {
     // Unknown is not the same as unauthorized — refuse rather than let an
     // unreachable node look like an unverified account.
-    return NextResponse.json({ error: 'kyc_lookup_unavailable' }, { status: 503 });
+    return reject('kyc_lookup_unavailable', 503, { address });
   }
 
   if (level < REQUIRED_KYC_LEVEL) {
-    return NextResponse.json(
-      { error: 'insufficient_kyc', level, required: REQUIRED_KYC_LEVEL },
-      { status: 403 },
-    );
+    return reject('insufficient_kyc', 403, { address, level }, { level, required: REQUIRED_KYC_LEVEL });
   }
+
+  console.info('[auth] verify ok:', address, { kycLevel: level });
 
   const response = NextResponse.json({ ok: true, address, kycLevel: level });
 
