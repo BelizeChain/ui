@@ -31,21 +31,33 @@ export interface ChainMetadata {
   addressPlaceholder: string;
 }
 
-export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
+/**
+ * The chain this wallet runs on. It is **not** a `BridgeChain` variant, so it
+ * can never be passed to `initiateBridge`.
+ */
+export const SOURCE_CHAIN: ChainMetadata = {
+  id: 'belizechain',
+  name: NETWORK_NAME,
+  symbol: 'Ɗ',
+  category: 'Substrate',
+  icon: 'BZ',
+  type: 'substrate',
+  nativeGasToken: 'DALLA',
+  estimatedTimeMin: 0.5,
+  explorerUrl: 'https://explorer.belizechain.org/extrinsic/',
+  addressPlaceholder: '5Cg3... / r1... (Substrate SS58)',
+};
+
+/**
+ * Display metadata for `BridgeChain` variants.
+ *
+ * **`id` must be the exact runtime variant name** (PascalCase), because that
+ * name is resolved through `BRIDGE_CHAIN_INDEX` to build the extrinsic's chain
+ * index. Using a lower-case slug like `'ethereum'` resolved to `undefined`.
+ */
+export const BRIDGE_CHAIN_CATALOGUE: ChainMetadata[] = [
   {
-    id: 'belizechain',
-    name: NETWORK_NAME,
-    symbol: 'Ɗ',
-    category: 'Substrate',
-    icon: 'BZ',
-    type: 'substrate',
-    nativeGasToken: 'DALLA',
-    estimatedTimeMin: 0.5,
-    explorerUrl: 'https://scan.belizechain.org/tx/',
-    addressPlaceholder: '5Cg3... / r1... (Substrate SS58)',
-  },
-  {
-    id: 'base',
+    id: 'Base',
     name: 'Base (Coinbase L2)',
     symbol: 'BASE',
     category: 'Layer 2',
@@ -57,7 +69,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'arbitrum',
+    id: 'ArbitrumOne',
     name: 'Arbitrum One',
     symbol: 'ARB',
     category: 'Layer 2',
@@ -69,7 +81,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'optimism',
+    id: 'Optimism',
     name: 'Optimism (OP Mainnet)',
     symbol: 'OP',
     category: 'Layer 2',
@@ -81,7 +93,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'polygon',
+    id: 'Polygon',
     name: 'Polygon PoS / POL',
     symbol: 'POL',
     category: 'Layer 2',
@@ -93,7 +105,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'ethereum',
+    id: 'Ethereum',
     name: 'Ethereum Mainnet',
     symbol: 'ETH',
     category: 'Layer 1',
@@ -105,7 +117,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'bsc',
+    id: 'BinanceSmartChain',
     name: 'BNB Smart Chain',
     symbol: 'BNB',
     category: 'Layer 1',
@@ -117,7 +129,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'solana',
+    id: 'Solana',
     name: 'Solana Mainnet',
     symbol: 'SOL',
     category: 'Non-EVM',
@@ -129,7 +141,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '7Ec... (Base58 Solana Address)',
   },
   {
-    id: 'tron',
+    id: 'Tron',
     name: 'TRON (USDT Hub)',
     symbol: 'TRX',
     category: 'Non-EVM',
@@ -141,7 +153,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: 'T9yD... (34-char Base58Check TRON Address)',
   },
   {
-    id: 'sui',
+    id: 'Sui',
     name: 'Sui Network',
     symbol: 'SUI',
     category: 'Non-EVM',
@@ -153,7 +165,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (66-char Sui Hex Address)',
   },
   {
-    id: 'near',
+    id: 'Near',
     name: 'Near Protocol',
     symbol: 'NEAR',
     category: 'Non-EVM',
@@ -165,7 +177,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: 'user.near / 64-char Hex',
   },
   {
-    id: 'avalanche',
+    id: 'Avalanche',
     name: 'Avalanche C-Chain',
     symbol: 'AVAX',
     category: 'Layer 1',
@@ -177,7 +189,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '0x... (42-char EVM Address)',
   },
   {
-    id: 'bitcoin',
+    id: 'Bitcoin',
     name: 'Bitcoin (Lightning / Runes)',
     symbol: 'BTC',
     category: 'Non-EVM',
@@ -189,7 +201,7 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: 'bc1p... / 1... / 3... (Bitcoin Address)',
   },
   {
-    id: 'polkadot',
+    id: 'Polkadot',
     name: 'Polkadot Relay',
     symbol: 'DOT',
     category: 'Substrate',
@@ -201,6 +213,104 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
     addressPlaceholder: '15... (Polkadot SS58 Address)',
   },
 ];
+
+/** The source chain followed by every described bridge target. */
+export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
+  SOURCE_CHAIN,
+  ...BRIDGE_CHAIN_CATALOGUE,
+];
+
+/**
+ * The runtime's `BridgeChain` variants, indexed exactly as
+ * `pallet_interoperability::decode_chain` decodes them.
+ *
+ * `initiateBridge` takes a `u8` chain index, not a variant name, so this map is
+ * the only correct way to turn a picker selection into an extrinsic argument.
+ * An earlier version did `Number.parseInt(bridgeId, 10) || 0` on a variant name
+ * like `'Ethereum'`; `parseInt` returned `NaN`, `|| 0` silently produced
+ * **Bitcoin**, and the transfer was submitted against the wrong chain.
+ *
+ * Keep in sync with `decode_chain` in
+ * `pallets/interoperability/src/lib.rs`.
+ */
+export const BRIDGE_CHAIN_INDEX: Readonly<Record<string, number>> = {
+  Bitcoin: 0,
+  Ethereum: 1,
+  Solana: 2,
+  BinanceSmartChain: 3,
+  Tron: 4,
+  Ripple: 5,
+  Cardano: 6,
+  Dogecoin: 7,
+  Polygon: 8,
+  Litecoin: 9,
+  Polkadot: 10,
+  Avalanche: 11,
+  CosmosHub: 12,
+  Ton: 13,
+  InternetComputer: 14,
+  Near: 15,
+  Stellar: 16,
+  Algorand: 17,
+  Tezos: 18,
+  EOS: 19,
+  Hedera: 20,
+  Fantom: 21,
+  Aptos: 22,
+  Sui: 23,
+  Kava: 24,
+  Celo: 25,
+  Harmony: 26,
+  Cronos: 27,
+  Thorchain: 28,
+  Gnosis: 29,
+  ArbitrumOne: 30,
+  Optimism: 31,
+  Base: 32,
+  ZkSyncEra: 33,
+  Linea: 34,
+  Scroll: 35,
+  Mantle: 36,
+  PolygonZkEvm: 37,
+  Metis: 38,
+  Boba: 39,
+  Zora: 40,
+  Moonbeam: 41,
+  Moonriver: 42,
+  Kusama: 43,
+  OKTC: 44,
+  Waves: 45,
+  Qtum: 46,
+  BitTorrentChain: 47,
+  ICON: 48,
+  VeChain: 49,
+  XCM: 50,
+};
+
+/**
+ * `BridgeAsset` variants, indexed as `decode_asset` decodes them.
+ *
+ * The pallet supports exactly two bridged assets. The picker used to offer
+ * USDT, USDC, ETH, SOL, TRX and BTC as well; `Number.parseInt('bBZD', 10) || 0`
+ * then resolved to DALLA, so selecting bBZD bridged DALLA instead.
+ */
+export const BRIDGE_ASSET_INDEX: Readonly<Record<string, number>> = {
+  DALLA: 0,
+  bBZD: 1,
+};
+
+/** `BridgeAsset` symbol for an index, for rendering decoded transfers. */
+export const BRIDGE_ASSET_BY_INDEX: readonly string[] = ['DALLA', 'bBZD'];
+
+/** Look up the runtime chain index for a `BridgeChain` variant name. */
+export function getBridgeChainIndex(chain: string): number | null {
+  return BRIDGE_CHAIN_INDEX[chain] ?? null;
+}
+
+/** Look up the runtime asset index for a `BridgeAsset` symbol. */
+export function getBridgeAssetIndex(asset: string): number | null {
+  return BRIDGE_ASSET_INDEX[asset] ?? null;
+}
 
 /**
  * Mirrors `interoperability.chainConfigurations: BridgeChain -> ChainConfig`.
@@ -298,6 +408,40 @@ export async function getBridges(): Promise<Bridge[]> {
 }
 
 /**
+ * The chains that can actually be bridged to, from `chainConfigurations`.
+ *
+ * This is what the picker must be driven by. The runtime's `BridgeChain` enum
+ * has 51 variants, but a variant is only usable once governance has written a
+ * `ChainConfig` for it — and `update_bridge_config` refuses to create one, so a
+ * configuration can only arrive via genesis or a runtime migration.
+ *
+ * Display fields are looked up by exact variant name; a variant the catalogue
+ * does not describe still appears, with its id as the label, rather than being
+ * hidden or given invented metadata.
+ */
+export async function getConfiguredChains(includeDisabled = false): Promise<ChainMetadata[]> {
+  const bridges = await getBridges();
+  return bridges
+    .filter((bridge) => includeDisabled || bridge.status === 'Active')
+    .map((bridge) => {
+      const catalogue = BRIDGE_CHAIN_CATALOGUE.find((c) => c.id === bridge.id);
+      if (catalogue) return catalogue;
+      return {
+        id: bridge.id,
+        name: bridge.id,
+        symbol: bridge.id.slice(0, 3).toUpperCase(),
+        category: 'Layer 1' as const,
+        icon: bridge.id.slice(0, 3).toUpperCase(),
+        type: 'evm' as const,
+        nativeGasToken: '—',
+        estimatedTimeMin: 0,
+        explorerUrl: '',
+        addressPlaceholder: 'Address format for this chain is not validated by the wallet',
+      };
+    });
+}
+
+/**
  * One entry of `interoperability.bridgeValidators`.
  *
  * There is no separate relayer registry: a relayer exists only as a
@@ -367,8 +511,24 @@ export async function initiateBridgeTransfer(
   try {
     const injector = await web3FromAddress(address);
     const amountInPlanck = BigInt(Math.floor(parseFloat(amount) * 1e12));
-    const targetChainIndex = Number.parseInt(bridgeId, 10) || 0;
-    const assetIndex = Number.parseInt(asset, 10) || 0;
+
+    // Resolve the picker's selection to the runtime's numeric arguments.
+    // Defaulting to 0 here — as this used to — silently retargets the transfer
+    // to Bitcoin and treats bBZD as DALLA, so an unknown name must abort.
+    const targetChainIndex = getBridgeChainIndex(bridgeId);
+    if (targetChainIndex === null) {
+      throw new Error(
+        `"${bridgeId}" is not a BridgeChain variant, so no chain index exists for it. Nothing was submitted.`,
+      );
+    }
+
+    const assetIndex = getBridgeAssetIndex(asset);
+    if (assetIndex === null) {
+      throw new Error(
+        `"${asset}" is not a bridged asset. pallet interoperability supports DALLA and bBZD only. Nothing was submitted.`,
+      );
+    }
+
     const tx = api.tx.interoperability.initiateBridge(
       targetChainIndex,
       toAddress,
@@ -379,8 +539,11 @@ export async function initiateBridgeTransfer(
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
-          let transferId = `BRG-${Date.now().toString().slice(-6)}`;
-          let estimatedFee = '0.05';
+          // Both values come from the pallet's own events. When an event is
+          // absent we report it as absent rather than defaulting to a
+          // timestamp-derived id and a made-up 0.05 fee.
+          let transferId = '';
+          let estimatedFee = '';
 
           events.forEach(({ event }) => {
             if (api.events.interoperability?.BridgeTransactionInitiated?.is(event)) {
@@ -513,8 +676,20 @@ export function validateCrossChainAddress(address: string, chainId: string): { i
   }
 
   const trimmed = address.trim();
-  const targetChain = SUPPORTED_EXPANDED_CHAINS.find((c) => c.id === chainId);
-  const type = targetChain?.type || 'evm';
+  const targetChain = BRIDGE_CHAIN_CATALOGUE.find((c) => c.id === chainId);
+
+  // A chain the catalogue does not describe gets no format check. Returning
+  // `isValid: true` with an explicit message is honest; the previous code fell
+  // back to `type: 'evm'` and rejected valid non-EVM addresses with an EVM
+  // format error.
+  if (!targetChain) {
+    return {
+      isValid: true,
+      message: `Address format is not validated for ${chainId}. Confirm it on the destination chain before sending.`,
+    };
+  }
+
+  const type = targetChain.type;
 
   switch (type) {
     case 'evm':
@@ -567,7 +742,12 @@ export function validateCrossChainAddress(address: string, chainId: string): { i
       return { isValid: false, message: 'Invalid Substrate / BelizeChain address length.' };
 
     default:
-      return { isValid: true };
+      // An address type the wallet has no rule for is reported as unvalidated
+      // rather than silently accepted.
+      return {
+        isValid: true,
+        message: `Address format is not validated for ${targetChain.name}. Confirm it on the destination chain before sending.`,
+      };
   }
 }
 
@@ -575,11 +755,14 @@ export function validateCrossChainAddress(address: string, chainId: string): { i
  * Get explorer URL for cross-chain transaction
  */
 export function getCrossChainExplorerUrl(chainId: string, txHash: string): string {
-  const chain = SUPPORTED_EXPANDED_CHAINS.find((c) => c.id === chainId);
+  const chain = BRIDGE_CHAIN_CATALOGUE.find((c) => c.id === chainId);
   if (chain?.explorerUrl) {
     return `${chain.explorerUrl}${txHash}`;
   }
-  return `https://etherscan.io/tx/${txHash}`;
+  // No explorer is known for this chain, so no link is offered. The previous
+  // fallback sent every unknown chain to etherscan, which showed a valid-looking
+  // page for a transaction that never happened there.
+  return '';
 }
 
 /**

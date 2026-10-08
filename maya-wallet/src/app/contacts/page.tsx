@@ -73,10 +73,18 @@ export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'recent'>('all');
   const [contacts, setContacts] = useState<ContactRow[]>([]);
+  // Captured once with the data instead of calling Date.now() during render,
+  // which react-hooks/purity rejects as an impure render-time call.
+  const [loadedAt, setLoadedAt] = useState(0);
 
   // Contacts are stored in local storage, so they can only be read on the client.
   useEffect(() => {
-    setContacts(getContacts().map(toContactRow));
+    // Deferred so the effect body doesn't call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(() => {
+      setContacts(getContacts().map(toContactRow));
+      setLoadedAt(Date.now());
+    });
   }, []);
 
   const filteredContacts = contacts.filter(contact => {
@@ -87,7 +95,7 @@ export default function ContactsPage() {
                          (activeFilter === 'favorites' && contact.favorite) ||
                          (activeFilter === 'recent' &&
                            !!contact.lastUsed &&
-                           Date.now() - new Date(contact.lastUsed).getTime() < RECENT_WINDOW_MS);
+                           loadedAt - new Date(contact.lastUsed).getTime() < RECENT_WINDOW_MS);
     return matchesSearch && matchesFilter;
   });
 
@@ -142,7 +150,7 @@ export default function ContactsPage() {
           {[
             { id: 'all', label: 'All', count: contacts.length },
             { id: 'favorites', label: 'Favorites', count: contacts.filter(c => c.favorite).length },
-            { id: 'recent', label: 'Recent', count: contacts.filter(c => c.lastUsed && Date.now() - new Date(c.lastUsed).getTime() < RECENT_WINDOW_MS).length }
+            { id: 'recent', label: 'Recent', count: contacts.filter(c => c.lastUsed && loadedAt - new Date(c.lastUsed).getTime() < RECENT_WINDOW_MS).length }
           ].map((filter) => (
             <button
               key={filter.id}

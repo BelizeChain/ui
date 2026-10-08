@@ -16,6 +16,7 @@ import {
   setTextRecord,
   removeTextRecord,
   updateHostingContent,
+  supportsPrimaryDomain,
   type Domain,
   type DomainListing,
 } from '@/services/pallets/bns';
@@ -182,6 +183,7 @@ export default function BNSPage() {
   const [domainToList, setDomainToList] = useState<DomainRecord | null>(null);
 
   const [loadedDomains, setLoadedDomains] = useState<DomainRecord[]>([]);
+  const [supportsPrimary, setSupportsPrimary] = useState(false);
 
   // Derived, not synced: when the wallet disconnects the portfolio empties out
   // without the effect having to setState.
@@ -228,6 +230,22 @@ export default function BNSPage() {
         console.error('Failed to load listings:', error);
         setMarketListings([]);
       });
+  }, []);
+
+  // Reverse resolution is spec-110 only, so the action is only offered when the
+  // runtime actually exposes it.
+  useEffect(() => {
+    let cancelled = false;
+    supportsPrimaryDomain()
+      .then((supported) => {
+        if (!cancelled) setSupportsPrimary(supported);
+      })
+      .catch(() => {
+        if (!cancelled) setSupportsPrimary(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const currentDomain = myDomains[selectedDomainIndex] || myDomains[0];
@@ -286,8 +304,8 @@ export default function BNSPage() {
     }
   };
 
-  // Reverse resolution has no extrinsic in the bns pallet, so there is nothing
-  // truthful to persist — `setPrimaryDomain` reports that rather than pretending.
+  // Reverse resolution requires the spec-110 runtime, which is not deployed yet —
+  // the capabilitity probe gates the button below rather than letting it fail.
   const handleSetPrimary = async (index: number) => {
     const domain = myDomains[index];
     if (!domain || !selectedAccount?.address) return;
@@ -296,7 +314,7 @@ export default function BNSPage() {
       await setPrimaryDomain(selectedAccount.address, `${domain.name}${domain.tld}`);
       addNotification({
         type: 'success',
-        message: `Set ${domain.name}${domain.tld} as your primary sovereign reverse handle!`,
+        message: `${domain.name}${domain.tld} is now your primary reverse handle.`,
       });
     } catch (error) {
       addNotification({
@@ -735,13 +753,17 @@ export default function BNSPage() {
                                 <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 border border-purple-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
                                   <Sparkle size={12} weight="fill" /> PRIMARY REVERSE HANDLE
                                 </span>
-                              ) : (
+                              ) : supportsPrimary ? (
                                 <button
                                   onClick={() => handleSetPrimary(index)}
                                   className="text-[10px] text-slate-400 hover:text-cyan-300 underline font-mono transition-colors"
                                 >
                                   Set as Primary
                                 </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  Primary handle: needs runtime spec 110
+                                </span>
                               )}
                             </div>
                           </div>

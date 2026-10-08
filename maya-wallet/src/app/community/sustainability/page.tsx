@@ -1,86 +1,157 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
-  Leaf,
-  ArrowLeft,
-  ShieldCheck,
-  Sun,
-  Check,
-} from 'phosphor-react';
+  getGreenProjects,
+  contributeToGreenProject,
+  getUserSRS,
+  type GreenProject,
+  type SRSInfo,
+} from '@/services/pallets/community';
+import {
+  getMeshNetworkCoverage,
+  getRelayMiningStats,
+  getGatewayStatus,
+  claimRelayRewards,
+  type MeshNetworkCoverage,
+  type RelayMiningStats,
+  type MeshGatewayStatus,
+} from '@/services/pallets/mesh';
+import { Leaf, ArrowLeft, ShieldCheck, Sun, Warning } from 'phosphor-react';
 
-interface GreenProject {
-  id: string;
-  title: string;
-  district: string;
-  category: 'Mangrove Restoration' | 'Barrier Reef Sensor Grid' | 'Solar LoRa Mesh Towers';
-  targetAmount: string;
-  raisedAmount: string;
-  carbonCreditsGenerated: number;
-  yieldBooster: string;
-  status: 'Funding' | 'Active Restoration' | 'Verified';
-}
+type Tab = 'projects' | 'mesh' | 'srs';
 
+/**
+ * Every figure on this page comes from `pallet_belize_community` (green
+ * projects, social-responsibility score) or `pallet_belize_mesh` (network
+ * coverage, relay mining).
+ *
+ * Removed here: three hardcoded projects with invented funding targets and
+ * carbon-credit counts, a "5,200 MT CO2e / 340 Ha / +3.5% APR / 2.5% rebate"
+ * metric row, live-looking node telemetry ("Battery: 98% • Solar Influx: 42W •
+ * Mesh Packets Relayed: 14,204") and two eco-tourism badges attributed to
+ * ministries that never issued them. The pallet stores no carbon-credit,
+ * uptime, APR-booster or badge concept.
+ */
 export default function SustainabilityPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<'blue-carbon' | 'solar-mesh' | 'eco-badges'>('blue-carbon');
-  const [contributingId, setContributingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('projects');
+  const [projects, setProjects] = useState<GreenProject[]>([]);
+  const [srs, setSrs] = useState<SRSInfo | null>(null);
+  const [coverage, setCoverage] = useState<MeshNetworkCoverage | null>(null);
+  const [relayStats, setRelayStats] = useState<RelayMiningStats | null>(null);
+  const [gateway, setGateway] = useState<MeshGatewayStatus | null>(null);
+  const [amounts, setAmounts] = useState<Record<number, string>>({});
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [projects] = useState<GreenProject[]>([
-    {
-      id: 'GP-01',
-      title: 'Ambergris Caye Mangrove Biosphere Reforestation',
-      district: 'Belize District (San Pedro)',
-      category: 'Mangrove Restoration',
-      targetAmount: '50,000 Ɗ',
-      raisedAmount: '38,400 Ɗ',
-      carbonCreditsGenerated: 1420,
-      yieldBooster: '+2.5% Staking APR',
-      status: 'Active Restoration',
-    },
-    {
-      id: 'GP-02',
-      title: 'Placencia Solar-Powered LoRa Mesh Node Array',
-      district: 'Stann Creek District',
-      category: 'Solar LoRa Mesh Towers',
-      targetAmount: '30,000 Ɗ',
-      raisedAmount: '21,500 Ɗ',
-      carbonCreditsGenerated: 680,
-      yieldBooster: '+3.5% Staking APR',
-      status: 'Funding',
-    },
-    {
-      id: 'GP-03',
-      title: 'Turneffe Atoll Coral Nursery & Acoustic Sensor Array',
-      district: 'Belize Offshore Cayes',
-      category: 'Barrier Reef Sensor Grid',
-      targetAmount: '75,000 Ɗ',
-      raisedAmount: '75,000 Ɗ',
-      carbonCreditsGenerated: 3100,
-      yieldBooster: '+4.0% Staking APR',
-      status: 'Verified',
-    },
-  ]);
+  const address = selectedAccount?.address;
 
-  const handleContribute = (project: GreenProject) => {
-    setContributingId(project.id);
-    setContributingId(null);
-    // CONFIG-002: no eco-contribution extrinsic is wired yet — no Ɗ moved.
-    addNotification({
-      type: 'info',
-      message: `Eco-program bonding for "${project.title}" is not wired on-chain yet. Community treasury funding is queued — no funds moved.`,
-    });
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [greenProjects, meshCoverage] = await Promise.all([
+        getGreenProjects(),
+        getMeshNetworkCoverage(),
+      ]);
+      setProjects(greenProjects);
+      setCoverage(meshCoverage);
+
+      if (address) {
+        const [srsInfo, stats, gatewayStatus] = await Promise.all([
+          getUserSRS(address),
+          getRelayMiningStats(address),
+          getGatewayStatus(address),
+        ]);
+        setSrs(srsInfo);
+        setRelayStats(stats);
+        setGateway(gatewayStatus);
+      }
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [address]);
+
+  useEffect(() => {
+    // Deferred so the effect body doesn't call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(load);
+  }, [load]);
+
+  const handleContribute = async (project: GreenProject) => {
+    if (!address) return;
+    const raw = amounts[project.projectId] ?? '25';
+    const amount = Math.floor(parseFloat(raw));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      addNotification({ type: 'error', message: 'Enter a whole-DALLA amount greater than zero.' });
+      return;
+    }
+
+    setBusyId(project.projectId);
+    try {
+      const { hash } = await contributeToGreenProject(address, project.projectId, String(amount));
+      addNotification({
+        type: 'success',
+        message: `Contributed ${amount} DALLA to "${project.name}" (tx ${hash.slice(0, 10)}…).`,
+      });
+      await load();
+    } catch (err) {
+      // Never report success on a rejected extrinsic.
+      addNotification({
+        type: 'error',
+        message: `Contribution failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleClaimRelayRewards = async () => {
+    if (!address) return;
+    setIsClaiming(true);
+    try {
+      const { amountClaimed } = await claimRelayRewards(address);
+      addNotification({
+        type: 'success',
+        message: `Claimed ${amountClaimed} DALLA in relay rewards.`,
+      });
+      await load();
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        message: `Relay reward claim failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsClaiming(false);
+    }
   };
 
   if (!isConnected || !selectedAccount) {
-    return <ConnectWalletPrompt message="Connect your Maya Wallet to view BelizeChain Blue Economy sustainability programs." fullScreen />;
+    return (
+      <ConnectWalletPrompt
+        message="Connect your Maya Wallet to view BelizeChain green projects and mesh relay mining."
+        fullScreen
+      />
+    );
   }
+
+  const totalRaised = projects.reduce(
+    (sum, p) => sum + (parseFloat(p.currentFunding) || 0),
+    0,
+  );
+  const totalContributors = projects.reduce((sum, p) => sum + p.contributorCount, 0);
+  const activeProjects = projects.filter((p) => p.isActive).length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-24">
@@ -94,179 +165,374 @@ export default function SustainabilityPage() {
               </button>
             </Link>
             <div>
-              <h1 className="text-xl font-bold">Belize Blue Economy & Carbon Credits</h1>
-              <p className="text-xs text-slate-400">Barrier Reef Preservation • Blue Carbon Offsets • Solar Mesh Mining</p>
+              <h1 className="text-xl font-bold">Green Projects & Mesh Relay</h1>
+              <p className="text-xs text-slate-400">
+                pallet community • pallet mesh
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
-              <Leaf size={16} weight="bold" />
-              Blue Carbon Active
-            </span>
-          </div>
+          <button
+            onClick={() => load()}
+            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-full text-xs font-bold"
+          >
+            {loading ? 'Reading…' : 'Refresh'}
+          </button>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 text-xs text-rose-200">
+            {error}
+          </div>
+        )}
+
+        {/* Real aggregate metrics */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Blue Carbon Offsets</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400 font-mono">5,200 MT</span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">CO2e Sequestered</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Green Projects</span>
+            <span className="text-lg font-bold text-emerald-400 font-mono block">
+              {loading ? '—' : projects.length}
+            </span>
+            <span className="text-[11px] text-slate-400 block">
+              {activeProjects} active on chain
+            </span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Solar Mesh Repeater Yield</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-amber-300 font-mono">+3.5% APR</span>
-            </div>
-            <span className="text-[11px] text-emerald-400 font-semibold">Green Node Booster</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Funding Raised</span>
+            <span className="text-lg font-bold text-cyan-300 font-mono block">
+              {loading ? '—' : `${totalRaised.toFixed(2)} Ɗ`}
+            </span>
+            <span className="text-[11px] text-slate-400 block">sum of currentFunding</span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Mangrove Hectares Protected</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-cyan-300 font-mono">340 Ha</span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">Coastal bio-shield</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Contributors</span>
+            <span className="text-lg font-bold text-purple-300 font-mono block">
+              {loading ? '—' : totalContributors}
+            </span>
+            <span className="text-[11px] text-slate-400 block">counted per project</span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Eco-Tourism POS Rebates</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-purple-400 font-mono">2.5%</span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">Auto-rebated on bBZD POS</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Your SRS</span>
+            <span className="text-lg font-bold text-amber-300 font-mono block">
+              {srs ? `${srs.score} / 10000` : '—'}
+            </span>
+            <span className="text-[11px] text-slate-400 block">
+              {srs ? `tier ${srs.tier}` : 'no score recorded'}
+            </span>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
-          {(['blue-carbon', 'solar-mesh', 'eco-badges'] as const).map((tab) => (
+        {/* Tabs */}
+        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto text-xs font-bold">
+          {(
+            [
+              { id: 'projects', label: 'Green Projects' },
+              { id: 'mesh', label: 'Mesh Relay Mining' },
+              { id: 'srs', label: 'Social Responsibility' },
+            ] as const
+          ).map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 min-w-[130px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
-                activeTab === tab
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-bold shadow-md'
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 min-w-[150px] py-2.5 rounded-xl transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {tab === 'blue-carbon'
-                ? 'Blue Carbon Projects'
-                : tab === 'solar-mesh'
-                ? 'Solar Mesh Mining'
-                : 'Eco-Certificates'}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Tab 1: Blue Carbon */}
-        {activeTab === 'blue-carbon' && (
+        {/* Tab 1: green projects */}
+        {activeTab === 'projects' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {projects.map((p) => (
+            {!loading && projects.length === 0 && (
+              <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-10 text-center text-slate-400 text-xs">
+                No green projects are registered on chain.
+              </div>
+            )}
+
+            {projects.map((project) => {
+              const target = parseFloat(project.targetFunding) || 0;
+              const current = parseFloat(project.currentFunding) || 0;
+              const progress = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+
+              return (
                 <div
-                  key={p.id}
-                  className="bg-slate-900/80 border border-slate-800 hover:border-emerald-500/40 rounded-3xl p-5 space-y-3 shadow-xl text-xs flex flex-col justify-between"
+                  key={project.projectId}
+                  className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl text-xs"
                 >
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
-                        {p.status}
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            project.isActive
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {project.isActive ? 'Active' : 'Closed'}
+                        </span>
+                        <span className="px-2.5 py-0.5 bg-slate-800 rounded-full text-[10px] font-bold text-slate-300">
+                          {project.category}
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-500">
+                          #{project.projectId}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-white text-sm">{project.name}</h3>
+                      <p className="text-slate-400 text-[11px]">{project.description}</p>
+                    </div>
+                    <div className="text-right font-mono shrink-0">
+                      <span className="text-white font-bold block">
+                        {project.currentFunding} Ɗ
                       </span>
-                      <span className="text-emerald-400 font-bold font-mono text-[10px]">{p.yieldBooster}</span>
-                    </div>
-
-                    <div>
-                      <h3 className="font-bold text-white text-sm">{p.title}</h3>
-                      <p className="text-slate-400 text-[11px] mt-0.5">{p.district}</p>
-                    </div>
-
-                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1 font-mono text-[10px]">
-                      <div className="flex justify-between text-slate-400">
-                        <span>Funding:</span>
-                        <span className="text-white font-bold">{p.raisedAmount} / {p.targetAmount}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-400">
-                        <span>Carbon Credits:</span>
-                        <span className="text-cyan-300 font-bold">{p.carbonCreditsGenerated} MT CO2e</span>
-                      </div>
+                      <span className="text-slate-500 text-[10px] block">
+                        of {project.targetFunding} Ɗ target
+                      </span>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleContribute(p)}
-                    disabled={contributingId === p.id}
-                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 mt-2"
-                  >
-                    <Leaf size={14} weight="bold" />
-                    {contributingId === p.id ? 'Bonding Ɗ...' : 'Bond 25 Ɗ to Sponsor'}
-                  </button>
+                  <div className="space-y-1">
+                    <div className="w-full bg-slate-950 rounded-full h-2 border border-slate-800">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                      <span>{progress.toFixed(1)}% funded</span>
+                      <span>{project.contributorCount} contributor{project.contributorCount === 1 ? '' : 's'}</span>
+                    </div>
+                  </div>
+
+                  {project.milestones.length > 0 && (
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                        Milestones
+                      </span>
+                      {project.milestones.map((m, i) => (
+                        <div key={i} className="flex justify-between text-[11px] gap-3">
+                          <span className="text-slate-300">{m.description}</span>
+                          <span className={m.achieved ? 'text-emerald-400' : 'text-slate-500'}>
+                            {m.achieved ? 'reached' : `${m.targetAmount} Ɗ`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={amounts[project.projectId] ?? '25'}
+                      onChange={(e) =>
+                        setAmounts((prev) => ({ ...prev, [project.projectId]: e.target.value }))
+                      }
+                      className="w-full sm:w-32 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:border-emerald-400 focus:outline-none"
+                      aria-label="Contribution amount in DALLA"
+                    />
+                    <button
+                      onClick={() => handleContribute(project)}
+                      disabled={busyId === project.projectId || !project.isActive}
+                      className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Leaf size={14} weight="bold" />
+                      {busyId === project.projectId ? 'Submitting…' : 'Contribute DALLA'}
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
+
+            <p className="text-[11px] text-slate-500 flex items-start gap-2">
+              <Warning size={14} className="text-slate-500 shrink-0 mt-0.5" weight="bold" />
+              Contributions go through <span className="font-mono">community.contributeToGreenProject</span>
+              , which takes whole-DALLA units. The pallet stores no carbon-credit or hectare figure,
+              so none is displayed.
+            </p>
           </div>
         )}
 
-        {/* Tab 2: Solar Mesh */}
-        {activeTab === 'solar-mesh' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Sun size={22} className="text-amber-400" />
-                Off-Grid Solar LoRa Mesh Staking Boosters
-              </h3>
-              <p className="text-slate-400 mt-1">
-                Operate solar-powered 915MHz Meshtastic repeater stations along the reef and coastline to earn elevated PoUW staking rewards.
-              </p>
-            </div>
-
-            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <span className="font-bold text-white text-sm">Solar Tower Node #08 (San Pedro South)</span>
-                <span className="text-slate-400 text-[11px] block">Battery: 98% • Solar Influx: 42W • Mesh Packets Relayed: 14,204</span>
+        {/* Tab 2: mesh relay */}
+        {activeTab === 'mesh' && (
+          <div className="space-y-4 text-xs">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Sun size={22} className="text-amber-400" />
+                  LoRa Mesh Relay Network
+                </h3>
+                <p className="text-slate-400 mt-1">
+                  Read from <span className="font-mono">mesh.meshNodes</span> and{' '}
+                  <span className="font-mono">mesh.relayRewards</span>.
+                </p>
               </div>
-              <span className="px-4 py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl font-bold font-mono text-xs">
-                +3.5% APR Active
-              </span>
+
+              {coverage ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-[11px]">
+                  {(
+                    [
+                      ['Total nodes', coverage.totalNodes],
+                      ['Active nodes', coverage.activeNodes],
+                      ['Gateway nodes', coverage.gatewayNodes],
+                      ['Messages relayed', coverage.messagesRelayed],
+                      ['Transactions relayed', coverage.transactionsRelayed],
+                      ['Emergency alerts', coverage.emergencyAlertsSent],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1"
+                    >
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        {label}
+                      </span>
+                      <span className="text-white font-bold">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400">Mesh network data is unavailable.</p>
+              )}
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+              <h3 className="text-base font-bold text-white">Your Relay Mining</h3>
+
+              {!relayStats ? (
+                <p className="text-slate-400">
+                  You do not own a mesh node, so there is nothing to relay or claim.
+                  {gateway && !gateway.hasGateway && ' A gateway node is required to settle mesh transactions.'}
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-[11px]">
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Node</span>
+                      <span className="text-white">{relayStats.nodeId}</span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        Packets relayed
+                      </span>
+                      <span className="text-white">{relayStats.packetsRelayed}</span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        Transactions relayed
+                      </span>
+                      <span className="text-white">{relayStats.transactionsRelayed}</span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        Reputation
+                      </span>
+                      <span className="text-white">
+                        {relayStats.reputationScore} / 10000
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        Unclaimed rewards
+                      </span>
+                      <span className="text-emerald-400 font-bold">
+                        {relayStats.unclaimedRewardsDalla} Ɗ
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        Gateway
+                      </span>
+                      <span className="text-white">{String(relayStats.isGateway)}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 flex items-start gap-2">
+                    <Warning size={14} className="text-slate-500 shrink-0 mt-0.5" weight="bold" />
+                    The pallet records no uptime percentage and no lifetime-total figure, so neither is
+                    shown. The previous panel displayed a battery level, a solar wattage and a packet
+                    count that came from nowhere.
+                  </p>
+
+                  <button
+                    onClick={handleClaimRelayRewards}
+                    disabled={isClaiming || parseFloat(relayStats.unclaimedRewardsDalla) <= 0}
+                    className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs transition-all"
+                  >
+                    {isClaiming ? 'Claiming…' : 'Claim Relay Rewards'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
 
-        {/* Tab 3: Eco Badges */}
-        {activeTab === 'eco-badges' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+        {/* Tab 3: social responsibility score */}
+        {activeTab === 'srs' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <ShieldCheck size={22} className="text-purple-400" />
-                Verifiable On-Chain Eco-Tourism Badges
+                Social Responsibility Score
               </h3>
               <p className="text-slate-400 mt-1">
-                Audited certificates for sustainable resorts, dive operators, and eco-tour guides.
+                Read from <span className="font-mono">community.socialResponsibilityScores</span> for{' '}
+                <span className="font-mono">{address?.slice(0, 12)}…</span>
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="font-bold text-white text-sm block">Turneffe Marine Eco-Operator Badge</span>
-                <p className="text-slate-400 text-[11px]">Certified 0% single-use plastic and 100% solar dive boat telemetry on BelizeChain.</p>
-                <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
-                  <Check size={12} weight="bold" /> Verified by Ministry of Blue Economy
-                </span>
-              </div>
+            {loading ? (
+              <p className="text-slate-400">Reading…</p>
+            ) : !srs ? (
+              <p className="text-slate-400">
+                No social-responsibility score is recorded for this account.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-[11px]">
+                  {(
+                    [
+                      ['Score', `${srs.score} / 10000`],
+                      ['Tier', String(srs.tier)],
+                      ['Participations', String(srs.participationCount)],
+                      ['Volunteer hours', String(srs.volunteerHours)],
+                      ['Education modules', String(srs.educationModulesCompleted)],
+                      ['Green contributions', `${srs.greenProjectContributions} Ɗ`],
+                      ['Monthly fee exemption', `${srs.monthlyFeeExemption} Ɗ`],
+                      [
+                        'Last updated',
+                        srs.lastUpdated > 0 ? new Date(srs.lastUpdated).toLocaleString() : '—',
+                      ],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1"
+                    >
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                        {label}
+                      </span>
+                      <span className="text-white font-bold">{value}</span>
+                    </div>
+                  ))}
+                </div>
 
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="font-bold text-white text-sm block">Cayo Agroforestry Carbon Neutral Badge</span>
-                <p className="text-slate-400 text-[11px]">Organic shade-grown cacao farm with satellite-verified canopy coverage on LandLedger.</p>
-                <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
-                  <Check size={12} weight="bold" /> Verified by Ministry of Agriculture
-                </span>
-              </div>
-            </div>
+                <p className="text-[11px] text-slate-500 flex items-start gap-2">
+                  <Warning size={14} className="text-slate-500 shrink-0 mt-0.5" weight="bold" />
+                  Eco-tourism &quot;badges&quot; previously shown here were attributed to government
+                  ministries. The community pallet issues no such credential.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

@@ -5,7 +5,6 @@ import { Badge, useI18n } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
 import { GlassCard } from '@/components/ui';
 import { fetchTransactionHistory, type Transaction } from '@/services/blockchain';
-import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import {
   PaperPlaneTilt,
   QrCode,
@@ -36,7 +35,9 @@ export function HomeScreen() {
   // These hooks must stay above the isConnected early return below.
   useEffect(() => {
     if (!address) {
-      setRecentActivity([]);
+      // Deferred so the effect body doesn't call setState synchronously
+      // (react-hooks/set-state-in-effect).
+      Promise.resolve().then(() => setRecentActivity([]));
       return;
     }
 

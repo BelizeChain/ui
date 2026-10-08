@@ -6,7 +6,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
-  SUPPORTED_EXPANDED_CHAINS,
+  SOURCE_CHAIN,
   type ChainMetadata,
   type BridgeTransfer,
   type BridgeValidatorView,
@@ -16,6 +16,7 @@ import {
   getUserBridgeTransfers,
   getBridgeValidators,
   getBridges,
+  getConfiguredChains,
   estimateBridgeFee,
   initiateBridgeTransfer,
 } from '@/services/pallets/interoperability';
@@ -34,15 +35,36 @@ import {
   LockKey,
 } from 'phosphor-react';
 
+/**
+ * `pallet_interoperability::BridgeAsset` has exactly two variants. The picker
+ * previously also offered USDT, USDC, ETH, SOL, TRX and BTC, none of which the
+ * pallet can decode — and because the service parsed the symbol as an integer,
+ * selecting bBZD silently resolved to DALLA.
+ */
+/**
+ * Stand-in for "no bridge chain is configured on this runtime".
+ *
+ * `pallet_interoperability::update_bridge_config` refuses to create a
+ * `ChainConfig` that does not exist, so a configuration can only arrive via
+ * genesis or a runtime migration. This sentinel carries an empty id, which
+ * never matches any `chainConfigurations` key, so the submit path stays blocked.
+ */
+const NO_DESTINATION: ChainMetadata = {
+  id: '',
+  name: 'Not configured',
+  symbol: '—',
+  category: 'Layer 1',
+  icon: '—',
+  type: 'evm',
+  nativeGasToken: '—',
+  estimatedTimeMin: 0,
+  explorerUrl: '',
+  addressPlaceholder: 'No bridge chain is configured on this chain',
+};
+
 const ASSET_OPTIONS = [
-  { id: 'DALLA', name: 'DALLA', symbol: 'Ɗ', type: 'Unpegged Native', icon: 'Ɗ', color: 'emerald' },
+  { id: 'DALLA', name: 'DALLA', symbol: 'Ɗ', type: 'Native', icon: 'Ɗ', color: 'emerald' },
   { id: 'bBZD', name: 'bBZD', symbol: 'BZ$', type: 'Statutory Stable (1:1 BZD)', icon: 'BZ$', color: 'cyan' },
-  { id: 'USDT', name: 'Tether USD', symbol: 'USDT', type: 'Bridged Stablecoin', icon: '₮', color: 'emerald' },
-  { id: 'USDC', name: 'USD Coin', symbol: 'USDC', type: 'Circle USD', icon: '$', color: 'blue' },
-  { id: 'ETH', name: 'Ether', symbol: 'ETH', type: 'Gas Asset', icon: 'ETH', color: 'purple' },
-  { id: 'SOL', name: 'Solana', symbol: 'SOL', type: 'Gas Asset', icon: 'SOL', color: 'purple' },
-  { id: 'TRX', name: 'TRON TRX', symbol: 'TRX', type: 'Gas Asset', icon: 'TRX', color: 'red' },
-  { id: 'BTC', name: 'Bitcoin', symbol: 'BTC', type: 'Wrapped / Runes', icon: 'BTC', color: 'amber' },
 ];
 
 export default function BridgePage() {
@@ -50,8 +72,11 @@ export default function BridgePage() {
   const { addNotification } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'transfer' | 'history' | 'validators'>('transfer');
-  const [fromChain, setFromChain] = useState<ChainMetadata>(SUPPORTED_EXPANDED_CHAINS[0]); // BelizeChain
-  const [toChain, setToChain] = useState<ChainMetadata>(SUPPORTED_EXPANDED_CHAINS[1]); // Base
+  // The origin is always this chain. BelizeChain is not a `BridgeChain` variant,
+  // so it can never be a bridge destination and is not offered in the picker.
+  const fromChain = SOURCE_CHAIN;
+  const [configuredChains, setConfiguredChains] = useState<ChainMetadata[]>([]);
+  const [toChain, setToChain] = useState<ChainMetadata>(NO_DESTINATION);
   const [selectedAsset, setSelectedAsset] = useState<string>('DALLA');
   const [amount, setAmount] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
@@ -62,10 +87,10 @@ export default function BridgePage() {
   const [feeError, setFeeError] = useState('');
 
   // `chainConfigurations` is keyed by the runtime's `BridgeChain` variant name
-  // (Ethereum, Solana, Bitcoin, …). The picker's ids are lower-case slugs
-  // ('base', 'arbitrum', …), so most selections have no on-chain counterpart.
-  // Until the picker is driven by the on-chain enum, say so rather than
-  // inventing a fee for a chain the pallet does not know.
+  // (Ethereum, Solana, Bitcoin, …) and `initiateBridge` takes that chain's u8
+  // index. A configuration can only be created by genesis or a runtime
+  // migration — `update_bridge_config` refuses to insert one — so when none is
+  // configured, the bridge cannot be used at all.
   const onChainBridge = bridges.find((b) => b.id === toChain.id) ?? null;
 
   // Transfer Stepper Modal
@@ -83,10 +108,15 @@ export default function BridgePage() {
     }
   }, [selectedAccount?.address]);
 
-  // Registered bridge validators (no relayer registry exists beyond this map).
+  // Registered bridge validators (no relayer registry exists beyond this map),
+  // the configured chains, and the picker's chain list.
   useEffect(() => {
     getBridgeValidators().then(setValidators);
     getBridges().then(setBridges);
+    getConfiguredChains().then((chains) => {
+      setConfiguredChains(chains);
+      setToChain((current) => (current.id ? current : chains[0] ?? NO_DESTINATION));
+    });
   }, []);
 
   // Fee comes from the chain's `feeRate` (basis points) for the target chain.
@@ -127,12 +157,6 @@ export default function BridgePage() {
 
   // Validation
   const addressValidation = validateCrossChainAddress(destinationAddress, toChain.id);
-
-  const handleSwapChains = () => {
-    const temp = fromChain;
-    setFromChain(toChain);
-    setToChain(temp);
-  };
 
   const calculateReceiveAmount = () => {
     const amt = parseFloat(amount) || 0;
@@ -225,14 +249,24 @@ export default function BridgePage() {
               </button>
             </Link>
             <div>
-              <h1 className="text-xl font-bold">Cross-Chain Bridge & Relayer</h1>
-              <p className="text-xs text-slate-400">14+ Blockchains • Base, Arbitrum, Polygon, TRON, Solana, Sui & Near</p>
+              <h1 className="text-xl font-bold">Cross-Chain Bridge</h1>
+              <p className="text-xs text-slate-400">
+                pallet interoperability • {configuredChains.length} chain
+                {configuredChains.length === 1 ? '' : 's'} configured, {validators.length} validator
+                {validators.length === 1 ? '' : 's'} registered
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
+            <span
+              className={`px-3 py-1 border rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                configuredChains.length > 0
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              }`}
+            >
               <Sparkle size={14} weight="fill" />
-              PQC Multi-Sig Live
+              {configuredChains.length > 0 ? 'Bridge Configured' : 'Not Configured'}
             </span>
           </div>
         </div>
@@ -251,7 +285,7 @@ export default function BridgePage() {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {tab === 'transfer' ? 'Bridge Portal' : tab === 'history' ? `Transfer History (${history.length})` : 'Relayer Quorum & PQC'}
+              {tab === 'transfer' ? 'Bridge Portal' : tab === 'history' ? `Transfer History (${history.length})` : `Validators (${validators.length})`}
             </button>
           ))}
         </div>
@@ -287,7 +321,7 @@ export default function BridgePage() {
 
               {/* Chain Selectors */}
               <div className="space-y-3">
-                {/* From Chain */}
+                {/* From Chain — always this chain */}
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase font-bold text-slate-400">From Network</span>
@@ -299,35 +333,19 @@ export default function BridgePage() {
                     <span className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center font-bold text-xs text-purple-300 font-mono tracking-tight shrink-0">
                       {fromChain.icon}
                     </span>
-                    <select
-                      value={fromChain.id}
-                      onChange={(e) => {
-                        const chosen = SUPPORTED_EXPANDED_CHAINS.find((c) => c.id === e.target.value);
-                        if (chosen) setFromChain(chosen);
-                      }}
-                      className="w-full bg-transparent text-white font-bold text-base focus:outline-none cursor-pointer"
-                    >
-                      {SUPPORTED_EXPANDED_CHAINS.map((c) => (
-                        <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                          {c.name} ({c.symbol}) • {c.category}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="text-white font-bold text-base">
+                      {fromChain.name} ({fromChain.symbol})
+                    </span>
                   </div>
                 </div>
 
-                {/* Swap Button */}
                 <div className="flex justify-center -my-2 relative z-10">
-                  <button
-                    type="button"
-                    onClick={handleSwapChains}
-                    className="h-10 w-10 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 flex items-center justify-center text-purple-400 shadow-xl transition-all"
-                  >
+                  <span className="h-10 w-10 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-purple-400">
                     <ArrowsLeftRight size={18} weight="bold" />
-                  </button>
+                  </span>
                 </div>
 
-                {/* To Chain */}
+                {/* To Chain — only chains the runtime has configured */}
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase font-bold text-slate-400">To Destination Network</span>
@@ -341,13 +359,19 @@ export default function BridgePage() {
                     </span>
                     <select
                       value={toChain.id}
+                      disabled={configuredChains.length === 0}
                       onChange={(e) => {
-                        const chosen = SUPPORTED_EXPANDED_CHAINS.find((c) => c.id === e.target.value);
+                        const chosen = configuredChains.find((c) => c.id === e.target.value);
                         if (chosen) setToChain(chosen);
                       }}
-                      className="w-full bg-transparent text-white font-bold text-base focus:outline-none cursor-pointer"
+                      className="w-full bg-transparent text-white font-bold text-base focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:text-slate-500"
                     >
-                      {SUPPORTED_EXPANDED_CHAINS.map((c) => (
+                      {configuredChains.length === 0 && (
+                        <option value="" className="bg-slate-900 text-slate-400">
+                          No bridge chain is configured on this chain
+                        </option>
+                      )}
+                      {configuredChains.map((c) => (
                         <option key={c.id} value={c.id} className="bg-slate-900 text-white">
                           {c.name} ({c.symbol}) • {c.category}
                         </option>
@@ -453,10 +477,11 @@ export default function BridgePage() {
                 )}
                 {!onChainBridge && (
                   <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
-                    <span className="font-mono">{toChain.id}</span> is not a{' '}
-                    <span className="font-mono">BridgeChain</span> variant, so pallet interoperability has no
-                    configuration for it. No fee or transfer is possible until the picker is driven by the
-                    on-chain enum.
+                    pallet interoperability has no <span className="font-mono">chainConfigurations</span> entry
+                    for {toChain.id ? <span className="font-mono">{toChain.id}</span> : 'any chain'} on this
+                    runtime, so no fee and no transfer are possible. A configuration can only be added by
+                    genesis or a runtime migration — the pallet&apos;s{' '}
+                    <span className="font-mono">updateBridgeConfig</span> refuses to create one.
                   </p>
                 )}
                 <div className="flex justify-between pt-2 border-t border-slate-800/80 font-bold text-white text-sm">
@@ -469,7 +494,7 @@ export default function BridgePage() {
               <button
                 type="button"
                 onClick={handleStartBridge}
-                disabled={!amount || parseFloat(amount) <= 0 || fromChain.id === toChain.id || !onChainBridge || (destinationAddress.trim() !== '' && !addressValidation.isValid)}
+                disabled={!amount || parseFloat(amount) <= 0 || !onChainBridge || (destinationAddress.trim() !== '' && !addressValidation.isValid)}
                 className="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 active:scale-[0.99] text-white rounded-2xl font-bold text-sm shadow-xl shadow-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <ArrowsLeftRight size={18} weight="bold" />
@@ -482,29 +507,38 @@ export default function BridgePage() {
               <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-3">
                 <h3 className="font-bold text-white text-sm flex items-center gap-2">
                   <GlobeHemisphereWest size={18} className="text-purple-400" />
-                  Supported Ecosystems (14)
+                  Configured Chains ({configuredChains.length})
                 </h3>
-                <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-                  {SUPPORTED_EXPANDED_CHAINS.map((chain) => (
-                    <div
-                      key={chain.id}
-                      onClick={() => setToChain(chain)}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                        toChain.id === chain.id
-                          ? 'bg-purple-500/20 border-purple-500/40 text-white'
-                          : 'bg-slate-950 border-slate-800/80 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-[10px] text-purple-300 font-mono shrink-0">
-                          {chain.icon}
-                        </span>
-                        <span className="font-bold text-xs">{chain.name}</span>
+                {configuredChains.length === 0 ? (
+                  <p className="text-slate-400 text-xs leading-relaxed">
+                    No bridge chain is configured on this runtime, so there is nothing to select. The 51
+                    <span className="font-mono"> BridgeChain</span> variants exist as an enum, but a variant
+                    becomes usable only once governance records a{' '}
+                    <span className="font-mono">ChainConfig</span> for it.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                    {configuredChains.map((chain) => (
+                      <div
+                        key={chain.id}
+                        onClick={() => setToChain(chain)}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                          toChain.id === chain.id
+                            ? 'bg-purple-500/20 border-purple-500/40 text-white'
+                            : 'bg-slate-950 border-slate-800/80 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-[10px] text-purple-300 font-mono shrink-0">
+                            {chain.icon}
+                          </span>
+                          <span className="font-bold text-xs">{chain.name}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">{chain.category}</span>
                       </div>
-                      <span className="text-[10px] text-slate-500">{chain.category}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-2">
@@ -563,7 +597,7 @@ export default function BridgePage() {
                         </span>
                       </div>
 
-                      {tx.destinationHash && (
+                      {tx.destinationHash && getCrossChainExplorerUrl(tx.toChain, tx.destinationHash) && (
                         <a
                           href={getCrossChainExplorerUrl(tx.toChain, tx.destinationHash)}
                           target="_blank"

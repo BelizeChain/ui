@@ -234,6 +234,12 @@ export async function setDomainResolution(
 
 /**
  * Set primary domain for an address (reverse resolution)
+ *
+ * `bns.setPrimaryDomain` was added in the spec-110 `aa2b6ab` commit and is
+ * absent from the runtime live on Ceiba (spec 109). The call is feature-detected
+ * rather than attempted, because `api.tx.bns.setPrimaryDomain` being undefined
+ * throws a bare TypeError that reads like a wallet bug rather than a pending
+ * runtime upgrade.
  */
 export async function setPrimaryDomain(
   address: string,
@@ -242,6 +248,12 @@ export async function setPrimaryDomain(
   const api = await initializeApi();
 
   try {
+    if (!api.tx.bns?.setPrimaryDomain) {
+      throw new Error(
+        'Setting a primary domain requires runtime spec 110, which is not deployed on this chain yet.',
+      );
+    }
+
     const injector = await web3FromAddress(address);
     const tx = api.tx.bns.setPrimaryDomain(normalizeDomain(domain));
 
@@ -258,11 +270,20 @@ export async function setPrimaryDomain(
   }
 }
 
-/** Clear the caller's reverse-resolution domain. */
+/**
+ * Clear the caller's reverse-resolution domain.
+ * Requires runtime spec 110 — see `setPrimaryDomain`.
+ */
 export async function clearPrimaryDomain(address: string): Promise<{ hash: string }> {
   const api = await initializeApi();
 
   try {
+    if (!api.tx.bns?.clearPrimaryDomain) {
+      throw new Error(
+        'Clearing a primary domain requires runtime spec 110, which is not deployed on this chain yet.',
+      );
+    }
+
     const injector = await web3FromAddress(address);
     const tx = api.tx.bns.clearPrimaryDomain();
 
@@ -290,7 +311,13 @@ export async function getPrimaryDomain(address: string): Promise<string | null> 
   const api = await initializeApi();
 
   try {
-    const entry: any = await api.query.bns.primaryDomain?.(address);
+    // Feature-detected: an optional call on missing storage still goes through
+    // the metadata lookup and throws, so check the entry exists first.
+    if (!api.query.bns?.primaryDomain) {
+      return null;
+    }
+
+    const entry: any = await api.query.bns.primaryDomain(address);
     if (!entry || entry.isNone) {
       return null;
     }
@@ -302,10 +329,28 @@ export async function getPrimaryDomain(address: string): Promise<string | null> 
 }
 
 /**
+ * Whether this runtime exposes reverse resolution at all.
+ *
+ * `setPrimaryDomain`/`clearPrimaryDomain` and the `primaryDomain` storage item
+ * were added in the spec-110 `aa2b6ab` commit. Because the runtime live on Ceiba
+ * is spec 109, the UI can only offer the action when this returns `true` —
+ * otherwise the button would exist purely to fail.
+ */
+export async function supportsPrimaryDomain(): Promise<boolean> {
+  try {
+    const api = await initializeApi();
+    return Boolean(api.tx.bns?.setPrimaryDomain && api.query.bns?.primaryDomain);
+  } catch (error) {
+    console.error('Failed to probe primary-domain support:', error);
+    return false;
+  }
+}
+
+/**
  * Add or replace a text record on a domain you own.
  *
  * Real signature: setTextRecord(domainName, key, value). Keys are capped at 32
- * bytes and values at 128 bytes on chain.
+ * bytes and values at 128 bytes on chain. Requires runtime spec 110.
  */
 export async function setTextRecord(
   address: string,
@@ -316,6 +361,12 @@ export async function setTextRecord(
   const api = await initializeApi();
 
   try {
+    if (!api.tx.bns?.setTextRecord) {
+      throw new Error(
+        'Text records require runtime spec 110, which is not deployed on this chain yet.',
+      );
+    }
+
     const injector = await web3FromAddress(address);
     const tx = api.tx.bns.setTextRecord(normalizeDomain(domain), key, value);
 
@@ -341,6 +392,12 @@ export async function removeTextRecord(
   const api = await initializeApi();
 
   try {
+    if (!api.tx.bns?.removeTextRecord) {
+      throw new Error(
+        'Text records require runtime spec 110, which is not deployed on this chain yet.',
+      );
+    }
+
     const injector = await web3FromAddress(address);
     const tx = api.tx.bns.removeTextRecord(normalizeDomain(domain), key);
 
