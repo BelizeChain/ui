@@ -41,7 +41,7 @@ export { getVerifiedMerchant, getVerifiedMerchants, isMerchantVerified, getTouri
 export { isDomainAvailable, getDomain, registerDomain, resolveDomain, resolveAddress, setDomainResolution, setPrimaryDomain, listDomainForSale, getMarketplaceListings, purchaseDomain, hostWebsite, getHostedWebsite, getUserDomains } from './bns';
 
 // Payroll Management
-export { getPayrollRecord, getSalaryPayments, getSalarySlip, getPayrollStats, getTaxSummary, downloadSalarySlip, verifySalaryPayment, requestSalaryAdvance } from './payroll';
+export { getPayrollRecord, getSalaryPayments, getSalarySlip, getPayrollStats, getTaxSummary, downloadSalarySlip, verifySalaryPayment, requestSalaryAdvance, getEmployeeRoster, getEmployerPayments } from './payroll';
 
 // Cross-Chain Interoperability
 export { getBridges, initiateBridgeTransfer, getBridgeTransfer, getUserBridgeTransfers, estimateBridgeFee, cancelBridgeTransfer, claimBridgeRefund, validateCrossChainAddress } from './interoperability';
@@ -93,7 +93,7 @@ export type { StakingInfo, ModelSubmission, Validator } from './staking';
 export type { LandTitle, Encumbrance, PropertyDocument, PropertyTransfer } from './landledger';
 export type { VerifiedMerchant, TourismReward, TourismStats } from './oracle';
 export type { Domain, DomainListing, HostedWebsite } from './bns';
-export type { PayrollRecord, SalaryPayment, SalarySlip } from './payroll';
+export type { PayrollRecord, SalaryPayment, SalarySlip, EmployeeRosterEntry } from './payroll';
 export type { Bridge, BridgeTransfer } from './interoperability';
 export type { QuantumJob, QuantumResult, QuantumWorkProof, QuantumBackend } from './quantum';
 export type { CommunityGroup, CommunityProposal, CommunityFund, CommunityEvent, Milestone } from './community';

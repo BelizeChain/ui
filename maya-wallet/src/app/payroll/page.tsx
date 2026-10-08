@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   getPayrollRecord,
   getSalaryPayments,
+  getEmployeeRoster,
+  getEmployerPayments,
+  type EmployeeRosterEntry,
   type PayrollRecord,
   type SalaryPayment,
 } from '@/services/pallets/payroll';
@@ -21,153 +23,65 @@ import {
   Receipt,
   Lightning,
   DownloadSimple,
-  X,
-  UserPlus,
 } from 'phosphor-react';
-
-interface EmployeeRoster {
-  id: string;
-  name: string;
-  department: string;
-  role: string;
-  walletAddress: string;
-  grossSalaryBBZD: number;
-  ssbEmployee: number;
-  ssbEmployer: number;
-  incomeTaxPAYE: number;
-  netPayBBZD: number;
-  status: 'Pending' | 'Paid' | 'Processing';
-}
-
-interface PayslipRecord {
-  id: string;
-  period: string;
-  gross: number;
-  ssbEmployee: number;
-  ssbEmployer: number;
-  incomeTax: number;
-  net: number;
-  paymentDate: string;
-  employer: string;
-  status: string;
-  txHash: string;
-}
-
-const INITIAL_ROSTER: EmployeeRoster[] = [
-  {
-    id: 'EMP-001',
-    name: 'Wicked Sovereign Citizen',
-    department: 'Ministry of Digital Transformation',
-    role: 'Principal Core Engineer',
-    walletAddress: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-    grossSalaryBBZD: 4500,
-    ssbEmployee: 180,
-    ssbEmployer: 225,
-    incomeTaxPAYE: 350,
-    netPayBBZD: 3970,
-    status: 'Paid',
-  },
-  {
-    id: 'EMP-002',
-    name: 'Elena Castillo',
-    department: 'Ministry of Natural Resources',
-    role: 'GIS Cadastre Registrar',
-    walletAddress: '5DTestAddressElenaCastillo998124',
-    grossSalaryBBZD: 3800,
-    ssbEmployee: 152,
-    ssbEmployer: 190,
-    incomeTaxPAYE: 280,
-    netPayBBZD: 3368,
-    status: 'Pending',
-  },
-  {
-    id: 'EMP-003',
-    name: 'Mateo Bradley',
-    department: 'Belize Port Authority',
-    role: 'Maritime Logistics Officer',
-    walletAddress: '5GR98124MateoBradleyPortAuth001',
-    grossSalaryBBZD: 3200,
-    ssbEmployee: 128,
-    ssbEmployer: 160,
-    incomeTaxPAYE: 210,
-    netPayBBZD: 2862,
-    status: 'Pending',
-  },
-  {
-    id: 'EMP-004',
-    name: 'Dr. Sofia Novelo',
-    department: 'Karl Heusner Memorial Hospital',
-    role: 'Chief Medical Officer',
-    walletAddress: '5FLS98124DrSofiaNoveloKHMH001',
-    grossSalaryBBZD: 5200,
-    ssbEmployee: 208,
-    ssbEmployer: 260,
-    incomeTaxPAYE: 460,
-    netPayBBZD: 4532,
-    status: 'Pending',
-  },
-];
 
 export default function PayrollPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [, setEmploymentRecord] = useState<PayrollRecord | null>(null);
-  const [activeTab, setActiveTab] = useState<'my-payslips' | 'ssb-pension' | 'advance' | 'employer-batch'>('my-payslips');
+  const [activeTab, setActiveTab] = useState<'my-payslips' | 'deductions' | 'advance' | 'employer-roster'>('my-payslips');
   const [advanceAmount, setAdvanceAmount] = useState('500.00');
   const [isSubmittingAdvance] = useState(false);
 
-  // Employer Roster State
-  const [roster, setRoster] = useState<EmployeeRoster[]>(INITIAL_ROSTER);
-  const [isProcessingBatch] = useState(false);
-
-  // New Employee Modal / Form
-  const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [newEmpName, setNewEmpName] = useState('');
-  const [newEmpDept, setNewEmpDept] = useState('Ministry of Digital Transformation');
-  const [newEmpRole, setNewEmpRole] = useState('');
-  const [newEmpWallet, setNewEmpWallet] = useState('');
-  const [newEmpSalary, setNewEmpSalary] = useState('3500');
-
-  // CONFIG-002: real chain payslips — payroll.payments entries for the
-  // connected account. No fabricated "August 2026 $4,500" sample data.
+  // Employee side
+  const [employmentRecord, setEmploymentRecord] = useState<PayrollRecord | null>(null);
   const [payslips, setPayslips] = useState<SalaryPayment[]>([]);
-  const [payrollLoading, setPayrollLoading] = useState(true);
-  const [payrollError, setPayrollError] = useState('');
+
+  // Employer side
+  const [roster, setRoster] = useState<EmployeeRosterEntry[]>([]);
+  const [employerPayments, setEmployerPayments] = useState<SalaryPayment[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Hoisted so the callback's deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
+
+  const loadPayroll = useCallback(async () => {
+    if (!address) return;
+    setLoading(true);
+    setError('');
+    try {
+      const [record, payments, employerRoster, madePayments] = await Promise.all([
+        getPayrollRecord(address),
+        getSalaryPayments(address, 24),
+        getEmployeeRoster(address),
+        getEmployerPayments(address, 50),
+      ]);
+      setEmploymentRecord(record);
+      setPayslips(payments);
+      setRoster(employerRoster);
+      setEmployerPayments(madePayments);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setPayslips([]);
+      setRoster([]);
+      setEmployerPayments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [address]);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetchData = async () => {
-      if (!selectedAccount?.address) return;
-      setPayrollLoading(true);
-      setPayrollError('');
-      try {
-        const [record, payments] = await Promise.all([
-          getPayrollRecord(selectedAccount.address),
-          getSalaryPayments(selectedAccount.address, 12),
-        ]);
-        if (cancelled) return;
-        setEmploymentRecord(record);
-        setPayslips(payments);
-        setPayrollError('');
-      } catch (err) {
-        if (!cancelled) {
-          setPayrollError(err instanceof Error ? err.message : String(err));
-          setPayslips([]);
-        }
-      } finally {
-        if (!cancelled) setPayrollLoading(false);
-      }
-    };
-    fetchData();
-    return () => { cancelled = true; };
-  }, [selectedAccount?.address]);
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadPayroll);
+  }, [loadPayroll]);
 
-  // CONFIG-002: advances and batch payroll are EMPLOYER-side actions with
-  // no employee-initiated extrinsics on chain (requestSalaryAdvance in the
-  // service raises, and no batch-disbursement extrinsic exists). Until the
-  // employer portal ships, these buttons show an honest gate instead of
-  // faking an approval + disbursement.
+  // Advances and batch payroll are EMPLOYER-side actions: there is no
+  // employee-initiated advance extrinsic, and the pallet's `batchPayment` is
+  // employer-signed. Both buttons gate honestly instead of faking a result.
   const handleRequestAdvance = (e: React.FormEvent) => {
     e.preventDefault();
     addNotification({
@@ -180,52 +94,26 @@ export default function PayrollPage() {
   const handleExecuteBatchPayroll = () => {
     addNotification({
       type: 'info',
-      message: 'Batch disbursement lives in the employer payroll portal (not yet deployed). This wallet view is read-only for employees.',
-    });
-  };
-
-  // Handle Add Employee
-  const handleAddEmployee = (e: React.FormEvent) => {
-    e.preventDefault();
-    const gross = parseFloat(newEmpSalary || '0');
-    const ssbEmp = gross * 0.04;
-    const ssbEmpr = gross * 0.05;
-    const tax = gross > 2500 ? (gross - 2500) * 0.15 : 0;
-    const net = gross - ssbEmp - tax;
-
-    const newEmp: EmployeeRoster = {
-      id: `EMP-00${roster.length + 1}`,
-      name: newEmpName,
-      department: newEmpDept,
-      role: newEmpRole,
-      walletAddress: newEmpWallet || '5DTestGeneratedWalletAddress001',
-      grossSalaryBBZD: gross,
-      ssbEmployee: ssbEmp,
-      ssbEmployer: ssbEmpr,
-      incomeTaxPAYE: tax,
-      netPayBBZD: net,
-      status: 'Pending',
-    };
-
-    setRoster([...roster, newEmp]);
-    setShowAddEmployee(false);
-    setNewEmpName('');
-    setNewEmpRole('');
-    setNewEmpWallet('');
-    addNotification({
-      type: 'success',
-      message: `Enrolled ${newEmpName} into automated BelizeChain payroll roster!`,
+      message: 'Batch disbursement is employer-signed (payroll.batchPayment) and has no portal in this wallet yet. The roster below is read-only.',
     });
   };
 
   if (!isConnected || !selectedAccount) {
     return (
       <ConnectWalletPrompt
-        message="Connect your Maya Wallet to view automated payroll slips, SSB pension contributions, and enterprise disbursements."
+        message="Connect your Maya Wallet to view on-chain salary records and the roster you pay."
         fullScreen
       />
     );
   }
+
+  // Everything below is read from payroll.employees / payroll.payrollRecords.
+  const monthlyGross = employmentRecord ? parseFloat(employmentRecord.salary) : null;
+  const totalPaid = employmentRecord ? parseFloat(employmentRecord.totalPaid) : null;
+  const totalWithheld = employmentRecord ? parseFloat(employmentRecord.totalDeductions) : null;
+  const ytdNet = payslips
+    .filter((p) => p.timestamp && new Date(p.timestamp).getFullYear() === new Date().getFullYear())
+    .reduce((sum, p) => sum + parseFloat(p.netAmount), 0);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-24">
@@ -244,10 +132,10 @@ export default function PayrollPage() {
             <div>
               <h1 className="text-lg font-bold text-white flex items-center gap-2">
                 <Briefcase size={22} className="text-emerald-400" />
-                Automated Civic & Enterprise Payroll Hub
+                On-Chain Payroll
               </h1>
               <p className="text-xs text-slate-400">
-                Social Security Board (SSB) • Tax Withholding • 0% Advances • Batch Disbursal
+                pallet payroll • salary records, deductions and employer roster
               </p>
             </div>
           </div>
@@ -255,7 +143,7 @@ export default function PayrollPage() {
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold font-mono flex items-center gap-1.5">
               <ShieldCheck size={14} weight="fill" />
-              SSB Statutory Connected
+              {roster.length} Employees Paid
             </span>
           </div>
         </div>
@@ -263,72 +151,84 @@ export default function PayrollPage() {
 
       {/* Main Workspace */}
       <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 space-y-6 flex-1">
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-300 text-center text-xs">
+            {error}
+          </div>
+        )}
+
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Monthly Base Salary */}
+          {/* Card 1: Base Salary */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-md space-y-3">
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-semibold uppercase tracking-wider text-[10px]">Monthly Base Pay</span>
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Gross Salary / Period</span>
               <Briefcase size={18} className="text-emerald-400" />
             </div>
             <div>
-              <span className="text-2xl font-bold font-mono text-white">4,500.00 bBZD</span>
+              <span className="text-2xl font-bold font-mono text-white">
+                {monthlyGross != null ? monthlyGross.toFixed(2) : '—'}
+              </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>Disbursal Cycle:</span>
-              <span className="text-emerald-300 font-bold">25th of Every Month</span>
+              <span>Worker type:</span>
+              <span className="text-emerald-300 font-bold">{employmentRecord?.workerType ?? '—'}</span>
             </div>
           </div>
 
-          {/* Card 2: Total SSB Pension */}
+          {/* Card 2: Total Paid */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-md space-y-3">
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-semibold uppercase tracking-wider text-[10px]">Total SSB Vested</span>
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Total Gross Paid</span>
               <ShieldCheck size={18} className="text-purple-400" />
             </div>
             <div>
-              <span className="text-2xl font-bold font-mono text-purple-300">3,240.00 bBZD</span>
+              <span className="text-2xl font-bold font-mono text-purple-300">
+                {totalPaid != null ? totalPaid.toFixed(2) : '—'}
+              </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>Pension Status:</span>
-              <span className="text-emerald-400 font-bold">100% Vested (48 Months)</span>
+              <span>Status:</span>
+              <span className="text-emerald-400 font-bold">{employmentRecord?.active ? 'Active' : '—'}</span>
             </div>
           </div>
 
-          {/* Card 3: Year-To-Date Net Pay */}
+          {/* Card 3: Withheld */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-md space-y-3">
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-semibold uppercase tracking-wider text-[10px]">YTD Net Disbursed</span>
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Total Deductions Withheld</span>
               <Coins size={18} className="text-cyan-400" />
             </div>
             <div>
-              <span className="text-2xl font-bold font-mono text-cyan-300">31,760.00 bBZD</span>
+              <span className="text-2xl font-bold font-mono text-cyan-300">
+                {totalWithheld != null ? totalWithheld.toFixed(2) : '—'}
+              </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>Processed Cycles:</span>
-              <span className="text-slate-300 font-bold">8 Consecutive Months</span>
+              <span>Last paid at block:</span>
+              <span className="text-slate-300 font-bold">{employmentRecord?.lastPaid ?? '—'}</span>
             </div>
           </div>
 
-          {/* Card 4: 0% Salary Advance */}
+          {/* Card 4: YTD Net */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-md space-y-3">
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-semibold uppercase tracking-wider text-[10px]">Earned Wage Advance</span>
+              <span className="font-semibold uppercase tracking-wider text-[10px]">YTD Net Received</span>
               <Lightning size={18} className="text-amber-400" />
             </div>
             <div>
-              <span className="text-2xl font-bold font-mono text-amber-300">1,500.00 bBZD</span>
+              <span className="text-2xl font-bold font-mono text-amber-300">{ytdNet.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>Interest Rate:</span>
-              <span className="text-emerald-400 font-bold">0.0% APR (Statutory)</span>
+              <span>Payments on record:</span>
+              <span className="text-emerald-400 font-bold">{payslips.length}</span>
             </div>
           </div>
         </div>
 
         {/* Tab Navigation */}
         <div className="flex bg-slate-900/90 border border-slate-800 rounded-2xl p-1 overflow-x-auto text-xs font-bold gap-1">
-          {(['my-payslips', 'ssb-pension', 'advance', 'employer-batch'] as const).map((tab) => (
+          {(['my-payslips', 'deductions', 'advance', 'employer-roster'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -339,38 +239,34 @@ export default function PayrollPage() {
               }`}
             >
               {tab === 'my-payslips'
-                ? 'My Salary Slips'
-                : tab === 'ssb-pension'
-                ? 'SSB Pension Ledger'
+                ? 'My Salary Records'
+                : tab === 'deductions'
+                ? 'Deductions'
                 : tab === 'advance'
-                ? '0% Salary Advance'
-                : 'Enterprise Batch Payroll'}
+                ? 'Salary Advance'
+                : 'Roster I Pay'}
             </button>
           ))}
         </div>
 
-        {/* Tab 1: My Salary Slips */}
+        {/* Tab 1: My Salary Records */}
         {activeTab === 'my-payslips' && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md text-xs">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Receipt size={22} className="text-emerald-400" />
-                Verified On-Chain Salary Slips
+                On-Chain Salary Records
               </h3>
               <p className="text-slate-400 mt-1">
-                Cryptographically signed verifiable salary credentials issued on BelizeChain consensus.
+                Read from payroll.payrollRecords. Each record carries a blake2_256 payment
+                commitment over gross, deductions, net, employer, employee and block.
               </p>
             </div>
 
-            {payrollLoading && (
+            {loading && (
               <div className="text-center py-8 text-slate-400 text-xs">Loading on-chain payroll records…</div>
             )}
-            {payrollError && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-300 text-center">
-                {payrollError}
-              </div>
-            )}
-            {!payrollLoading && !payrollError && payslips.length === 0 && (
+            {!loading && payslips.length === 0 && (
               <div className="text-center py-8 text-slate-400 text-xs">
                 No on-chain salary payments recorded for this account yet.
               </div>
@@ -435,64 +331,86 @@ export default function PayrollPage() {
           </div>
         )}
 
-        {/* Tab 2: SSB Pension Ledger */}
-        {activeTab === 'ssb-pension' && (
+        {/* Tab 2: Deductions */}
+        {activeTab === 'deductions' && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md text-xs">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <ShieldCheck size={22} className="text-purple-400" />
-                Belize Social Security Board (SSB) Pension Ledger
+                Withholdings
               </h3>
               <p className="text-slate-400 mt-1">
-                Transparent 9% statutory contribution splitting between employer (5%) and employee (4%) with automatic state pension allocation.
+                The pallet stores a single aggregated deductions figure per payment. It does not
+                split SSB, PAYE or any other statutory component, so no per-tax breakdown can be
+                shown.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-2">
-                <span className="font-bold text-white text-sm block">Employee Contribution (4%)</span>
-                <p className="text-slate-400 text-[11px]">
-                  Automatically withheld from monthly gross salary and directly remitted to SSB smart contracts.
-                </p>
-                <span className="font-bold text-purple-300 text-lg font-mono block">180.00 bBZD / month</span>
+            {loading && (
+              <div className="text-center py-8 text-slate-400 text-xs">Loading…</div>
+            )}
+            {!loading && payslips.length === 0 && (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                No withholding records for this account.
               </div>
+            )}
+            {!loading && payslips.length > 0 && (
+              <>
+                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-2">
+                  <span className="text-slate-500 block text-[10px] uppercase">
+                    Total deducted across {payslips.length} payments
+                  </span>
+                  <span className="font-bold text-purple-300 text-2xl font-mono block">
+                    {payslips.reduce((sum, p) => sum + parseFloat(p.deductions), 0).toFixed(2)}
+                  </span>
+                </div>
 
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-2">
-                <span className="font-bold text-white text-sm block">Employer Match Contribution (5%)</span>
-                <p className="text-slate-400 text-[11px]">
-                  Statutory employer match credited directly into your national retirement and disability safety fund.
-                </p>
-                <span className="font-bold text-emerald-400 text-lg font-mono block">225.00 bBZD / month</span>
-              </div>
-            </div>
+                <div className="space-y-2">
+                  {payslips.map((p) => (
+                    <div
+                      key={p.paymentId}
+                      className="flex justify-between font-mono text-[11px] bg-slate-950 p-3.5 rounded-2xl border border-slate-800"
+                    >
+                      <span className="text-slate-400">
+                        {p.date ?? '—'} • {p.employer.slice(0, 14)}…
+                      </span>
+                      <span className="text-purple-300 font-bold">{p.deductions}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* Tab 3: 0% Salary Advance */}
+        {/* Tab 3: Salary Advance */}
         {activeTab === 'advance' && (
           <div className="max-w-xl mx-auto bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-md text-xs">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Lightning size={22} className="text-amber-400" />
-                0% Interest Instant Salary Advance
+                Salary Advance
               </h3>
               <p className="text-slate-400 mt-1">
-                Access your earned wages before the 25th of the month. Disbursed instantly to your Maya Wallet and settled on the next pay cycle.
+                Advances are issued by the employer via payroll.issueBonus. There is no
+                employee-initiated advance extrinsic, so this form cannot disburse anything — it
+                tells you who to ask instead.
               </p>
             </div>
 
             <form onSubmit={handleRequestAdvance} className="space-y-4">
               <div>
-                <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Advance Amount (bBZD)</label>
+                <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Requested Amount</label>
                 <input
                   type="number"
-                  required
                   placeholder="500.00"
                   value={advanceAmount}
                   onChange={(e) => setAdvanceAmount(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-base font-bold text-white font-mono focus:border-amber-400 focus:outline-none"
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">Maximum eligible advance: 1,500.00 bBZD</span>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  No maximum is stored on chain; eligibility is an employer policy.
+                </span>
               </div>
 
               <button
@@ -501,188 +419,103 @@ export default function PayrollPage() {
                 className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-50 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2"
               >
                 <Lightning size={16} weight="bold" />
-                {isSubmittingAdvance ? 'Disbursing Advance...' : 'Request Instant Advance'}
+                Why Can I Not Request This?
               </button>
             </form>
           </div>
         )}
 
-        {/* Tab 4: Enterprise Batch Payroll Runner */}
-        {activeTab === 'employer-batch' && (
+        {/* Tab 4: Roster I Pay */}
+        {activeTab === 'employer-roster' && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-md text-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Users size={22} className="text-emerald-400" />
-                  Enterprise & Civic Batch Payroll Runner
+                  Employees Paid By This Account
                 </h3>
                 <p className="text-slate-400 mt-0.5">
-                  1-Click batch salary, SSB pension, and PAYE tax disbursal across your entire organization.
+                  Read from payroll.employees where the employer key is your address. The pallet
+                  stores no name, job title or department label — only a department id.
                 </p>
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddEmployee(true)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all border border-slate-700/50"
-                >
-                  <UserPlus size={16} /> Enroll Employee
-                </button>
-                <button
-                  onClick={handleExecuteBatchPayroll}
-                  disabled={isProcessingBatch}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md"
-                >
-                  <Coins size={16} weight="bold" />
-                  {isProcessingBatch ? 'Disbursing...' : 'Disburse Batch Payroll'}
-                </button>
-              </div>
+              <button
+                onClick={handleExecuteBatchPayroll}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all border border-slate-700/50"
+              >
+                <Coins size={16} weight="bold" />
+                How Do I Disburse?
+              </button>
             </div>
 
-            {/* Roster Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left font-mono">
-                <thead>
-                  <tr className="text-slate-500 border-b border-slate-800 text-[10px] uppercase">
-                    <th className="pb-2">ID / Employee</th>
-                    <th className="pb-2">Department</th>
-                    <th className="pb-2">Gross (bBZD)</th>
-                    <th className="pb-2">SSB (9%)</th>
-                    <th className="pb-2">Tax (PAYE)</th>
-                    <th className="pb-2">Net Pay</th>
-                    <th className="pb-2 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-xs">
-                  {roster.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-slate-800/30">
-                      <td className="py-3">
-                        <span className="font-bold text-white block">{emp.name}</span>
-                        <span className="text-[10px] text-slate-500">{emp.id} • {emp.role}</span>
-                      </td>
-                      <td className="py-3 text-slate-400">{emp.department}</td>
-                      <td className="py-3 text-white font-bold">BZ$ {emp.grossSalaryBBZD.toLocaleString()}</td>
-                      <td className="py-3 text-purple-300">BZ$ {(emp.ssbEmployee + emp.ssbEmployer).toFixed(2)}</td>
-                      <td className="py-3 text-amber-300">BZ$ {emp.incomeTaxPAYE.toFixed(2)}</td>
-                      <td className="py-3 text-emerald-400 font-bold">BZ$ {emp.netPayBBZD.toLocaleString()}</td>
-                      <td className="py-3 text-right">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            emp.status === 'Paid'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                          }`}
-                        >
-                          {emp.status}
-                        </span>
-                      </td>
+            {loading && <div className="text-center py-8 text-slate-400 text-xs">Loading roster…</div>}
+            {!loading && roster.length === 0 && (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                This account pays no employees. Enrollment is an employer action through
+                payroll.addEmployee.
+              </div>
+            )}
+            {!loading && roster.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left font-mono">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-slate-800 text-[10px] uppercase">
+                      <th className="pb-2">Employee</th>
+                      <th className="pb-2">Dept id</th>
+                      <th className="pb-2">Worker type</th>
+                      <th className="pb-2">Salary / period</th>
+                      <th className="pb-2">Paid to date</th>
+                      <th className="pb-2">Withheld to date</th>
+                      <th className="pb-2 text-right">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-xs">
+                    {roster.map((emp) => (
+                      <tr key={emp.employee} className="hover:bg-slate-800/30">
+                        <td className="py-3 text-slate-200 truncate max-w-[160px]">{emp.employee}</td>
+                        <td className="py-3 text-slate-400">{emp.departmentId}</td>
+                        <td className="py-3 text-slate-400">{emp.workerType}</td>
+                        <td className="py-3 text-white font-bold">{emp.salary}</td>
+                        <td className="py-3 text-emerald-400 font-bold">{emp.totalPaid}</td>
+                        <td className="py-3 text-purple-300">{emp.totalDeductions}</td>
+                        <td className="py-3 text-right">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              emp.active
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            }`}
+                          >
+                            {emp.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {!loading && employerPayments.length > 0 && (
+              <div className="space-y-2 pt-4 border-t border-slate-800">
+                <span className="text-slate-400 uppercase text-[10px] font-bold block">
+                  Recent payments made ({employerPayments.length})
+                </span>
+                {employerPayments.slice(0, 10).map((p) => (
+                  <div
+                    key={p.paymentId}
+                    className="flex justify-between font-mono text-[11px] bg-slate-950 p-3.5 rounded-2xl border border-slate-800"
+                  >
+                    <span className="text-slate-400 truncate max-w-[55%]">{p.employee}</span>
+                    <span className="text-emerald-400 font-bold">{p.netAmount}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
-
-      {/* Enroll Employee Modal */}
-      <AnimatePresence>
-        {showAddEmployee && (
-          <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl relative text-xs"
-            >
-              <button
-                onClick={() => setShowAddEmployee(false)}
-                className="absolute top-5 right-5 p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"
-              >
-                <X size={18} />
-              </button>
-
-              <div className="text-center space-y-2 border-b border-slate-800 pb-4">
-                <h3 className="text-lg font-bold text-white tracking-wide">Enroll New Employee</h3>
-                <p className="text-xs text-slate-400">Add team member to automated smart contract payroll roster</p>
-              </div>
-
-              <form onSubmit={handleAddEmployee} className="space-y-4">
-                <div>
-                  <label className="text-slate-400 uppercase font-semibold mb-1 block text-[10px]">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Carlos Marin"
-                    value={newEmpName}
-                    onChange={(e) => setNewEmpName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-emerald-400 focus:outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-slate-400 uppercase font-semibold mb-1 block text-[10px]">Department</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Finance, IT, Ops"
-                      value={newEmpDept}
-                      onChange={(e) => setNewEmpDept(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-emerald-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 uppercase font-semibold mb-1 block text-[10px]">Role / Title</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Software Engineer"
-                      value={newEmpRole}
-                      onChange={(e) => setNewEmpRole(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-emerald-400 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-slate-400 uppercase font-semibold mb-1 block text-[10px]">
-                    Maya Wallet Address or BNS (.bz)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. carlos.bz or 5DTest..."
-                    value={newEmpWallet}
-                    onChange={(e) => setNewEmpWallet(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-emerald-400 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-400 uppercase font-semibold mb-1 block text-[10px]">Monthly Gross Salary (bBZD)</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="3500"
-                    value={newEmpSalary}
-                    onChange={(e) => setNewEmpSalary(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-emerald-400 focus:outline-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5"
-                >
-                  <UserPlus size={16} weight="bold" /> Enroll & Activate Payroll
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

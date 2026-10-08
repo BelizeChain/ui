@@ -164,6 +164,95 @@ export async function getSalaryPayments(
 }
 
 /**
+ * A single entry of the employer->employee roster (`payroll.employees`).
+ *
+ * The pallet stores no name, department label, role or tax itemisation — only
+ * a `departmentId` number, a `workerType` enum and a salary commitment, so
+ * job titles and PAYE/SSB splits cannot be shown.
+ */
+export interface EmployeeRosterEntry {
+  employer: string;
+  employee: string;
+  salary: string;
+  salaryCommitment: string;
+  workerType: string;
+  departmentId: number;
+  active: boolean;
+  lastPaid: number;
+  totalPaid: string;
+  totalDeductions: string;
+  startBlock: number;
+  metadataHash: string;
+}
+
+/**
+ * Read the roster an address pays, i.e. `payroll.employees` entries keyed by
+ * that employer. Returns `[]` if the address employs nobody.
+ */
+export async function getEmployeeRoster(employer: string): Promise<EmployeeRosterEntry[]> {
+  const api = await initializeApi();
+
+  try {
+    if (!api.query.payroll?.employees) return [];
+    const entries = await api.query.payroll.employees.entries();
+
+    const roster: EmployeeRosterEntry[] = [];
+    for (const [key, raw] of entries as any[]) {
+      if (String(key?.args?.[0]) !== employer) continue;
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      roster.push({
+        employer,
+        employee: String(data.account ?? key?.args?.[1] ?? ''),
+        salary: formatBalance(String(data.salary ?? '0')),
+        salaryCommitment: String(data.salaryCommitment ?? ''),
+        workerType: String(data.workerType),
+        departmentId: Number(data.departmentId ?? 0),
+        active: Boolean(data.active),
+        lastPaid: Number(data.lastPaid ?? 0),
+        totalPaid: formatBalance(String(data.totalPaid ?? '0')),
+        totalDeductions: formatBalance(String(data.totalDeductions ?? '0')),
+        startBlock: Number(data.startBlock ?? 0),
+        metadataHash: String(data.metadataHash ?? ''),
+      });
+    }
+
+    return roster.sort((a, b) => a.employee.localeCompare(b.employee));
+  } catch (error) {
+    console.warn('Failed to fetch employee roster:', error);
+    return [];
+  }
+}
+
+/**
+ * Read every payment an address made as an employer
+ * (`payroll.payrollRecords` filtered by `employer`).
+ */
+export async function getEmployerPayments(
+  employer: string,
+  limit: number = 50
+): Promise<SalaryPayment[]> {
+  const api = await initializeApi();
+
+  try {
+    if (!api.query.payroll?.payrollRecords) return [];
+    const entries = await api.query.payroll.payrollRecords.entries();
+
+    const payments: SalaryPayment[] = [];
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data || String(data.employer) !== employer) continue;
+      payments.push(toSalaryPayment(String(data.id ?? key?.args?.[0] ?? ''), data));
+    }
+
+    return payments.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  } catch (error) {
+    console.warn('Failed to fetch employer payments:', error);
+    return [];
+  }
+}
+
+/**
  * Get formatted salary slip
  */
 export async function getSalarySlip(paymentId: string): Promise<SalarySlip | null> {
