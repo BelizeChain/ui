@@ -25,24 +25,25 @@ export async function subscribeToBalanceChanges(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.account(address, async (accountInfo: any) => {
     const balances = accountInfo.data;
     const dalla = formatBalance(balances.free.toString());
-    
+
     // Get bBZD balance
     let bBZD = '0.00';
     try {
-      const bBZDBalance = await api.query.economy?.bBzdBalances(address);
+      // Storage item is `bbzdBalances` (lowercase b), not `bBzdBalances`.
+      const bBZDBalance = await api.query.economy?.bbzdBalances(address);
       if (bBZDBalance && !bBZDBalance.isEmpty) {
         bBZD = formatBalance(bBZDBalance.toString());
       }
     } catch (error) {
       console.debug('bBZD balance query failed:', error);
     }
-    
+
     const total = (parseFloat(dalla) + parseFloat(bBZD)).toFixed(2);
-    
+
     callback({ dalla, bBZD, total });
   })) as unknown as () => void;
 
@@ -61,14 +62,14 @@ export async function subscribeToGovernanceProposals(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       if (api.events.governance?.Proposed?.is(event)) {
         const [proposalIndex, proposer, value, title] = event.data;
-        
+
         callback({
           proposalIndex: Number((proposalIndex as any).toString()),
           proposer: proposer.toString(),
@@ -94,15 +95,15 @@ export async function subscribeToStakingRewards(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       // Standard staking rewards
       if (api.events.staking?.Reward?.is(event)) {
         const [rewardAddress, amount, era] = event.data;
-        
+
         if (rewardAddress.toString() === address) {
           callback({
             amount: formatBalance(amount.toString()),
@@ -111,11 +112,11 @@ export async function subscribeToStakingRewards(
           });
         }
       }
-      
+
       // PoUW rewards
       if (api.events.staking?.PoUWRewarded?.is(event)) {
         const [rewardAddress, amount] = event.data;
-        
+
         if (rewardAddress.toString() === address) {
           callback({
             amount: formatBalance(amount.toString()),
@@ -143,14 +144,14 @@ export async function subscribeToTourismCashback(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       if (api.events.oracle?.CashbackEarned?.is(event)) {
         const [user, merchant, amountSpent, cashbackAmount, cashbackRate] = event.data;
-        
+
         if (user.toString() === address) {
           callback({
             merchant: merchant.toString(),
@@ -178,14 +179,14 @@ export async function subscribeToComplianceAlerts(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       if (api.events.compliance?.KYCApproved?.is(event)) {
         const [approvedAddress, level] = event.data;
-        
+
         if (approvedAddress.toString() === address) {
           callback({
             type: 'KYCApproved',
@@ -194,10 +195,10 @@ export async function subscribeToComplianceAlerts(
           });
         }
       }
-      
+
       if (api.events.compliance?.KYCRejected?.is(event)) {
         const [rejectedAddress, reason] = event.data;
-        
+
         if (rejectedAddress.toString() === address) {
           callback({
             type: 'KYCRejected',
@@ -206,10 +207,10 @@ export async function subscribeToComplianceAlerts(
           });
         }
       }
-      
+
       if (api.events.compliance?.LimitExceeded?.is(event)) {
         const [violatorAddress, limit] = event.data;
-        
+
         if (violatorAddress.toString() === address) {
           callback({
             type: 'LimitExceeded',
@@ -237,14 +238,14 @@ export async function subscribeToLandTransfers(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       if (api.events.landLedger?.TitleTransferred?.is(event)) {
         const [titleId, from, to] = event.data;
-        
+
         if (from.toString() === address || to.toString() === address) {
           callback({
             titleId: titleId.toString(),
@@ -272,14 +273,14 @@ export async function subscribeToDomainEvents(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       if (api.events.bns?.DomainRegistered?.is(event)) {
         const [owner, domain] = event.data;
-        
+
         if (owner.toString() === address) {
           callback({
             type: 'Registered',
@@ -287,10 +288,10 @@ export async function subscribeToDomainEvents(
           });
         }
       }
-      
+
       if (api.events.bns?.DomainTransferred?.is(event)) {
         const [from, to, domain] = event.data;
-        
+
         if (from.toString() === address || to.toString() === address) {
           callback({
             type: 'Transferred',
@@ -299,10 +300,10 @@ export async function subscribeToDomainEvents(
           });
         }
       }
-      
+
       if (api.events.bns?.DomainSold?.is(event)) {
         const [seller, buyer, domain, price] = event.data;
-        
+
         if (seller.toString() === address || buyer.toString() === address) {
           callback({
             type: 'Sold',
@@ -332,14 +333,14 @@ export async function subscribeToDEXEvents(
   }>
 ): Promise<EventSubscription> {
   const api = await initializeApi();
-  
+
   const unsubscribe = (await api.query.system.events((events: any) => {
     events.forEach((record: any) => {
       const { event } = record;
-      
+
       if (api.events.belizeX?.Swapped?.is(event)) {
         const [trader, tokenIn, tokenOut, amountIn, amountOut] = event.data;
-        
+
         if (trader.toString() === address) {
           callback({
             type: 'Swapped',
@@ -352,10 +353,10 @@ export async function subscribeToDEXEvents(
           });
         }
       }
-      
+
       if (api.events.belizeX?.LiquidityAdded?.is(event)) {
         const [provider, token0, token1, amount0, amount1, liquidity] = event.data;
-        
+
         if (provider.toString() === address) {
           callback({
             type: 'LiquidityAdded',
@@ -392,35 +393,35 @@ export async function subscribeToAllEvents(
   }
 ): Promise<EventSubscription> {
   const subscriptions: EventSubscription[] = [];
-  
+
   if (callbacks.onBalance) {
     subscriptions.push(await subscribeToBalanceChanges(address, callbacks.onBalance));
   }
-  
+
   if (callbacks.onStakingReward) {
     subscriptions.push(await subscribeToStakingRewards(address, callbacks.onStakingReward));
   }
-  
+
   if (callbacks.onTourismCashback) {
     subscriptions.push(await subscribeToTourismCashback(address, callbacks.onTourismCashback));
   }
-  
+
   if (callbacks.onComplianceAlert) {
     subscriptions.push(await subscribeToComplianceAlerts(address, callbacks.onComplianceAlert));
   }
-  
+
   if (callbacks.onGovernanceProposal) {
     subscriptions.push(await subscribeToGovernanceProposals(callbacks.onGovernanceProposal));
   }
-  
+
   if (callbacks.onLandTransfer) {
     subscriptions.push(await subscribeToLandTransfers(address, callbacks.onLandTransfer));
   }
-  
+
   if (callbacks.onDomainEvent) {
     subscriptions.push(await subscribeToDomainEvents(address, callbacks.onDomainEvent));
   }
-  
+
   if (callbacks.onDEXEvent) {
     subscriptions.push(await subscribeToDEXEvents(address, callbacks.onDEXEvent));
   }

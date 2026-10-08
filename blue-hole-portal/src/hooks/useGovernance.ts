@@ -5,6 +5,7 @@ import { useBlockchain } from '@/lib/blockchain/hooks';
 import {
   getActiveProposals,
   getProposalById,
+  mapOnChainProposal,
   type Proposal as ChainProposal,
 } from '@/services/pallets/governance';
 
@@ -167,106 +168,77 @@ export function useProposalRaw(proposalId: number) {
       return;
     }
 
+    let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
     const fetchProposalData = async () => {
       try {
-        setIsLoading(true);
+        const opt: any = await api.query.governance?.proposals(proposalId);
+        if (cancelled) return;
 
-        // Query referendum info
-        const refInfo: any = await api.query.belizeGovernance?.referendumInfoOf(proposalId);
-        if (!refInfo) {
+        if (!opt || (typeof opt.isNone === 'boolean' && opt.isNone)) {
           setProposal(null);
+          setTally(null);
           setIsLoading(false);
           return;
         }
 
-        const ref: any = refInfo.isSome ? refInfo.unwrap() : refInfo;
-        const ongoing = ref.isOngoing ? ref.asOngoing : ref;
-        if (!ongoing || !ongoing.proposer) {
+        const raw: any = typeof opt.unwrap === 'function' ? opt.unwrap() : opt;
+        if (!raw) {
           setProposal(null);
+          setTally(null);
           setIsLoading(false);
           return;
         }
 
-        // Parse proposal
-        const parsedProposal: Proposal = {
-          index: proposalId,
-          hash: ongoing.proposalHash?.toString() || '',
-          proposer: ongoing.proposer?.toString() || 'Unknown',
-          title: ongoing.title?.toString() || `Referendum #${proposalId}`,
-          description: ongoing.description?.toString() || '',
-          value: ongoing.amount ? ongoing.amount.toString() : '0',
-          beneficiary: ongoing.beneficiary?.toString() || '',
-          status: 'Active',
-          category: ongoing.category?.toString() as any || 'Policy',
-          createdAt: ongoing.createdAt ? parseInt(ongoing.createdAt.toString()) : Date.now(),
-          voteEnd: ongoing.endsAt ? parseInt(ongoing.endsAt.toString()) : Date.now() + 30 * 24 * 60 * 60 * 1000,
-          bond: ongoing.deposit ? ongoing.deposit.toString() : '0',
-          voteCount: {
-            ayes: ongoing.tally?.ayes ? parseInt(ongoing.tally.ayes.toString()) : 0,
-            nays: ongoing.tally?.nays ? parseInt(ongoing.tally.nays.toString()) : 0,
-          }
-        };
+        setProposal(mapOnChainProposal(raw, proposalId));
 
-        setProposal(parsedProposal);
+        // `proposal.voteTally` holds u32 *counts* (ayes/nays/abstentions), not
+        // weighted balances.
+        const counts = raw.voteTally ?? raw.vote_tally ?? {};
+        const aye = BigInt(Number(counts.ayes ?? 0));
+        const nay = BigInt(Number(counts.nays ?? 0));
+        const abstain = BigInt(Number(counts.abstentions ?? 0));
+        const total = aye + nay + abstain;
 
-        // Query votes for this proposal
-        const votingData: any = await api.query.belizeGovernance?.voting(proposalId);
-        if (votingData) {
-          const voting: any = votingData.isSome ? votingData.unwrap() : votingData;
-          const voteArray = voting.votes?.toArray() || [];
-          
-          const parsedVotes: Vote[] = voteArray.map((vote: any) => ({
-            voter: vote.voter.toString(),
-            amount: BigInt(vote.amount.toString()),
-            voteType: vote.voteType.toString() as 'Aye' | 'Nay' | 'Abstain',
-            timestamp: vote.timestamp ? parseInt(vote.timestamp.toString()) : Date.now(),
-          }));
-
-          setVotes(parsedVotes);
-
-          // Calculate tally
-          const aye = parsedVotes
-            .filter(v => v.voteType === 'Aye')
-            .reduce((sum, v) => sum + v.amount, 0n);
-          const nay = parsedVotes
-            .filter(v => v.voteType === 'Nay')
-            .reduce((sum, v) => sum + v.amount, 0n);
-          const abstain = parsedVotes
-            .filter(v => v.voteType === 'Abstain')
-            .reduce((sum, v) => sum + v.amount, 0n);
-          const total = aye + nay + abstain;
-
-          setTally({
-            aye,
-            nay,
-            abstain,
-            total,
-            approvalPercentage: total > 0n ? Number(aye * 10000n / total) / 100 : 0,
-          });
-        }
-
+        setTally({
+          aye,
+          nay,
+          abstain,
+          total,
+          approvalPercentage: total > 0n ? Number((aye * 10000n) / total) / 100 : 0,
+        });
         setIsLoading(false);
       } catch (err) {
         console.error('Proposal query error:', err);
-        setProposal(null);
-        setIsLoading(false);
+        if (!cancelled) {
+          setProposal(null);
+          setTally(null);
+          setIsLoading(false);
+        }
       }
     };
 
     fetchProposalData();
 
-    // Subscribe to voting changes
-    if (api.query.belizeGovernance?.voting) {
-      api.query.belizeGovernance.voting(proposalId, (voting: any) => {
-        fetchProposalData(); // Refetch on vote changes
-      }).then((unsub) => {
-        unsubscribe = unsub as any;
+    // Individual ballots live in `governance.votes`, a double map keyed by
+    // (proposalId, AccountId). There is no on-chain index to enumerate them, so
+    // the per-voter list stays empty; use `tally` for aggregate counts.
+    setVotes([]);
+
+    api.query.governance
+      ?.proposals(proposalId, () => {
+        void fetchProposalData();
+      })
+      .then((unsub) => {
+        unsubscribe = unsub as unknown as () => void;
+      })
+      .catch(() => {
+        // Subscription unavailable; the initial fetch above still stands.
       });
-    }
 
     return () => {
+      cancelled = true;
       if (unsubscribe) unsubscribe();
     };
   }, [api, isConnected, proposalId]);

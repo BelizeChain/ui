@@ -84,7 +84,7 @@ function bytesToString(raw: unknown): string {
 /**
  * Map a raw on-chain `Proposal` codec into the UI `Proposal` shape.
  */
-function mapOnChainProposal(p: any, idHint?: number): Proposal {
+export function mapOnChainProposal(p: any, idHint?: number): Proposal {
   const tally = p.vote_tally ?? p.voteTally ?? {};
   const status = String(p.status?.toString?.() ?? p.status ?? 'Voting');
   const id = typeof idHint === 'number' ? idHint : Number(p.id?.toString?.() ?? p.id ?? 0);
@@ -103,7 +103,8 @@ function mapOnChainProposal(p: any, idHint?: number): Proposal {
     ) {
       const inner = actionInner.asTreasurySpend ?? actionInner.value ?? actionInner;
       if (inner?.amount) value = formatBalance(inner.amount.toString());
-      if (inner?.beneficiary) beneficiary = inner.beneficiary.toString();
+      // On-chain field is `recipient`; the UI exposes it as `beneficiary`.
+      if (inner?.recipient) beneficiary = inner.recipient.toString();
     }
   } catch {
     // Non-treasury proposals leave value/beneficiary as defaults.

@@ -30,12 +30,14 @@ export class CommunityIndexerService {
     try {
       return await withRetry(async () => {
         const api = (await initializeApi()) as any;
-        const entries = await api.query.community?.srsScores?.entries?.() || [];
+        // Storage item is `socialResponsibilityScores`; `srsScores` does not
+        // exist. The score field is `score`, not `total`.
+        const entries = await api.query.community?.socialResponsibilityScores?.entries?.() || [];
         const scores = entries.map(([key, opt]: [any, any]) => ({
           account: key.args[0].toString(),
           srs: opt.unwrapOrDefault(),
         }));
-        scores.sort((a: any, b: any) => (b.srs.total ?? 0) - (a.srs.total ?? 0));
+        scores.sort((a: any, b: any) => (Number(b.srs.score ?? 0)) - (Number(a.srs.score ?? 0)));
         return scores.slice(0, limit);
       });
     } catch (e) {

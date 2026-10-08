@@ -110,11 +110,30 @@ export function useAccountBalance(address: string | null, currency: 'DALLA' | 'b
 
     let unsubscribe: (() => void) | undefined;
 
+    // DALLA is the native currency, so it lives in `system.account`; bBZD has
+    // its own `economy.bbzdBalances` map. The old code queried a single
+    // `belizeEconomy.balances(address, currency)` that does not exist — the
+    // section name is `economy` and there is no combined balances map.
+    const subscribe = (): Promise<unknown> => {
+      if (currency === 'bBZD') {
+        return api.query.economy.bbzdBalances(address, (value: any) => {
+          setBalance(value?.isEmpty ? 0n : BigInt(value.toString()));
+        });
+      }
+      return api.query.system.account(address, (accountInfo: any) => {
+        setBalance(BigInt(accountInfo.data.free.toString()));
+      });
+    };
+
     const fetchBalance = async () => {
       try {
         setIsLoading(true);
-        const accountBalance = await api.query.belizeEconomy?.balances(address, currency);
-        setBalance(accountBalance ? BigInt(accountBalance.toString()) : 0n);
+        const value: any =
+          currency === 'bBZD'
+            ? await api.query.economy.bbzdBalances(address)
+            : await api.query.system.account(address);
+        const raw = currency === 'bBZD' ? value : value?.data?.free;
+        setBalance(raw && !raw.isEmpty ? BigInt(raw.toString()) : 0n);
         setIsLoading(false);
       } catch (err) {
         console.error('Balance query error:', err);
@@ -125,14 +144,9 @@ export function useAccountBalance(address: string | null, currency: 'DALLA' | 'b
 
     fetchBalance();
 
-    // Subscribe to balance changes
-    if (api.query.belizeEconomy?.balances) {
-      api.query.belizeEconomy.balances(address, currency, (balance: any) => {
-        setBalance(BigInt(balance.toString()));
-      }).then((unsub) => {
-        unsubscribe = unsub as any;
-      });
-    }
+    subscribe().then((unsub) => {
+      unsubscribe = unsub as () => void;
+    });
 
     return () => {
       if (unsubscribe) unsubscribe();

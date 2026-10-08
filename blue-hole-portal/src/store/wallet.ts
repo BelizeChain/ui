@@ -1,6 +1,6 @@
 /**
  * Wallet Store - Zustand State Management
- * 
+ *
  * Manages:
  * - Polkadot.js extension accounts
  * - Selected account
@@ -17,12 +17,12 @@ interface WalletState {
   // Accounts
   accounts: InjectedAccountWithMeta[];
   selectedAccount: InjectedAccountWithMeta | null;
-  
+
   // Extension status
   extensionAvailable: boolean;
   isConnecting: boolean;
   error: string | null;
-  
+
   // Balances
   balances: {
     dalla: string;
@@ -30,7 +30,7 @@ interface WalletState {
     locked: string;
     reserved: string;
   };
-  
+
   // Actions
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
@@ -55,43 +55,43 @@ export const useWalletStore = create<WalletState>()(
         locked: '0',
         reserved: '0',
       },
-      
+
       // Connect to Polkadot.js extension
       connectWallet: async () => {
         set({ isConnecting: true, error: null });
-        
+
         try {
           // Check if extension is available
           if (typeof window === 'undefined') {
             throw new Error('Must be called in browser environment');
           }
-          
+
           const { web3Accounts, web3Enable } = await import('@polkadot/extension-dapp');
-          
+
           // Request access to extension
           const extensions = await web3Enable('Blue Hole Portal');
-          
+
           if (extensions.length === 0) {
             throw new Error(
               'No Polkadot.js extension found. Please install Polkadot.js extension.'
             );
           }
-          
+
           // Get all accounts
           const allAccounts = await web3Accounts();
-          
+
           if (allAccounts.length === 0) {
             throw new Error(
               'No accounts found. Please create an account in Polkadot.js extension.'
             );
           }
-          
+
           // Select first account if none selected
           const currentAccount = get().selectedAccount;
           const selectedAccount = currentAccount && allAccounts.find(
             (acc) => acc.address === currentAccount.address
           ) || allAccounts[0];
-          
+
           set({
             accounts: allAccounts,
             selectedAccount,
@@ -99,7 +99,7 @@ export const useWalletStore = create<WalletState>()(
             isConnecting: false,
             error: null,
           });
-          
+
           if (selectedAccount?.address) {
             void get().fetchBalances(selectedAccount.address);
           }
@@ -115,7 +115,7 @@ export const useWalletStore = create<WalletState>()(
           console.error('[WALLET] Wallet connection failed:', error);
         }
       },
-      
+
       // Disconnect wallet
       disconnectWallet: () => {
         set({
@@ -132,12 +132,12 @@ export const useWalletStore = create<WalletState>()(
         });
         console.log('[WALLET] Wallet disconnected');
       },
-      
+
       // Select account
       selectAccount: (account: InjectedAccountWithMeta) => {
         set({ selectedAccount: account });
         console.log(`[WALLET] Selected account: ${account.meta.name || account.address}`);
-        
+
         // Reset and trigger refresh of balances for new account
         set({
           balances: {
@@ -149,7 +149,7 @@ export const useWalletStore = create<WalletState>()(
         });
         void get().fetchBalances(account.address);
       },
-      
+
       // Update balances
       setBalances: (newBalances: Partial<WalletState['balances']>) => {
         set((state) => ({
@@ -185,8 +185,10 @@ export const useWalletStore = create<WalletState>()(
 
           let bBZD = '0.00';
           try {
-            if (api.query.belizeEconomy?.bBzdBalances) {
-              const bBzdRaw: any = await api.query.belizeEconomy.bBzdBalances(targetAddress);
+            // Section is `economy` (not `belizeEconomy`) and the storage item
+            // is `bbzdBalances` (lowercase b).
+            if (api.query.economy?.bbzdBalances) {
+              const bBzdRaw: any = await api.query.economy.bbzdBalances(targetAddress);
               if (bBzdRaw) {
                 bBZD = (Number(BigInt(bBzdRaw.toString())) / 1e12).toLocaleString(undefined, {
                   minimumFractionDigits: 2,
@@ -210,7 +212,7 @@ export const useWalletStore = create<WalletState>()(
           console.warn('[WALLET] Failed to fetch balances:', err);
         }
       },
-      
+
       // Refresh accounts from extension
       refreshAccounts: async () => {
         const { connectWallet } = get();
@@ -237,7 +239,7 @@ export function useWalletConnection() {
     connectWallet,
     disconnectWallet,
   } = useWalletStore();
-  
+
   return {
     isConnected: !!selectedAccount && extensionAvailable,
     selectedAccount,
@@ -251,7 +253,7 @@ export function useWalletConnection() {
 // Helper hook for account balances
 export function useAccountBalances() {
   const { balances, selectedAccount } = useWalletStore();
-  
+
   return {
     balances,
     address: selectedAccount?.address || null,
