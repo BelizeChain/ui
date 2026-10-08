@@ -200,6 +200,25 @@ export async function getEmergencyAlerts(): Promise<EmergencyAlert[]> {
 }
 
 /**
+ * Is `address` a registered NEMO emergency authority?
+ *
+ * Authoritative source is `mesh.emergencyAuthorities` — the runtime's
+ * `is_emergency_authority` reads that same NEMO registry, so this mirrors the
+ * exact check `issue_emergency_alert` performs on chain.
+ */
+export async function isEmergencyAuthority(address: string): Promise<boolean> {
+  try {
+    const api = await initializeApi();
+    if (!api.query.mesh?.emergencyAuthorities) return false;
+    const raw: any = await api.query.mesh.emergencyAuthorities(address as any);
+    return Boolean(raw?.toJSON?.() ?? false);
+  } catch (err) {
+    console.error('Failed to read emergency authority status:', err);
+    return false;
+  }
+}
+
+/**
  * Get Relay Mining stats for the connected account
  */
 export async function getRelayMiningStats(address: string): Promise<RelayMiningStats | null> {

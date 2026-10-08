@@ -174,18 +174,22 @@ class BlockchainProofService {
     };
   }
 
-  /** Verifies on-chain that the signer is a registered emergency authority */
+  /**
+   * Verifies on-chain that the signer is a registered emergency authority.
+   *
+   * The authoritative registry is `mesh.emergencyAuthorities` (NEMO). The
+   * previous implementation read `identity.identityOf(..).info.additional` and
+   * looked for an `accountType=government` field — that storage is unrelated to
+   * the mesh authority check, so it always reported `false` for real
+   * authorities.
+   */
   async verifyEmergencyAuthority(address: string): Promise<boolean> {
     if (!this.api) return false;
     try {
-      const identity = await this.api.query.identity?.identityOf?.(address);
-      const identityData = identity as any;
-      if (!identityData?.isSome) return false;
-      return (identityData.unwrap() as any).info.additional.some(
-        (item: [any, any]) =>
-          item[0].toString().toLowerCase() === 'accounttype' &&
-          item[1].toString().toLowerCase() === 'government',
-      );
+      const registry = (this.api.query.mesh as any)?.emergencyAuthorities;
+      if (!registry) return false;
+      const raw: any = await registry(address);
+      return Boolean(raw?.toJSON?.() ?? false);
     } catch (error) {
       console.error('[PROOF] Authority verification failed:', error);
       return false;

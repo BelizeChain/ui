@@ -4,6 +4,7 @@
  */
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
+import { blake2AsHex } from '@polkadot/util-crypto';
 import { initializeApi } from '../blockchain';
 
 /** Mirrors `quantum.quantumJobs: Bytes -> QuantumJob`. */
@@ -203,13 +204,17 @@ export async function submitQuantumJob(
     void priority;
     const jobIdBytes = `0x${Date.now().toString(16).padStart(16, '0')}`;
     const backendIndex = Number.parseInt(backend, 10) || 0;
-    // Hash circuit into a 32-byte placeholder. Backend should derive the real
-    // commitment off-chain and pass a [u8;32] hex string here.
-    const circuitHash = circuit.startsWith('0x') && circuit.length === 66
-      ? circuit
-      : '0x' + '00'.repeat(32);
-    const numQubits = 1;
-    const circuitDepth = 1;
+    // Real commitment: blake2b-256 over the circuit source, or an already-hashed
+    // 32-byte hex string supplied by the caller.
+    const circuitHash =
+      circuit.startsWith('0x') && circuit.length === 66
+        ? circuit
+        : blake2AsHex(new TextEncoder().encode(circuit), 256);
+    // Derive width/depth from the circuit itself rather than guessing.
+    const qregMatch = /\bqreg\s+\w+\s*\[\s*(\d+)\s*\]/i.exec(circuit);
+    const gateCount = (circuit.match(/;/g) ?? []).length;
+    const numQubits = Math.min(Math.max(Number.parseInt(qregMatch?.[1] ?? '1', 10) || 1, 1), 65535);
+    const circuitDepth = Math.min(Math.max(gateCount, 1), 4_294_967_295);
     const tx = api.tx.quantum.submitQuantumJob(
       jobIdBytes,
       backendIndex,

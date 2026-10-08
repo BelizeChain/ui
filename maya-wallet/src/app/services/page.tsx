@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { walletLogger, useI18n } from '@belizechain/shared';
-import { 
-  ArrowLeft, 
+import {
+  ArrowLeft,
   Lightning,
   IdentificationCard,
   Car,
@@ -215,12 +215,28 @@ export default function ServicesPage() {
 
       {/* Main Content Container */}
       <div className="p-4 space-y-6">
+        {/* Honest disclosure — no government-services backend exists yet */}
+        <div
+          role="note"
+          className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4"
+        >
+          <Clock size={20} weight="fill" className="mt-0.5 flex-shrink-0 text-amber-400" />
+          <div className="text-sm text-amber-200">
+            <p className="font-semibold mb-1">Catalogue preview — not yet available</p>
+            <p className="text-amber-200/90">
+              No government-services backend is deployed on BelizeChain yet, so none of these
+              services can be submitted today. The fees and processing times below are illustrative
+              placeholders, not real charges.
+            </p>
+          </div>
+        </div>
+
         {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
-            <MagnifyingGlass 
-              size={20} 
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" 
+            <MagnifyingGlass
+              size={20}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
               weight="bold"
             />
             <input
@@ -281,9 +297,9 @@ export default function ServicesPage() {
                         <h3 className="font-semibold text-gray-900">{service.name}</h3>
                         {getStatusBadge(service.status)}
                       </div>
-                      
+
                       <p className="text-sm text-gray-600 mb-3">{service.description}</p>
-                      
+
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <div>
                           <span className="font-medium">Fee:</span>{' '}
@@ -312,19 +328,19 @@ export default function ServicesPage() {
               <p className="text-sm font-semibold text-caribbean-900">Pay Bills</p>
               <p className="text-xs text-caribbean-500 mt-1">Utilities & services</p>
             </button>
-            
+
             <button className="p-4 bg-gradient-to-br from-jungle-50 to-jungle-100 rounded-xl border border-jungle-200 hover:shadow-md transition-all">
               <IdentificationCard size={32} className="text-jungle-600 mb-2" weight="duotone" />
               <p className="text-sm font-semibold text-jungle-900">ID Services</p>
               <p className="text-xs text-jungle-700 mt-1">Licenses & permits</p>
             </button>
-            
+
             <button className="p-4 bg-gradient-to-br from-maya-50 to-maya-100 rounded-xl border border-maya-200 hover:shadow-md transition-all">
               <Briefcase size={32} className="text-maya-700 mb-2" weight="duotone" />
               <p className="text-sm font-semibold text-maya-900">Business</p>
               <p className="text-xs text-maya-700 mt-1">Registration & tax</p>
             </button>
-            
+
             <button className="p-4 bg-gradient-to-br from-bluehole-50 to-bluehole-100 rounded-xl border border-bluehole-200 hover:shadow-md transition-all">
               <FirstAid size={32} className="text-bluehole-600 mb-2" weight="duotone" />
               <p className="text-sm font-semibold text-bluehole-900">Healthcare</p>

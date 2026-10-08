@@ -106,7 +106,7 @@ export default function BudgetPage() {
     }
   }, []);
 
-  // DCA vault card: real on-chain stake for the connected account.
+  // Staking card: real on-chain stake for the connected account.
   useEffect(() => {
     if (!selectedAccount?.address) return;
 
@@ -126,15 +126,15 @@ export default function BudgetPage() {
 
   const currencyTotals = useMemo(() => getCurrencyTotals(categories), [categories]);
 
-  const vaultValue = stakingInfo ? `${stakingInfo.totalStaked} Ɗ` : '—';
-  let vaultDetail = 'Reading on-chain stake…';
+  const stakedValue = stakingInfo ? `${stakingInfo.totalStaked} Ɗ` : '—';
+  let stakedDetail = 'Reading on-chain stake…';
   if (stakingError) {
-    vaultDetail = 'Staking read failed';
+    stakedDetail = 'Staking read failed';
   } else if (stakingInfo) {
-    vaultDetail =
+    stakedDetail =
       stakingInfo.totalStaked === '0.00'
         ? 'No staked position on chain'
-        : `Epoch ${stakingInfo.epoch} · Rewards claimable on demand`;
+        : `Epoch ${stakingInfo.epoch} · validator status: ${stakingInfo.validatorStatus}`;
   }
 
   const handleAddCategory = (e: React.FormEvent) => {
@@ -178,7 +178,7 @@ export default function BudgetPage() {
             </Link>
             <div>
               <h1 className="text-xl font-bold">Citizen Fiscal Budgeting</h1>
-              <p className="text-xs text-slate-400">Monthly Spending Envelopes • DCA Savings Vaults • bBZD & DALLA</p>
+              <p className="text-xs text-slate-400">Monthly Spending Envelopes • On-Chain Staking • bBZD & DALLA</p>
             </div>
           </div>
           <button
@@ -229,11 +229,11 @@ export default function BudgetPage() {
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">DCA Staking Vault</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Staked (On-Chain)</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-purple-400 font-mono">{vaultValue}</span>
+              <span className="text-lg font-bold text-purple-400 font-mono">{stakedValue}</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">{vaultDetail}</span>
+            <span className="text-[11px] text-slate-400 block">{stakedDetail}</span>
           </div>
         </div>
 

@@ -482,17 +482,29 @@ export async function getUserEducationProgress(
 
 /**
  * Complete education module and claim reward
+ *
+ * The pallet requires a NON-EMPTY `completion_proof` (an empty payload is
+ * rejected with `ModuleNotFound`), so the caller must supply a real payload
+ * describing the completed work. The pallet records it without verifying it.
  */
 export async function completeEducationModule(
   address: string,
-  moduleId: number
+  moduleId: number,
+  completionProof: Uint8Array | string
 ): Promise<{ hash: string; rewardAmount: string }> {
   const api = await initializeApi();
 
   try {
     const injector = await web3FromAddress(address);
     // Real signature: completeEducationModule(moduleId:u32, completionProof:Bytes).
-    const tx = api.tx.community.completeEducationModule(moduleId, '0x');
+    const proofBytes =
+      typeof completionProof === 'string'
+        ? new TextEncoder().encode(completionProof)
+        : completionProof;
+    if (proofBytes.length === 0) {
+      throw new Error('Completion proof must be non-empty; the pallet rejects empty proofs.');
+    }
+    const tx = api.tx.community.completeEducationModule(moduleId, proofBytes);
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {

@@ -6,10 +6,9 @@ export const dynamic = 'force-dynamic';
 import React from 'react';
 import {
   ArrowLeft,
-  FilePdf,
-  FileXls,
+  FileJs,
+  FileCsv,
   ChartBar,
-  Download,
   Funnel,
   CurrencyDollar,
   TrendUp,
@@ -99,7 +98,7 @@ export default function FinancialReportsPage() {
     fetchAnalytics();
   }, []);
 
-  const generatePDFReport = async () => {
+  const exportReportAsJson = async () => {
     if (!selectedTemplate) {
       alert('Please select a report template');
       return;
@@ -111,8 +110,8 @@ export default function FinancialReportsPage() {
       await blockchainService.initialize();
       const reportData = await analyticsService.getTreasuryAnalytics();
 
-      // In production, this would use a library like jsPDF or call a backend service
-      // For now, we'll create a downloadable data file
+      // PDF rendering is not implemented — export the underlying report data
+      // as JSON so the figures are still usable.
       const reportContent = {
         template: selectedTemplate,
         generatedAt: new Date().toISOString(),
@@ -136,14 +135,14 @@ export default function FinancialReportsPage() {
         alert('Report exported as JSON. PDF rendering is not implemented yet.');
       setShowBuilder(false);
     } catch (error) {
-      console.error('Failed to generate PDF:', error);
+      console.error('Failed to export report:', error);
       alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setGenerating(false);
     }
   };
 
-  const generateExcelReport = async () => {
+  const exportReportAsCsv = async () => {
     if (!selectedTemplate) {
       alert('Please select a report template');
       return;
@@ -176,7 +175,7 @@ export default function FinancialReportsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      alert('Excel report (CSV) generated successfully!');
+      alert('CSV report generated successfully!');
       setShowBuilder(false);
     } catch (error) {
       console.error('Failed to generate Excel:', error);
@@ -307,9 +306,9 @@ export default function FinancialReportsPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2 pt-3 border-t border-sand-200">
-                    <FilePdf size={18} className="text-red-600" />
-                    <FileXls size={18} className="text-green-600" />
-                    <span className="text-xs text-bluehole-500">PDF / Excel</span>
+                    <FileJs size={18} className="text-yellow-600" />
+                    <FileCsv size={18} className="text-green-600" />
+                    <span className="text-xs text-bluehole-500">JSON / CSV</span>
                   </div>
                 </button>
               );
@@ -442,15 +441,15 @@ export default function FinancialReportsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={generateExcelReport}
+                  onClick={exportReportAsCsv}
                   disabled={generating}
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  <FileXls size={18} weight="fill" />
-                  <span>Download Excel</span>
+                  <FileCsv size={18} weight="fill" />
+                  <span>Download CSV</span>
                 </button>
                 <button
-                  onClick={generatePDFReport}
+                  onClick={exportReportAsJson}
                   disabled={generating}
                   className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
@@ -461,8 +460,8 @@ export default function FinancialReportsPage() {
                     </>
                   ) : (
                     <>
-                      <FilePdf size={18} weight="fill" />
-                      <span>Download PDF</span>
+                      <FileJs size={18} weight="fill" />
+                      <span>Download JSON</span>
                     </>
                   )}
                 </button>

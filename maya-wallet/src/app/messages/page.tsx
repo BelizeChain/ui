@@ -6,6 +6,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useMessaging } from '@/contexts/MessagingContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import EmergencyBroadcastPanel from '@/components/EmergencyBroadcastPanel';
 import {
   getEmergencyAlerts,
   getDistrictAlertLoads,
@@ -306,11 +307,14 @@ export default function MessagesPage() {
               <div>
                 <h3 className="text-sm font-bold text-amber-300">Emergency Broadcast Feed</h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                  Read from mesh.emergencyAlerts. Alerts must be issued by an account in
-                  mesh.emergencyAuthorities — this wallet cannot issue one.
+                  Read from mesh.emergencyAlerts. Only accounts registered in
+                  mesh.emergencyAuthorities (NEMO) can issue an alert; the issuance form
+                  appears below when the connected account holds that role.
                 </p>
               </div>
             </div>
+
+            {selectedAccount && <EmergencyBroadcastPanel address={selectedAccount.address} />}
 
             {isLoadingChain && <div className="text-center py-8 text-slate-400 text-xs">Loading alerts…</div>}
             {!isLoadingChain && alerts.length === 0 && (

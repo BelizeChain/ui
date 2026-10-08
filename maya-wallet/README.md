@@ -32,35 +32,28 @@ Maya Wallet is designed to be the simplest, most user-friendly blockchain wallet
 - Quick actions (send, receive, documents, services)
 - Tourism rewards banner
 
-### 2. **Send Money** (Coming Soon)
+### 2. **Send Money**
 - Contact picker
 - Amount input with currency selector
-- Confirmation screen
-- Success feedback with confetti 🎉
+- Fee estimate + on-chain transfer (`submitTransfer`)
+- Confirmation screen with success feedback
 
-### 3. **Receive Money** (Coming Soon)
+### 3. **Receive Money**
 - QR code generator
 - Share address button
 - Payment request
 
-### 4. **Documents** (Coming Soon)
-- Birth certificates
-- National IDs
-- Land titles
-- Driver's licenses
+### 4. **Documents**
+- BelizeID credentials and land titles from the on-chain register
 - View/download/share
 
-### 5. **Government Services** (Coming Soon)
-- Pay bills
-- Renew licenses
-- Submit applications
-- Track status
+### 5. **Government Services**
+- A service-catalogue page exists, but **no government-services backend is
+  deployed** — the listed services are not yet executable.
 
-### 6. **Tourism Rewards** (Coming Soon)
-- Cashback tracker
-- Merchant map
-- Reward history
-- 5-8% rewards at hotels, restaurants, tours
+### 6. **Tourism Rewards** *(not yet available)*
+- On-chain tourism redemption is not implemented
+  (see `src/services/pallets/oracle.ts`)
 
 ## 🚀 Getting Started
 

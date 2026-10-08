@@ -53,15 +53,15 @@ console.log('Transaction hash:', hash.toHex());`,
       name: 'Blockchain CLI',
       description: 'Command-line interface for blockchain operations',
       status: 'Available',
-      link: 'https://docs.belizechain.io/cli',
+      link: 'https://belizechain.org/developers/getting-started',
       external: true,
     },
     {
       icon: <Package size={24} weight="duotone" />,
-      name: 'TypeScript SDK',
-      description: 'Official SDK for building dApps',
-      status: 'v1.2.0',
-      link: 'https://www.npmjs.com/package/@belizechain/sdk',
+      name: 'GEM TypeScript SDK',
+      description: '@belizechain/gem-sdk — lives in the gem repository, not yet published to npm',
+      status: 'In repo',
+      link: 'https://belizechain.org/gem/sdk',
       external: true,
     },
     {
@@ -75,10 +75,10 @@ console.log('Transaction hash:', hash.toHex());`,
     {
       icon: <Flask size={24} weight="duotone" />,
       name: 'Testnet Faucet',
-      description: 'Get testnet DALLA for development',
-      status: 'Coming soon',
-      link: null,
-      external: false,
+      description: 'Claim testnet DALLA from the deployed faucet contract',
+      status: 'Available',
+      link: 'https://wallet.belizechain.org/gem',
+      external: true,
     },
   ];
 
@@ -240,7 +240,7 @@ console.log('Transaction hash:', hash.toHex());`,
           <h2 className="text-lg font-bold text-white mb-4">Additional Resources</h2>
           <div className="space-y-2">
             <a
-              href="https://docs.belizechain.io"
+              href="https://belizechain.org/developers"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/50 hover:border-blue-500/50 transition-colors"
