@@ -145,48 +145,14 @@ export async function getCommunityGroups(
   district?: string,
   category?: string
 ): Promise<CommunityGroup[]> {
-  const api = await initializeApi();
-
-  try {
-    const groups: any = await api.query.community?.groups?.entries?.() || [];
-
-    if (!groups || groups.length === 0) {
-      return [];
-    }
-
-    return groups
-      .filter(([, value]: [any, any]) => {
-        const data = value.unwrap();
-        const districtMatch = !district || data.district.toString() === district;
-        const categoryMatch = !category || data.category.toString() === category;
-        return districtMatch && categoryMatch && data.isActive.toHuman();
-      })
-      .map(([key, value]: [any, any]) => {
-        const groupId = key.args[0].toString();
-        const data = value.unwrap();
-
-        return {
-          groupId,
-          name: data.name.toString(),
-          description: data.description.toString(),
-          location: {
-            district: data.district.toString(),
-            village: data.village?.toString(),
-          },
-          founder: data.founder.toString(),
-          members: data.members.toHuman() as string[],
-          memberCount: data.memberCount.toNumber(),
-          treasury: formatBalance(data.treasury.toString()),
-          proposalCount: data.proposalCount.toNumber(),
-          createdAt: data.createdAt.toNumber(),
-          isActive: data.isActive.toHuman(),
-          category: data.category.toString() as any,
-        };
-      });
-  } catch (error) {
-    console.error('Failed to fetch community groups:', error);
-    return [];
-  }
+  // The community pallet has no group storage at all — there is no `groups`
+  // map. Community organisation happens through proposals, endorsements and
+  // attested activities. An earlier version of this file read `groups` (which
+  // silently returned []) and filtered on invented name/description/members
+  // fields.
+  void district;
+  void category;
+  return [];
 }
 
 /**
@@ -401,48 +367,12 @@ export async function getCommunityEvents(
   groupId?: string,
   upcoming: boolean = true
 ): Promise<CommunityEvent[]> {
-  const api = await initializeApi();
-
-  try {
-    const events: any = await api.query.community?.events?.entries?.() || [];
-
-    if (!events || events.length === 0) {
-      return [];
-    }
-
-    const now = Date.now();
-
-    return events
-      .filter(([, value]: [any, any]) => {
-        const data = value.unwrap();
-        const groupMatch = !groupId || data.groupId.toString() === groupId;
-        const timeMatch = !upcoming || data.startTime.toNumber() > now;
-        return groupMatch && timeMatch;
-      })
-      .map(([key, value]: [any, any]) => {
-        const eventId = key.args[0].toString();
-        const data = value.unwrap();
-
-        return {
-          eventId,
-          groupId: data.groupId.toString(),
-          title: data.title.toString(),
-          description: data.description.toString(),
-          location: data.location.toString(),
-          startTime: data.startTime.toNumber(),
-          endTime: data.endTime.toNumber(),
-          organizer: data.organizer.toString(),
-          attendees: data.attendees.toHuman() as string[],
-          maxAttendees: data.maxAttendees?.toNumber(),
-          requiresRSVP: data.requiresRSVP.toHuman(),
-          status: data.status.toString() as any,
-        };
-      })
-      .sort((a: { startTime: number }, b: { startTime: number }) => a.startTime - b.startTime);
-  } catch (error) {
-    console.error('Failed to fetch events:', error);
-    return [];
-  }
+  // No `events` storage exists on the community pallet; community events are
+  // not modelled on chain. The previous read always returned [] after failing
+  // against invented title/startTime/location fields.
+  void groupId;
+  void upcoming;
+  return [];
 }
 
 /**
@@ -677,22 +607,25 @@ export async function getProjectContributors(
   const api = await initializeApi();
 
   try {
-    const contributors: any = await api.query.community?.greenProjectContributors?.entries(projectId);
+    // `greenContributions` is a double map keyed (AccountId, projectId) whose
+    // value is the contributed u64 total — not a struct with amount/timestamp.
+    // There is no timestamp per contribution, so it is reported as 0.
+    if (!api.query.community?.greenContributions) return [];
 
-    if (!contributors || contributors.length === 0) {
-      return [];
+    const entries = await api.query.community.greenContributions.entries();
+    const contributors: Array<{ address: string; amount: string; timestamp: number }> = [];
+
+    for (const [key, raw] of entries as any[]) {
+      const args = key?.args ?? [];
+      if (Number(args[1]) !== projectId) continue;
+      contributors.push({
+        address: String(args[0]),
+        amount: formatBalance(String(raw?.toString?.() ?? '0')),
+        timestamp: 0,
+      });
     }
 
-    return contributors.map(([key, value]: [any, any]) => {
-      const address = key.args[1].toString();
-      const data = value.unwrap();
-
-      return {
-        address,
-        amount: formatBalance(data.amount.toString()),
-        timestamp: data.timestamp.toNumber(),
-      };
-    });
+    return contributors;
   } catch (error) {
     console.error('Failed to fetch project contributors:', error);
     return [];
@@ -733,39 +666,53 @@ export async function getUserSRS(address: string): Promise<SRSInfo | null> {
 /**
  * Calculate effective fee with SRS discount
  */
+/**
+ * SRS tier -> fee discount percentage.
+ * Mirrors `pallet_belize_community::calculate_fee_discount` exactly.
+ */
+const SRS_TIER_DISCOUNT: Record<string, number> = {
+  Bronze: 0,
+  Silver: 25,
+  Gold: 50,
+  Platinum: 75,
+  Diamond: 90,
+};
+
+/**
+ * Fee after the SRS tier discount.
+ *
+ * `calculate_effective_fee` is a Rust trait method, not storage — the old
+ * `api.query.community.calculateEffectiveFee(...)` call could never resolve.
+ * The discount table is small and fixed, so it is applied here from the
+ * account's real `socialResponsibilityScores.tier`.
+ */
 export async function calculateEffectiveFee(
   address: string,
   originalFee: string
 ): Promise<{ effectiveFee: string; discount: string; discountPercent: number }> {
-  const api = await initializeApi();
+  const noDiscount = { effectiveFee: originalFee, discount: '0', discountPercent: 0 };
 
   try {
-    const feeInPlanck = parseFloat(originalFee) * Math.pow(10, 12);
-    const result: any = await api.query.community?.calculateEffectiveFee(address, feeInPlanck);
+    const api = await initializeApi();
+    if (!api.query.community?.socialResponsibilityScores) return noDiscount;
 
-    if (!result) {
-      return {
-        effectiveFee: originalFee,
-        discount: '0',
-        discountPercent: 0,
-      };
-    }
+    const raw: any = await api.query.community.socialResponsibilityScores(address as any);
+    if (!raw || raw.isNone) return noDiscount;
 
-    const [effectiveFee, discountPercent] = result;
-    const effective = formatBalance(effectiveFee.toString());
-    const discountAmount = (parseFloat(originalFee) - parseFloat(effective)).toFixed(2);
+    const tier = String((raw.toJSON() as any)?.tier ?? '');
+    const discountPercent = SRS_TIER_DISCOUNT[tier] ?? 0;
+    if (discountPercent === 0) return noDiscount;
+
+    const amount = parseFloat(originalFee) || 0;
+    const effective = amount - (amount * discountPercent) / 100;
 
     return {
-      effectiveFee: effective,
-      discount: discountAmount,
-      discountPercent: discountPercent.toNumber(),
+      effectiveFee: effective.toFixed(2),
+      discount: (amount - effective).toFixed(2),
+      discountPercent,
     };
   } catch (error) {
     console.error('Failed to calculate effective fee:', error);
-    return {
-      effectiveFee: originalFee,
-      discount: '0',
-      discountPercent: 0,
-    };
+    return noDiscount;
   }
 }
