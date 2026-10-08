@@ -13,17 +13,13 @@ import {
   Broadcast,
 } from 'phosphor-react';
 import { useMessaging } from '@/contexts/MessagingContext';
+import { useUIStore } from '@/store/ui';
 
-const VERIFIED_PEERS = [
-  { bns: 'ceiba-tech.bz', district: 'San Pedro', desc: 'Ceiba Testbed' },
-  { bns: 'ambergris-mesh.caye', district: 'Ambergris Caye', desc: 'Solar Relay' },
-  { bns: 'belmopan-civic.gov', district: 'Belmopan', desc: 'District Assembly' },
-  { bns: 'cayo-agro.bz', district: 'Cayo', desc: 'Sustainable Agriculture' },
-];
 
 export default function ComposeMessagePage() {
   const router = useRouter();
   const { sendMessage } = useMessaging();
+  const { addNotification } = useUIStore();
 
   const [recipient, setRecipient] = useState('');
   const [message, setMessage] = useState('');
@@ -34,12 +30,20 @@ export default function ComposeMessagePage() {
 
     setSending(true);
     try {
-      await sendMessage(recipient.trim(), message.trim());
+      const sent = await sendMessage(recipient.trim(), message.trim());
+      if (!sent) {
+        addNotification({
+          type: 'error',
+          message: 'The message was not transported. Check mesh availability or register a gateway node.',
+        });
+        return;
+      }
       router.push('/messages');
     } catch (error) {
-      console.error('Failed to send message:', error);
-      // Even if offline/simulated, redirect to messages so user sees draft in active thread
-      router.push('/messages');
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to send message.',
+      });
     } finally {
       setSending(false);
     }
@@ -56,10 +60,10 @@ export default function ComposeMessagePage() {
             </Link>
             <div>
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                New Sovereign E2EE Message
+                New Sovereign Message
               </h1>
               <p className="text-xs text-slate-400 font-mono">
-                Signal / Noise Protocol Cipher Suite
+                Signed SR25519 • Mesh / gateway transport
               </p>
             </div>
           </div>
@@ -70,7 +74,7 @@ export default function ComposeMessagePage() {
             className="px-5 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold rounded-xl text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-teal-500/25 transition-all flex items-center gap-2"
           >
             <PaperPlaneTilt size={16} weight="bold" />
-            <span>{sending ? 'Encrypting...' : 'Transmit'}</span>
+            <span>{sending ? 'Transmitting…' : 'Transmit'}</span>
           </button>
         </div>
       </header>
@@ -89,7 +93,7 @@ export default function ComposeMessagePage() {
               <span>Recipient Address or BNS Handle</span>
             </label>
             <span className="text-[11px] font-mono text-teal-400 flex items-center gap-1">
-              <LockKey size={13} /> Noise E2EE Ready
+              <LockKey size={13} /> Signature required
             </span>
           </div>
 
@@ -98,34 +102,13 @@ export default function ComposeMessagePage() {
               type="text"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
-              placeholder="e.g. ceiba-tech.bz or 5FHneW..."
+              placeholder="e.g. ceiba-tech.bz or r1…"
               className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3.5 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-teal-500/60 transition-all"
             />
           </div>
 
-          {/* Quick suggestions */}
-          <div>
-            <span className="text-slate-500 text-[10px] font-mono uppercase block mb-2">
-              Suggested Verified Contacts
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {VERIFIED_PEERS.map((p) => (
-                <button
-                  key={p.bns}
-                  type="button"
-                  onClick={() => setRecipient(p.bns)}
-                  className={`p-2.5 rounded-xl border text-left transition-all text-xs font-mono ${
-                    recipient === p.bns
-                      ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <div className="font-bold text-white text-[11px] truncate">{p.bns}</div>
-                  <div className="text-[9px] text-slate-500 truncate">{p.district}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* The wallet has no verified-contacts registry, so no quick-pick list
+              is offered. An earlier version suggested four invented BNS handles. */}
         </motion.div>
 
         {/* Message Input Card */}
@@ -136,7 +119,7 @@ export default function ComposeMessagePage() {
           className="bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-800 p-5 sm:p-6 shadow-xl space-y-4"
         >
           <label className="text-slate-300 text-xs font-bold uppercase tracking-wider font-mono block">
-            Encrypted Message Body
+            Message Body
           </label>
 
           <textarea
@@ -149,7 +132,7 @@ export default function ComposeMessagePage() {
 
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1">
             <span className="flex items-center gap-1.5 text-teal-400">
-              <ShieldCheck size={14} /> End-to-end encrypted with recipient&apos;s public key
+              <ShieldCheck size={14} /> Signed with your wallet key — the transport does not encrypt
             </span>
             <span>{message.length} / 5000</span>
           </div>
@@ -167,9 +150,12 @@ export default function ComposeMessagePage() {
               <Broadcast size={20} weight="bold" />
             </div>
             <div className="text-xs text-slate-300 space-y-1">
-              <h4 className="font-bold text-white">Multi-Bearer Transmission Architecture</h4>
+              <h4 className="font-bold text-white">Transport Architecture</h4>
               <p className="text-slate-400 leading-relaxed">
-                Messages are routed through BelizeChain libp2p peers when internet is active, and automatically bridge across 915MHz LoRa mesh repeaters in offline conditions. Message proofs are cryptographically anchored to Pakit IPFS.
+                When the account owns an active gateway node, a message settles on chain through
+                pallet mesh. Otherwise it is queued over the Bluetooth LE / 915MHz LoRa GATT pipe
+                with a TTL hop count and a Pakit store-and-forward backup. Payloads are signed; they
+                are not encrypted.
               </p>
             </div>
           </div>
