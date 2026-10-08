@@ -52,10 +52,9 @@ export interface RuntimeConfig {
 
 /**
  * Built-in Ceiba testnet deployment of GEM contracts.
- * Sourced from `gem/deployment-1778612694168.json` (psp37) and
- * `gem/deployment-1778612718117.json` (dex factory/router), both deployed
- * 2026-05-12 on top of the existing dalla/beli_nft/dao/faucet set from
- * `gem/deployment-1778544360130.json`.
+ * Sourced from `gem/deployment-1791482394057.json`, deployed 2026-10-08 on
+ * chain D ("Jade", runtime spec 110). The previous instances were wiped by the
+ * 2026-09-29 re-genesis, so every address here post-dates it.
  *
  * Override any of these via `NEXT_PUBLIC_*_CONTRACT` env vars.
  *
@@ -63,15 +62,15 @@ export interface RuntimeConfig {
  * pairs on demand via `create_pair`), so there is no fixed pair address.
  */
 const CEIBA_GEM_DEPLOYMENT = {
-  id: '1787784936039',
-  dalla: 'r1Sjjv7dTvjvzfQpuKyFXwaifCYrNwHKreUQdLTqxy19JnibD',
-  beliNft: 'r1WRTKphtZrPVh3zBb4n4Y8jNsdzDQmQkRJ6isxkkRitcD2FU',
-  dao: 'r1Tkof3LipWF4sZzLapMhPysMLwqhBqfXd7RY5q7G8QfCjDgG',
-  faucet: 'r1VqwZQ59x2BTY9fKzF72hwuSQR4ASJX9uzSqoRokBjMJtueQ',
-  psp37: 'r1WGBGLDc7RokxEB4dzNvWqipby5W6mLwDSgi6YKs1b2rNFnR',
-  dexFactory: 'r1VqTUG1rW2HTMEKHDKsariYHf2V8oKefCrNC75KXcbMQgkkx',
-  dexRouter: 'r1TmEDDYFu7hDaBs75CSVE5MS1ZTRbQLqP9C68QNejVpqhsoY',
-  dexPairCodeHash: '0x96de81afced1e99600f0f54e513fcdb95d167c01a8a7c644c9f849f43f8a5c69',
+  id: '1791482394057',
+  dalla: 'r1SqoNCdgah6zWqzPJSNmKcknW2KaCvruSz6Mg8jBTd6jqtyL',
+  beliNft: 'r1UxXWdW89AQ9ewvdRUthaEPR4vvWrgxn3VeHKVMB2rYsUUvv',
+  dao: 'r1ScgRVx963TurkyzkTNLQbmhBfzhaj5x8YCHgM7yLFkmx8eh',
+  faucet: 'r1Wcf2YSzSeziDHG82ku9zRbaLNqfQG3A3c6mbTsnJPGxKqCG',
+  psp37: 'r1Vc9kffhRY2K5gTFdwMagLbGGSzwfhoH71EkZpTMpR9t6Dei',
+  dexFactory: 'r1WhHW5jeHRRn2H3JFnLi9ek8MKQi1rtxamcSASKXjkDs1yTw',
+  dexRouter: 'r1SwipZJQbrTvrUutUsUv7ZhLvp3Cb2dwpFW6gSKUks1poUPm',
+  dexPairCodeHash: '0x76abcda9d0dbbf650e786d4cad63ecbca6a74fee291c3a1ae1d00d53b2dbce82',
 } as const;
 
 const localHostnames = new Set(['127.0.0.1', '::1', 'localhost']);
