@@ -5,48 +5,119 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '../../lib/codec';
 
+type AttestationItem = 'ssnAttestations' | 'passportAttestations';
+
+/** Resolve an account to its u128 identity id, or null when unregistered. */
+async function resolveIdentityId(api: any, address: string): Promise<any | null> {
+  if (!api.query.identity?.identityOf) return null;
+  const idOpt: any = await api.query.identity.identityOf(address);
+  if (!idOpt || idOpt.isNone) return null;
+  return idOpt.unwrap();
+}
+
+async function currentBlock(api: any): Promise<number> {
+  try {
+    return Number((await api.query.system.number()).toString());
+  } catch {
+    return 0;
+  }
+}
+
+function toAttestation(raw: any, block: number): AttestationRecord | null {
+  const a = raw?.toJSON?.();
+  if (!a) return null;
+  const status = String(a.status ?? '');
+  const validUntil = Number(a.validUntil ?? 0);
+  return {
+    attrType: String(a.attrType ?? ''),
+    issuer: String(a.issuer ?? ''),
+    standardVersion: Number(a.standardVersion ?? 0),
+    // The metadata aliases `hash_` to `hash`; accept either spelling.
+    hash: String(a.hash ?? a.hash_ ?? ''),
+    formatOk: Boolean(a.formatOk),
+    issuedAt: Number(a.issuedAt ?? 0),
+    validUntil,
+    graceUntil: Number(a.graceUntil ?? 0),
+    status,
+    anchor: bytesToString(a.anchor),
+    verified: status.toLowerCase() === 'active' && block <= validUntil,
+  };
+}
+
+async function getAttestation(address: string, item: AttestationItem): Promise<AttestationRecord | null> {
+  const api = await initializeApi();
+  try {
+    if (!api.query.identity?.[item]) return null;
+    const identityId = await resolveIdentityId(api, address);
+    if (!identityId) return null;
+    const raw: any = await api.query.identity[item](identityId);
+    if (!raw || raw.isNone) return null;
+    return toAttestation(raw, await currentBlock(api));
+  } catch (error) {
+    console.error(`Failed to fetch ${item}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Mirrors `identity.identities: u128 -> IdentityRecord`.
+ *
+ * The pallet stores only a name, owner, linked accounts and an optional DID
+ * document CID. There is no first name, last name, date of birth, nationality
+ * or district on chain — an earlier version of this file invented all of them.
+ */
 export interface BelizeID {
+  /** u128 identity id assigned by the pallet (the storage key). */
   id: string;
-  firstName: string;
-  middleName?: string;
-  lastName: string;
-  dateOfBirth: string;
-  nationality: string;
-  address: string;
-  district: string;
+  name: string;
+  owner: string;
+  accounts: string[];
+  didDocCid?: string;
+  /** Derived: an active, unexpired SSN attestation exists. */
   ssnVerified: boolean;
+  /** Derived: an active, unexpired passport attestation exists. */
   passportVerified: boolean;
-  kycStatus: 'None' | 'Pending' | 'Verified' | 'Rejected';
-  registrationDate: number;
-  expiryDate: number;
 }
 
-export interface SSNRecord {
-  ssn: string;
+/**
+ * Mirrors an `identity.ssnAttestations` / `passportAttestations` entry.
+ *
+ * The pallet stores attestations keyed by **u128 identity id**, not by account
+ * address, and never stores the raw document number — only a salted hash
+ * anchored on chain. The old `ssnRecords`/`passportRecords` maps this file read
+ * do not exist.
+ */
+export interface AttestationRecord {
+  attrType: string;
+  issuer: string;
+  standardVersion: number;
+  hash: string;
+  formatOk: boolean;
+  issuedAt: number;
+  validUntil: number;
+  graceUntil: number;
+  status: string;
+  anchor: string;
+  /** Derived: status is Active and the current block is within `validUntil`. */
   verified: boolean;
-  verificationDate?: number;
-  verifier?: string;
 }
 
-export interface PassportRecord {
-  passportNumber: string;
-  issuingCountry: string;
-  issueDate: number;
-  expiryDate: number;
-  verified: boolean;
-  verificationDate?: number;
-}
+export type SSNRecord = AttestationRecord;
+export type PassportRecord = AttestationRecord;
 
 export interface KYCStatus {
   level: 'None' | 'Basic' | 'Enhanced' | 'Full';
   status: 'None' | 'Pending' | 'Verified' | 'Rejected';
   verificationDate?: number;
   documents: string[];
-  limits: {
-    dailyTransfer: string;
-    monthlyTransfer: string;
-  };
+  /**
+   * The identity pallet records no transfer limits, so this is always null.
+   * It used to return invented figures (25,000 / 10,000,000) that the UI then
+   * rendered as an enforced spending cap.
+   */
+  limits: { dailyTransfer: string; monthlyTransfer: string } | null;
 }
 
 /**
@@ -56,23 +127,33 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
   const api = await initializeApi();
 
   try {
-    const identity: any = await api.query.identity?.identities?.(address);
+    const identityId = await resolveIdentityId(api, address);
+    if (!identityId) return null;
 
-    if (identity && !identity.isNone) {
-      const data = identity.unwrap();
-      return {
-        id: data.id.toString(),
-        firstName: data.firstName.toString(),
-        middleName: data.middleName?.toString(),
-        lastName: data.lastName.toString(),
-        dateOfBirth: data.dateOfBirth.toString(),
-        nationality: data.nationality.toString(),
-        address: data.address.toString(),
-        district: data.district.toString(),
-        ssnVerified: data.ssnVerified.toHuman(),
-        passportVerified: data.passportVerified.toHuman(),
-        kycStatus: data.kycStatus.toString(),
-        registrationDate: data.registrationDate.toNumber(),
+    const raw: any = await api.query.identity.identities(identityId);
+    if (!raw || raw.isNone) return null;
+    const data = raw.toJSON() as any;
+
+    const block = await currentBlock(api);
+    const [ssn, passport] = await Promise.all([
+      api.query.identity.ssnAttestations?.(identityId).then((r: any) => toAttestation(r, block)),
+      api.query.identity.passportAttestations?.(identityId).then((r: any) => toAttestation(r, block)),
+    ]);
+
+    return {
+      id: identityId.toString(),
+      name: bytesToString(data.name),
+      owner: String(data.owner ?? ''),
+      accounts: Array.isArray(data.accounts) ? data.accounts.map(String) : [],
+      didDocCid: data.didDocCid ? bytesToString(data.didDocCid) : undefined,
+      ssnVerified: ssn?.verified ?? false,
+      passportVerified: passport?.verified ?? false,
+    };
+  } catch (error) {
+    console.error('Failed to fetch BelizeID:', error);
+    return null;
+  }
+}
         expiryDate: data.expiryDate.toNumber(),
       };
     }
@@ -97,24 +178,14 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
 export async function getDisplayName(address: string): Promise<string | undefined> {
   try {
     const api = await initializeApi();
+    const identityId = await resolveIdentityId(api, address);
+    if (!identityId) return undefined;
 
-    // 1. BelizeID record (sovereign identity)
-    const belizeId: any = await api.query.identity?.identities?.(address);
-    if (belizeId && !belizeId.isNone) {
-      const data = belizeId.unwrap();
-      const first = data.firstName?.toString?.() || '';
-      const last = data.lastName?.toString?.() || '';
-      const full = `${first} ${last}`.trim();
-      if (full) return full;
-    }
+    const raw: any = await api.query.identity.identities(identityId);
+    if (!raw || raw.isNone) return undefined;
 
-    // 2. Standard Substrate identity (identityOf -> info.display.Raw)
-    const standard: any = await api.query.identity?.identityOf?.(address);
-    const json = standard?.toJSON?.() as any;
-    const display = json?.info?.display?.Raw || json?.display;
-    if (display) return String(display);
-
-    return undefined;
+    const name = bytesToString((raw.toJSON() as any)?.name);
+    return name || undefined;
   } catch (error) {
     console.debug('getDisplayName lookup failed:', error);
     return undefined;
@@ -190,27 +261,7 @@ export async function registerBelizeID(
  * Get SSN verification status
  */
 export async function getSSNRecord(address: string): Promise<SSNRecord | null> {
-  const api = await initializeApi();
-
-  try {
-    const ssnRecord: any = await api.query.identity?.ssnRecords?.(address);
-
-    if (!ssnRecord || ssnRecord.isNone) {
-      return null;
-    }
-
-    const data = ssnRecord.unwrap();
-
-    return {
-      ssn: data.ssn.toString(),
-      verified: data.verified.toHuman(),
-      verificationDate: data.verificationDate?.toNumber(),
-      verifier: data.verifier?.toString(),
-    };
-  } catch (error) {
-    console.error('Failed to fetch SSN record:', error);
-    return null;
-  }
+  return getAttestation(address, 'ssnAttestations');
 }
 
 /**
@@ -234,29 +285,7 @@ export async function submitSSNVerification(
  * Get passport verification status
  */
 export async function getPassportRecord(address: string): Promise<PassportRecord | null> {
-  const api = await initializeApi();
-
-  try {
-    const passportRecord: any = await api.query.identity?.passportRecords?.(address);
-
-    if (!passportRecord || passportRecord.isNone) {
-      return null;
-    }
-
-    const data = passportRecord.unwrap();
-
-    return {
-      passportNumber: data.passportNumber.toString(),
-      issuingCountry: data.issuingCountry.toString(),
-      issueDate: data.issueDate.toNumber(),
-      expiryDate: data.expiryDate.toNumber(),
-      verified: data.verified.toHuman(),
-      verificationDate: data.verificationDate?.toNumber(),
-    };
-  } catch (error) {
-    console.error('Failed to fetch passport record:', error);
-    return null;
-  }
+  return getAttestation(address, 'passportAttestations');
 }
 
 /**
@@ -309,10 +338,7 @@ export async function getKYCStatus(address: string): Promise<KYCStatus> {
             status: 'Verified',
             verificationDate: data.issuedAt?.toNumber?.() ?? Math.floor(Date.now() / 1000),
             documents: ['Social Security Attestation (on-chain)'],
-            limits: {
-              dailyTransfer: isWithinValidity ? '10,000,000.00' : '0.00',
-              monthlyTransfer: isWithinValidity ? '100,000,000.00' : '0.00',
-            },
+            limits: null,
           };
         }
       }
@@ -325,10 +351,7 @@ export async function getKYCStatus(address: string): Promise<KYCStatus> {
     level: 'None',
     status: 'None',
     documents: [],
-    limits: {
-      dailyTransfer: '25,000.00',
-      monthlyTransfer: '750,000.00',
-    },
+    limits: null,
   };
 }
 
@@ -337,20 +360,7 @@ export async function getKYCStatus(address: string): Promise<KYCStatus> {
  */
 export async function resolveAddressToName(address: string): Promise<string | null> {
   const belizeID = await getBelizeID(address);
-
-  if (!belizeID) {
-    return null;
-  }
-
-  const fullName = [
-    belizeID.firstName,
-    belizeID.middleName,
-    belizeID.lastName,
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return fullName || null;
+  return belizeID?.name || null;
 }
 
 /**
@@ -364,27 +374,25 @@ export async function isKYCVerified(address: string): Promise<boolean> {
 /**
  * Get account type from identity
  */
-export async function getAccountType(address: string): Promise<'Citizen' | 'Business' | 'Tourism' | 'Government' | null> {
+export async function getAccountType(address: string): Promise<'Citizen' | 'Business' | null> {
   const api = await initializeApi();
 
   try {
-    const accountData: any = await api.query.economy?.accounts?.(address);
-
-    if (!accountData || accountData.isNone) {
-      return null;
+    // The chain has no account-type storage. Derive it from the registrations
+    // that do exist rather than reading a non-existent `economy.accounts` map.
+    if (api.query.payroll?.verifiedEmployers) {
+      const employer: any = await api.query.payroll.verifiedEmployers(address);
+      if (employer?.isTrue) return 'Business';
     }
+    if (api.query.oracle?.merchantCategories) {
+      const merchant: any = await api.query.oracle.merchantCategories(address);
+      if (merchant && !merchant.isNone) return 'Business';
+    }
+    if (await resolveIdentityId(api, address)) return 'Citizen';
 
-    return accountData.unwrap().accountType.toString() as any;
+    return null;
   } catch (error) {
-    console.error('Failed to fetch account type:', error);
+    console.error('Failed to derive account type:', error);
     return null;
   }
-}
-
-/**
- * Format balance helper
- */
-function formatBalance(planck: string): string {
-  const value = parseFloat(planck) / Math.pow(10, 12);
-  return value.toFixed(2);
 }

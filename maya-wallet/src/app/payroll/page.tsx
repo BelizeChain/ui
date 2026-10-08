@@ -385,30 +385,30 @@ export default function PayrollPage() {
                     <div>
                       <span className="font-bold text-white text-sm block">{p.employer}</span>
                       <span className="text-slate-400 text-[11px]">
-                        {new Date(p.payPeriod.start).toLocaleDateString()} – {new Date(p.payPeriod.end).toLocaleDateString()} • {p.status}
+                        {p.date ?? '—'} • block {p.blockNumber} • {p.category}
                       </span>
                     </div>
                     <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full font-bold text-[10px]">
-                      {p.status}
+                      {p.category}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-400 text-[11px] font-mono">
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-500 block text-[10px]">Gross Salary</span>
-                      <span className="text-white font-bold text-xs">{p.currency === 'bBZD' ? 'BZ$' : 'Ɗ'} {p.grossSalary}</span>
+                      <span className="text-slate-500 block text-[10px]">Gross Amount</span>
+                      <span className="text-white font-bold text-xs">{p.currency === 'bBZD' ? 'BZ$' : 'Ɗ'} {p.amount}</span>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-500 block text-[10px]">SSB (Employee 4%)</span>
-                      <span className="text-purple-300 font-bold text-xs">{(() => { const ssb = p.deductions.find((d) => d.type === 'SSB'); return ssb ? ssb.amount : '—'; })()}</span>
+                      <span className="text-slate-500 block text-[10px]">Total Deductions</span>
+                      <span className="text-purple-300 font-bold text-xs">{p.currency === 'bBZD' ? 'BZ$' : 'Ɗ'} {p.deductions}</span>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                      <span className="text-slate-500 block text-[10px]">Income Tax (PAYE)</span>
-                      <span className="text-amber-300 font-bold text-xs">{(() => { const tax = p.deductions.find((d) => d.type === 'Tax'); return tax ? tax.amount : '—'; })()}</span>
+                      <span className="text-slate-500 block text-[10px]">Category</span>
+                      <span className="text-amber-300 font-bold text-xs">{p.category}</span>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
                       <span className="text-slate-500 block text-[10px]">Net Disbursed</span>
-                      <span className="text-emerald-400 font-bold text-xs">{p.netSalary}</span>
+                      <span className="text-emerald-400 font-bold text-xs">{p.netAmount}</span>
                     </div>
                   </div>
 

@@ -166,7 +166,8 @@ export function DashboardHome() {
           communityVotes: votes.length,
           pouwRewards,
           monthlySpending,
-          budgetLimit: parseFloat(kyc.limits.monthlyTransfer) || 0,
+          // No transfer limits are recorded on chain, so there is no enforced cap.
+          budgetLimit: parseFloat(kyc.limits?.monthlyTransfer ?? '') || 0,
         });
       } catch (err) {
         console.error('Failed to load dashboard data:', err);

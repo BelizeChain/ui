@@ -255,7 +255,7 @@ export default function BelizeIDPage() {
               </div>
               <div className="text-xs space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Security Protocol</span>
-                <span className="text-emerald-400 font-bold block flex items-center gap-1">
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
                   <ShieldCheck size={14} weight="fill" /> Ed25519 & Groth16
                 </span>
                 <span className="text-slate-400 text-[11px] block">Level 4 Sovereign Anchor</span>
@@ -332,7 +332,7 @@ export default function BelizeIDPage() {
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs space-y-1">
                 <span className="font-bold block">On-chain BelizeID verified</span>
                 <span className="text-slate-300 block">
-                  KYC: {kycStatus?.status ?? 'unknown'} ({kycStatus?.level ?? '—'}) • District: {belizeID.district} • SSN {belizeID.ssnVerified ? 'verified' : 'unverified'} • Passport {belizeID.passportVerified ? 'verified' : 'unverified'}
+                  KYC: {kycStatus?.status ?? 'unknown'} ({kycStatus?.level ?? '—'}) • Name: {belizeID.name || '—'} • SSN {belizeID.ssnVerified ? 'verified' : 'unverified'} • Passport {belizeID.passportVerified ? 'verified' : 'unverified'}
                 </span>
               </div>
             ) : (

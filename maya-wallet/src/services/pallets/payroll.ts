@@ -5,79 +5,71 @@
 
 import { initializeApi } from '../blockchain';
 
+/**
+ * Mirrors `payroll.employees: (employer, employee) -> EmployeeRecord`.
+ *
+ * The pallet stores no employer name, job title, employment type or status —
+ * an earlier version of this file invented all four. The map is also keyed by a
+ * (employer, employee) tuple, so it cannot be read with a single account.
+ */
 export interface PayrollRecord {
+  /** Composite key, `employer:employee` — the pallet has no record id here. */
   recordId: string;
   employee: string;
   employer: string;
-  employerName: string;
-  employmentType: 'Government' | 'Private' | 'Contractor';
-  position?: string;
-  department?: string;
-  startDate: number;
-  endDate?: number;
-  status: 'Active' | 'Suspended' | 'Terminated';
+  workerType: string;
+  departmentId: number;
+  salary: string;
+  totalPaid: string;
+  totalDeductions: string;
+  lastPaid: number;
+  startBlock: number;
+  active: boolean;
 }
 
+/**
+ * Mirrors `payroll.payrollRecords: u64 -> PayrollRecord`.
+ *
+ * `deductions` is a single u128 total, not an itemised list, and the pallet
+ * records no pay period, status or transaction hash.
+ */
 export interface SalaryPayment {
   paymentId: string;
   employee: string;
   employer: string;
-  amount?: string; // Alias for netSalary (UI compatibility)\n  date?: string; // Formatted payment date (UI compatibility)
-  payPeriod: {
-    start: number;
-    end: number;
-  };
-  grossSalary: string;
-  deductions: Deduction[];
-  netSalary: string;
-  currency: 'DALLA' | 'bBZD';
-  paymentDate: number;
-  paymentHash?: string; // Blockchain transaction hash
-  status: 'Pending' | 'Paid' | 'Failed' | 'Disputed';
-}
-
-export interface Deduction {
-  type: 'Tax' | 'SSB' | 'Insurance' | 'Loan' | 'Advance' | 'Other';
-  description: string;
+  /** Gross amount paid, in DALLA. */
   amount: string;
-  percentage?: number; // For tax/SSB
-  mandatory: boolean;
+  deductions: string;
+  netAmount: string;
+  currency: 'DALLA' | 'bBZD';
+  category: string;
+  blockNumber: number;
+  timestamp: number;
+  paymentCommitment: string;
+  /** Formatted payment date (UI convenience). */
+  date?: string;
 }
 
 export interface SalarySlip {
   paymentId: string;
   employee: string;
-  employeeName?: string;
   employer: string;
-  employerName: string;
-  payPeriod: string; // Formatted date range
-  position?: string;
-  department?: string;
-  basicSalary: string;
-  allowances: Allowance[];
-  grossSalary: string;
-  deductions: Deduction[];
-  totalDeductions: string;
-  netSalary: string;
-  currency: 'DALLA' | 'bBZD';
-  paymentDate: string;
-  paymentMethod: 'Direct' | 'Manual';
-}
-
-export interface Allowance {
-  type: 'Housing' | 'Transportation' | 'Meal' | 'Education' | 'Medical' | 'Other';
-  description: string;
   amount: string;
+  deductions: string;
+  netAmount: string;
+  currency: 'DALLA' | 'bBZD';
+  category: string;
+  blockNumber: number;
+  timestamp: number;
+  paymentCommitment: string;
 }
 
 export interface PayrollStats {
-  totalEarnings: string; // Lifetime
+  totalEarnings: string; // Lifetime net, in DALLA
   yearToDate: string;
   lastPayment: string;
   averageMonthly: string;
   totalDeductions: string;
-  taxPaid: string;
-  ssbContributions: string;
   paymentCount: number;
 }
 
@@ -86,32 +78,61 @@ export interface PayrollStats {
  */
 export async function getPayrollRecord(address: string): Promise<PayrollRecord | null> {
   const api = await initializeApi();
-  
+
   try {
-    const record: any = await api.query.payroll?.employees(address);
-    
-    if (!record || record.isNone) {
-      return null;
+    if (!api.query.payroll?.employees) return null;
+
+    // `employees` is keyed by (employer, employee) with no per-employee index,
+    // so filter the entries by the employee account.
+    const entries = await api.query.payroll.employees.entries();
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data || String(data.account) !== address) continue;
+
+      const employer = String(key?.args?.[0] ?? '');
+      return {
+        recordId: `${employer}:${address}`,
+        employee: address,
+        employer,
+        workerType: String(data.workerType),
+        departmentId: Number(data.departmentId ?? 0),
+        salary: formatBalance(String(data.salary ?? '0')),
+        totalPaid: formatBalance(String(data.totalPaid ?? '0')),
+        totalDeductions: formatBalance(String(data.totalDeductions ?? '0')),
+        lastPaid: Number(data.lastPaid ?? 0),
+        startBlock: Number(data.startBlock ?? 0),
+        active: Boolean(data.active),
+      };
     }
 
-    const data = record.unwrap();
-    
-    return {
-      recordId: data.recordId.toString(),
-      employee: address,
-      employer: data.employer.toString(),
-      employerName: data.employerName.toString(),
-      employmentType: data.employmentType.toString() as any,
-      position: data.position?.toString(),
-      department: data.department?.toString(),
-      startDate: data.startDate.toNumber(),
-      endDate: data.endDate?.toNumber(),
-      status: data.status.toString() as any,
-    };
+    return null;
   } catch (error) {
     console.error('Failed to fetch payroll record:', error);
     return null;
   }
+}
+
+/** Normalise a pallet `timestamp: u64` to milliseconds (seconds -> ms). */
+function toMillis(ts: number): number {
+  return ts > 1e12 ? ts : ts * 1000;
+}
+
+function toSalaryPayment(paymentId: string, data: any): SalaryPayment {
+  const timestamp = Number(data.timestamp ?? 0);
+  return {
+    paymentId,
+    employee: String(data.employee ?? ''),
+    employer: String(data.employer ?? ''),
+    amount: formatBalance(String(data.amount ?? '0')),
+    deductions: formatBalance(String(data.deductions ?? '0')),
+    netAmount: formatBalance(String(data.netAmount ?? '0')),
+    currency: String(data.tokenType) === 'bBZD' ? 'bBZD' : 'DALLA',
+    category: String(data.category),
+    blockNumber: Number(data.blockNumber ?? 0),
+    timestamp,
+    paymentCommitment: String(data.paymentCommitment ?? ''),
+    date: timestamp ? new Date(toMillis(timestamp)).toLocaleDateString() : undefined,
+  };
 }
 
 /**
@@ -122,38 +143,20 @@ export async function getSalaryPayments(
   limit: number = 12
 ): Promise<SalaryPayment[]> {
   const api = await initializeApi();
-  
+
   try {
-    const payments: any = await api.query.payroll?.payments?.entries?.(address) || [];
-    
-    if (!payments || payments.length === 0) {
-      return [];
+    if (!api.query.payroll?.payrollRecords) return [];
+
+    const entries = await api.query.payroll.payrollRecords.entries();
+    const payments: SalaryPayment[] = [];
+
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data || String(data.employee) !== address) continue;
+      payments.push(toSalaryPayment(String(data.id ?? key?.args?.[0] ?? ''), data));
     }
 
-    return payments
-      .map(([key, value]: [any, any]) => {
-        const paymentId = key.args[1].toString();
-        const data = value.unwrap();
-        
-        return {
-          paymentId,
-          employee: address,
-          employer: data.employer.toString(),
-          payPeriod: {
-            start: data.periodStart.toNumber(),
-            end: data.periodEnd.toNumber(),
-          },
-          grossSalary: formatBalance(data.grossSalary.toString()),
-          deductions: data.deductions.toHuman() as Deduction[],
-          netSalary: formatBalance(data.netSalary.toString()),
-          currency: data.currency.toString() as any,
-          paymentDate: data.paymentDate.toNumber(),
-          paymentHash: data.paymentHash?.toString(),
-          status: data.status.toString() as any,
-        };
-      })
-      .sort((a: { paymentDate: number }, b: { paymentDate: number }) => b.paymentDate - a.paymentDate)
-      .slice(0, limit);
+    return payments.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
   } catch (error) {
     console.error('Failed to fetch salary payments:', error);
     return [];
@@ -165,35 +168,26 @@ export async function getSalaryPayments(
  */
 export async function getSalarySlip(paymentId: string): Promise<SalarySlip | null> {
   const api = await initializeApi();
-  
-  try {
-    const payment: any = await api.query.payroll?.paymentsById(paymentId);
-    
-    if (!payment || payment.isNone) {
-      return null;
-    }
 
-    const data = payment.unwrap();
-    const record = await getPayrollRecord(data.employee.toString());
-    
+  try {
+    if (!api.query.payroll?.payrollRecords) return null;
+
+    const raw: any = await api.query.payroll.payrollRecords(paymentId);
+    if (!raw || raw.isNone) return null;
+
+    const payment = toSalaryPayment(paymentId, raw.toJSON());
     return {
-      paymentId,
-      employee: data.employee.toString(),
-      employeeName: data.employeeName?.toString(),
-      employer: data.employer.toString(),
-      employerName: data.employerName.toString(),
-      payPeriod: formatPayPeriod(data.periodStart.toNumber(), data.periodEnd.toNumber()),
-      position: record?.position,
-      department: record?.department,
-      basicSalary: formatBalance(data.basicSalary.toString()),
-      allowances: data.allowances?.toHuman() as Allowance[] || [],
-      grossSalary: formatBalance(data.grossSalary.toString()),
-      deductions: data.deductions.toHuman() as Deduction[],
-      totalDeductions: calculateTotalDeductions(data.deductions.toHuman() as Deduction[]),
-      netSalary: formatBalance(data.netSalary.toString()),
-      currency: data.currency.toString() as any,
-      paymentDate: new Date(data.paymentDate.toNumber()).toLocaleDateString(),
-      paymentMethod: data.paymentMethod.toString() as any,
+      paymentId: payment.paymentId,
+      employee: payment.employee,
+      employer: payment.employer,
+      amount: payment.amount,
+      deductions: payment.deductions,
+      netAmount: payment.netAmount,
+      currency: payment.currency,
+      category: payment.category,
+      blockNumber: payment.blockNumber,
+      timestamp: payment.timestamp,
+      paymentCommitment: payment.paymentCommitment,
     };
   } catch (error) {
     console.error('Failed to fetch salary slip:', error);
@@ -206,7 +200,7 @@ export async function getSalarySlip(paymentId: string): Promise<SalarySlip | nul
  */
 export async function getPayrollStats(address: string): Promise<PayrollStats> {
   const payments = await getSalaryPayments(address, 1000);
-  
+
   if (payments.length === 0) {
     return {
       totalEarnings: '0.00',
@@ -214,39 +208,23 @@ export async function getPayrollStats(address: string): Promise<PayrollStats> {
       lastPayment: '0.00',
       averageMonthly: '0.00',
       totalDeductions: '0.00',
-      taxPaid: '0.00',
-      ssbContributions: '0.00',
       paymentCount: 0,
     };
   }
 
   const currentYear = new Date().getFullYear();
-  const totalEarnings = payments.reduce((sum, p) => sum + parseFloat(p.netSalary), 0);
-  
-  const yearToDatePayments = payments.filter(p => 
-    new Date(p.paymentDate).getFullYear() === currentYear
-  );
-  const yearToDate = yearToDatePayments.reduce((sum, p) => sum + parseFloat(p.netSalary), 0);
-  
-  const lastPayment = payments.length > 0 ? parseFloat(payments[0].netSalary) : 0;
-  const averageMonthly = totalEarnings / Math.max(payments.length, 1);
-  
-  let totalDeductions = 0;
-  let taxPaid = 0;
-  let ssbContributions = 0;
-  
-  payments.forEach(payment => {
-    payment.deductions.forEach(deduction => {
-      const amount = parseFloat(deduction.amount);
-      totalDeductions += amount;
-      
-      if (deduction.type === 'Tax') {
-        taxPaid += amount;
-      } else if (deduction.type === 'SSB') {
-        ssbContributions += amount;
-      }
-    });
-  });
+  const totalEarnings = payments.reduce((sum, p) => sum + parseFloat(p.netAmount), 0);
+
+  const yearToDate = payments
+    .filter(p => p.timestamp && new Date(toMillis(p.timestamp)).getFullYear() === currentYear)
+    .reduce((sum, p) => sum + parseFloat(p.netAmount), 0);
+
+  const lastPayment = parseFloat(payments[0].netAmount);
+  const averageMonthly = totalEarnings / payments.length;
+
+  // `deductions` is a single u128 per payment — the pallet stores no
+  // Tax/SSB itemisation, so those cannot be broken out.
+  const totalDeductions = payments.reduce((sum, p) => sum + parseFloat(p.deductions), 0);
 
   return {
     totalEarnings: totalEarnings.toFixed(2),
@@ -254,8 +232,6 @@ export async function getPayrollStats(address: string): Promise<PayrollStats> {
     lastPayment: lastPayment.toFixed(2),
     averageMonthly: averageMonthly.toFixed(2),
     totalDeductions: totalDeductions.toFixed(2),
-    taxPaid: taxPaid.toFixed(2),
-    ssbContributions: ssbContributions.toFixed(2),
     paymentCount: payments.length,
   };
 }
@@ -281,33 +257,25 @@ export async function downloadSalarySlip(paymentId: string): Promise<Blob> {
  */
 export async function verifySalaryPayment(paymentId: string): Promise<{
   verified: boolean;
-  transactionHash?: string;
+  /** The on-chain commitment hash for this payment. */
+  commitment?: string;
   blockNumber?: number;
   timestamp?: number;
 }> {
   const api = await initializeApi();
-  
+
   try {
-    const payment: any = await api.query.payroll?.paymentsById(paymentId);
-    
-    if (!payment || payment.isNone) {
-      return { verified: false };
-    }
+    if (!api.query.payroll?.payrollRecords) return { verified: false };
 
-    const data = payment.unwrap();
-    const txHash = data.paymentHash?.toString();
-    
-    if (!txHash) {
-      return { verified: false };
-    }
+    const raw: any = await api.query.payroll.payrollRecords(paymentId);
+    if (!raw || raw.isNone) return { verified: false };
 
-    // Verify transaction exists on chain
-    // In production, would query indexer or scan blocks
+    const data = raw.toJSON() as any;
     return {
       verified: true,
-      transactionHash: txHash,
-      blockNumber: 0, // Would get from indexer
-      timestamp: data.paymentDate.toNumber(),
+      commitment: String(data.paymentCommitment ?? ''),
+      blockNumber: Number(data.blockNumber ?? 0),
+      timestamp: Number(data.timestamp ?? 0),
     };
   } catch (error) {
     console.error('Failed to verify payment:', error);
@@ -316,59 +284,50 @@ export async function verifySalaryPayment(paymentId: string): Promise<{
 }
 
 /**
- * Get tax summary for year (for tax filing)
+ * Yearly income summary.
+ *
+ * The pallet stores deductions as a single u128 total, with no Tax/SSB
+ * itemisation, so this reports gross income and total deductions only.
  */
 export async function getTaxSummary(address: string, year: number): Promise<{
   year: number;
   totalIncome: string;
-  totalTax: string;
-  totalSSB: string;
+  totalDeductions: string;
   monthlyBreakdown: Array<{
     month: string;
     income: string;
-    tax: string;
-    ssb: string;
+    deductions: string;
   }>;
 }> {
   const payments = await getSalaryPayments(address, 1000);
-  
-  const yearPayments = payments.filter(p => 
-    new Date(p.paymentDate).getFullYear() === year
+
+  const yearPayments = payments.filter(
+    p => p.timestamp && new Date(toMillis(p.timestamp)).getFullYear() === year
   );
 
   const monthlyBreakdown = Array.from({ length: 12 }, (_, i) => {
     const month = new Date(year, i).toLocaleString('default', { month: 'long' });
-    const monthPayments = yearPayments.filter(p => 
-      new Date(p.paymentDate).getMonth() === i
+    const monthPayments = yearPayments.filter(
+      p => new Date(toMillis(p.timestamp)).getMonth() === i
     );
 
-    const income = monthPayments.reduce((sum, p) => sum + parseFloat(p.grossSalary), 0);
-    const tax = monthPayments.reduce((sum, p) => {
-      const taxDeduction = p.deductions.find(d => d.type === 'Tax');
-      return sum + (taxDeduction ? parseFloat(taxDeduction.amount) : 0);
-    }, 0);
-    const ssb = monthPayments.reduce((sum, p) => {
-      const ssbDeduction = p.deductions.find(d => d.type === 'SSB');
-      return sum + (ssbDeduction ? parseFloat(ssbDeduction.amount) : 0);
-    }, 0);
+    const income = monthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+    const deductions = monthPayments.reduce((sum, p) => sum + parseFloat(p.deductions), 0);
 
     return {
       month,
       income: income.toFixed(2),
-      tax: tax.toFixed(2),
-      ssb: ssb.toFixed(2),
+      deductions: deductions.toFixed(2),
     };
   });
 
   const totalIncome = monthlyBreakdown.reduce((sum, m) => sum + parseFloat(m.income), 0);
-  const totalTax = monthlyBreakdown.reduce((sum, m) => sum + parseFloat(m.tax), 0);
-  const totalSSB = monthlyBreakdown.reduce((sum, m) => sum + parseFloat(m.ssb), 0);
+  const totalDeductions = monthlyBreakdown.reduce((sum, m) => sum + parseFloat(m.deductions), 0);
 
   return {
     year,
     totalIncome: totalIncome.toFixed(2),
-    totalTax: totalTax.toFixed(2),
-    totalSSB: totalSSB.toFixed(2),
+    totalDeductions: totalDeductions.toFixed(2),
     monthlyBreakdown,
   };
 }
@@ -390,23 +349,6 @@ export async function requestSalaryAdvance(
     'Salary advances must be issued by the employer (payroll.issueBonus). ' +
       'No employee-initiated advance extrinsic exists on chain.',
   );
-}
-
-/**
- * Helper: Calculate total deductions
- */
-function calculateTotalDeductions(deductions: Deduction[]): string {
-  const total = deductions.reduce((sum, d) => sum + parseFloat(d.amount), 0);
-  return total.toFixed(2);
-}
-
-/**
- * Helper: Format pay period
- */
-function formatPayPeriod(start: number, end: number): string {
-  const startDate = new Date(start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const endDate = new Date(end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  return `${startDate} - ${endDate}`;
 }
 
 /**
