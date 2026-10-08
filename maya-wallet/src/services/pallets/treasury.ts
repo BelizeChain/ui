@@ -47,8 +47,11 @@ export interface TreasuryBalance {
   freePlanck: string;
   freeDalla: string;
   reservedPlanck: string;
+  /** `reservedPlanck` rendered as a 2-decimal DALLA string. */
+  reservedDalla: string;
 }
 
+/** Convert a planck string to a 2-decimal DALLA string. Public for display. */
 function planckToDalla(planck: string): string {
   try {
     const value = BigInt(planck);
@@ -74,10 +77,15 @@ export async function getTreasuryBalance(): Promise<TreasuryBalance> {
     };
     const freePlanck = account?.data?.free?.toString?.() ?? '0';
     const reservedPlanck = account?.data?.reserved?.toString?.() ?? '0';
-    return { freePlanck, freeDalla: planckToDalla(freePlanck), reservedPlanck };
+    return {
+      freePlanck,
+      freeDalla: planckToDalla(freePlanck),
+      reservedPlanck,
+      reservedDalla: planckToDalla(reservedPlanck),
+    };
   } catch (error) {
     console.error('Failed to read treasury balance:', error);
-    return { freePlanck: '0', freeDalla: '0', reservedPlanck: '0' };
+    return { freePlanck: '0', freeDalla: '0', reservedPlanck: '0', reservedDalla: '0' };
   }
 }
 

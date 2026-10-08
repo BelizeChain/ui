@@ -9,28 +9,24 @@ import {
   getQuantumBackends,
   generateCircuitTemplate,
   validateQASM,
-  rotatePqcKey,
-  getPqcKeyStatus,
   executeSimulatedQuantumCircuit,
   executeKinichCompression,
+  getQuantumWorkProofs,
   type QuantumBackend,
-  type PqcKeyStatus,
   type QuantumCompressionResult,
+  type QuantumWorkProof,
 } from '@/services/pallets';
 import {
   Atom,
   Coins,
   Play,
-  X,
   ArrowLeft,
   ShieldCheck,
   Code,
   ArrowsClockwise,
   Sparkle,
-  Check,
   Cube,
   FileZip,
-  Waves,
   Trophy,
 } from 'phosphor-react';
 
@@ -38,21 +34,18 @@ export default function KinichPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<'pqc' | 'compression' | 'backends' | 'qasm' | 'proofs'>('compression');
+  const [activeTab, setActiveTab] = useState<'compression' | 'backends' | 'qasm' | 'proofs'>('compression');
   const [, setLoading] = useState(true);
   const [backends, setBackends] = useState<QuantumBackend[]>([]);
-  const [pqcStatus, setPqcStatus] = useState<PqcKeyStatus | null>(null);
-  const [isRotatingPqc, setIsRotatingPqc] = useState(false);
+  const [workProofs, setWorkProofs] = useState<QuantumWorkProof[]>([]);
 
   // QASM Editor State
   const [qasmCode, setQasmCode] = useState<string>(generateCircuitTemplate(2, 'Bell'));
   const [shots] = useState<number>(1024);
-  const [selectedBackend] = useState<string>('Simulator-24Q');
   const [isRunningCircuit, setIsRunningCircuit] = useState<boolean>(false);
   const [circuitResult, setCircuitResult] = useState<{
     counts: Record<string, number>;
-    executionTimeMs: number;
-    stateVectorEntropy: number;
+    shots: number;
   } | null>(null);
 
   // Compression State
@@ -88,16 +81,16 @@ export default function KinichPage() {
     }
 
     try {
-      const [backendsList, pqcInfo] = await Promise.all([
+      const [backendsList, proofs] = await Promise.all([
         getQuantumBackends(),
-        getPqcKeyStatus(address),
+        getQuantumWorkProofs(address, 50),
       ]);
       // No fabricated backends. A hardcoded list used to stand in whenever the
       // chain returned none, advertising capacities, queue lengths, wait times
       // and per-shot prices that no pallet records. Backends are derived from
       // the jobs actually submitted, so an empty chain means an empty list.
       setBackends(backendsList);
-      setPqcStatus(pqcInfo);
+      setWorkProofs(proofs);
     } catch (err) {
       console.error('Failed to load Kinich data', err);
     } finally {
@@ -111,34 +104,20 @@ export default function KinichPage() {
     Promise.resolve().then(fetchData);
   }, [fetchData]);
 
-  const handleRotateKey = async (scheme: 'CRYSTALS-Dilithium5' | 'Falcon-512' | 'SPHINCS+') => {
-    if (!selectedAccount?.address) return;
-    setIsRotatingPqc(true);
+  const handleRunCompression = async () => {
+    setIsCompressing(true);
     try {
-      const res = await rotatePqcKey(selectedAccount.address, scheme);
-      setPqcStatus((prev) => (prev ? { ...prev, algorithm: scheme, lastRotated: 'Just now' } : null));
+      const result = await executeKinichCompression(compressionInput);
+      setCompressionResult(result);
       addNotification({
         type: 'success',
-        message: `PQC Key successfully rotated to ${res.newAlgorithm} (NIST Level 5 Quantum-Resistant)!`,
+        message: `Measured gzip ratio: ${result.compressionRatio}x. This is a local browser compression, not a quantum job.`,
       });
     } catch (err: any) {
-      addNotification({ type: 'error', message: err?.message || 'Key rotation failed.' });
+      addNotification({ type: 'error', message: err?.message || 'Local compression failed.' });
     } finally {
-      setIsRotatingPqc(false);
-    }
-  };
-
-  const handleRunCompression = () => {
-    setIsCompressing(true);
-    setTimeout(() => {
-      const result = executeKinichCompression(compressionInput);
-      setCompressionResult(result);
       setIsCompressing(false);
-      addNotification({
-        type: 'success',
-        message: `Local Kinich compression demo: ${result.compressionRatio}x (client-side simulation — no on-chain/photonic job was submitted).`,
-      });
-    }, 1200);
+    }
   };
 
   const handleRunQasm = () => {
@@ -155,7 +134,7 @@ export default function KinichPage() {
       setIsRunningCircuit(false);
       addNotification({
         type: 'success',
-        message: `Local circuit simulation on '${selectedBackend}' profile in ${res.executionTimeMs}ms (no real quantum backend was contacted).`,
+        message: `Local circuit simulation produced ${shots} shots. No quantum backend was contacted.`,
       });
     }, 1400);
   };
@@ -163,7 +142,7 @@ export default function KinichPage() {
   if (!isConnected || !selectedAccount) {
     return (
       <ConnectWalletPrompt
-        message="Connect your Maya Wallet to access Kinich Quantum Compression, Xanadu Photonic Hardware, and Post-Quantum Security."
+        message="Connect your Maya Wallet to view the quantum job registry and PoUW work proofs."
         fullScreen
       />
     );
@@ -182,19 +161,13 @@ export default function KinichPage() {
             </Link>
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
-                <Atom size={24} className="text-cyan-400 animate-spin" />
-                Kinich Quantum & Photonic Hub
+                <Atom size={24} className="text-cyan-400" />
+                Kinich Quantum Hub
               </h1>
               <p className="text-xs text-slate-400">
-                10x Quantum Compression • Xanadu Photonic Backends • Surface Code Error Mitigation
+                pallet quantum • job registry, results and PoUW work proofs
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
-              <Sparkle size={14} weight="bold" />
-              10x Target Active
-            </span>
           </div>
         </div>
       </div>
@@ -204,11 +177,10 @@ export default function KinichPage() {
         <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto text-xs">
           {(
             [
-              { id: 'compression', label: 'Quantum Compression (10x)', icon: FileZip },
-              { id: 'backends', label: 'Xanadu & Hardware', icon: Atom },
-              { id: 'pqc', label: 'NIST Level 5 PQC Keys', icon: ShieldCheck },
-              { id: 'qasm', label: 'OpenQASM 2.0 Studio', icon: Code },
-              { id: 'proofs', label: 'PQW Mining Proofs', icon: Trophy },
+              { id: 'compression', label: 'Local Compression Demo', icon: FileZip },
+              { id: 'backends', label: 'Hardware Backends', icon: Atom },
+              { id: 'qasm', label: 'OpenQASM 2.0 (local sim)', icon: Code },
+              { id: 'proofs', label: 'PoUW Work Proofs', icon: Trophy },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon;
@@ -229,41 +201,46 @@ export default function KinichPage() {
           })}
         </div>
 
-        {/* Tab 1: Quantum Compression & Surface Code Simulator */}
+        {/* Tab 1: Local compression demo */}
         {activeTab === 'compression' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-gradient-to-br from-cyan-500/10 via-slate-900 to-slate-900 border border-cyan-500/20 rounded-3xl p-5 shadow-xl space-y-2">
                 <div className="flex justify-between items-center text-slate-400 text-xs">
-                  <span>Target Compression Ratio</span>
+                  <span>Measured Ratio</span>
                   <FileZip size={20} className="text-cyan-400" />
                 </div>
                 <div className="text-2xl font-bold text-white tracking-tight">
-                  9.8x – 10.2x <span className="text-xs font-mono text-cyan-400">Ratio</span>
+                  {compressionResult ? `${compressionResult.compressionRatio}x` : '—'}{' '}
+                  <span className="text-xs font-mono text-cyan-400">gzip</span>
                 </div>
-                <p className="text-[11px] text-slate-400">Surface code entropy reduction pipeline</p>
+                <p className="text-[11px] text-slate-400">
+                  Actual gzip ratio of the payload below — nothing is quantum
+                </p>
               </div>
 
               <div className="bg-gradient-to-br from-purple-500/10 via-slate-900 to-slate-900 border border-purple-500/20 rounded-3xl p-5 shadow-xl space-y-2">
                 <div className="flex justify-between items-center text-slate-400 text-xs">
-                  <span>Surface Code Distance</span>
+                  <span>Grid Shown</span>
                   <Cube size={20} className="text-purple-400" />
                 </div>
                 <div className="text-2xl font-bold text-purple-400 tracking-tight">
-                  d = {surfaceCodeDistance} <span className="text-xs font-mono">({surfaceCodeDistance * surfaceCodeDistance} Physical Qubits)</span>
+                  {surfaceCodeDistance} × {surfaceCodeDistance}
                 </div>
-                <p className="text-[11px] text-slate-400">Fault-tolerant threshold: 0.994 fidelity</p>
+                <p className="text-[11px] text-slate-400">
+                  Decorative lattice only — no syndrome decoding runs
+                </p>
               </div>
 
               <div className="bg-gradient-to-br from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/20 rounded-3xl p-5 shadow-xl space-y-2">
                 <div className="flex justify-between items-center text-slate-400 text-xs">
-                  <span>Archival State Storage</span>
+                  <span>Compressed Size</span>
                   <ShieldCheck size={20} className="text-emerald-400" />
                 </div>
                 <div className="text-2xl font-bold text-emerald-400 tracking-tight">
-                  -89.6% <span className="text-xs font-mono">Space Saved</span>
+                  {compressionResult ? `${compressionResult.compressedSizeBytes} B` : '—'}
                 </div>
-                <p className="text-[11px] text-slate-400">Verified against Substrate state root</p>
+                <p className="text-[11px] text-slate-400">Compressed locally in the browser</p>
               </div>
             </div>
 
@@ -308,7 +285,7 @@ export default function KinichPage() {
                   className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2"
                 >
                   <Sparkle size={16} weight="bold" />
-                  {isCompressing ? 'Executing Surface-Code Compression...' : 'Compress with Kinich (10x)'}
+                  {isCompressing ? 'Compressing…' : 'Run Local Compression'}
                 </button>
               </div>
 
@@ -317,9 +294,9 @@ export default function KinichPage() {
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Cube size={20} className="text-purple-400" />
-                    Surface Code Lattice & Syndrome Decode
+                    Lattice Preview &amp; Compression Result
                   </h3>
-                  <p className="text-slate-400 mt-1">Rotated 2D surface code stabilizer measurements (X & Z plaquettes).</p>
+                  <p className="text-slate-400 mt-1">Decorative stabilizer lattice. No syndrome decoding is performed.</p>
 
                   {/* Visual Surface Code Grid */}
                   <div className="grid grid-cols-5 gap-1.5 p-4 bg-slate-950 rounded-2xl border border-slate-800 my-3 text-center font-mono text-[9px]">
@@ -344,20 +321,20 @@ export default function KinichPage() {
                         <span className="text-white font-bold">{compressionResult.originalSizeBytes} bytes</span>
                       </div>
                       <div className="flex justify-between text-slate-400">
-                        <span>Compressed State Size:</span>
+                        <span>Compressed Size:</span>
                         <span className="text-emerald-400 font-bold">{compressionResult.compressedSizeBytes} bytes</span>
                       </div>
                       <div className="flex justify-between text-slate-400 border-t border-slate-800 pt-2">
-                        <span>Effective Compression Ratio:</span>
+                        <span>Measured Compression Ratio:</span>
                         <span className="text-cyan-300 font-bold text-xs">{compressionResult.compressionRatio}x</span>
                       </div>
                       <div className="text-[10px] text-slate-500 truncate pt-1">
-                        Proof Hash: {compressionResult.verificationHash}
+                        Algorithm: {compressionResult.algorithm} (browser built-in) — no chain proof is produced
                       </div>
                     </div>
                   ) : (
                     <div className="text-center py-6 text-slate-500">
-                      Click "Compress with Kinich (10x)" to view live compression benchmarks.
+                      Press Run Local Compression to measure a real gzip ratio on the payload.
                     </div>
                   )}
                 </div>
@@ -366,17 +343,18 @@ export default function KinichPage() {
           </div>
         )}
 
-        {/* Tab 2: Xanadu & Quantum Backends */}
+        {/* Tab 2: Hardware backends */}
         {activeTab === 'backends' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Waves size={22} className="text-cyan-400" />
-                  Quantum Hardware & Photonic Backends
+                  <Atom size={22} className="text-cyan-400" />
+                  Quantum Backends
                 </h3>
                 <p className="text-slate-400 mt-1">
-                  Connected to Xanadu Photonic GKP Qubits, Rigetti Superconducting, and IonQ Trapped Ion processors.
+                  Derived from the jobs actually submitted to pallet quantum. No Xanadu backend
+                  exists in the runtime&apos;s backend enum, so none can be shown.
                 </p>
               </div>
               <button
@@ -384,17 +362,21 @@ export default function KinichPage() {
                 className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all"
               >
                 <ArrowsClockwise size={14} />
-                Refresh Telemetry
+                Refresh
               </button>
             </div>
+
+            {backends.length === 0 && (
+              <div className="text-center py-10 text-slate-400 text-xs">
+                No quantum jobs have been submitted, so no backend has any activity to report.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {backends.map((backend) => (
                 <div
                   key={backend.name}
-                  className={`bg-slate-900/80 border rounded-3xl p-5 space-y-4 shadow-xl ${
-                    backend.provider === 'Xanadu' ? 'border-cyan-500/40 bg-cyan-950/10' : 'border-slate-800'
-                  }`}
+                  className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl"
                 >
                   <div className="flex justify-between items-start">
                     <div>
@@ -416,7 +398,7 @@ export default function KinichPage() {
                       <h4 className="text-base font-bold text-white mt-1.5">{backend.name}</h4>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Peak Width</span>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Widest Circuit</span>
                       <span className="text-cyan-300 font-bold text-sm">{backend.maxQubits} Qubits</span>
                     </div>
                   </div>
@@ -447,66 +429,19 @@ export default function KinichPage() {
           </div>
         )}
 
-        {/* Tab 3: PQC Keys */}
-        {activeTab === 'pqc' && pqcStatus && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs max-w-xl mx-auto">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                <ShieldCheck size={26} weight="fill" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">NIST Level 5 Post-Quantum Shield</h3>
-                <p className="text-slate-400 text-xs">Protected against Shor's and Grover's quantum attacks.</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5 font-mono text-[11px]">
-              <div className="flex justify-between text-slate-400">
-                <span>Active Algorithm:</span>
-                <span className="text-cyan-300 font-bold">{pqcStatus.algorithm}</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Security Level:</span>
-                <span className="text-emerald-400 font-bold">NIST Category 5 (256-bit PQ)</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Last Rotated:</span>
-                <span className="text-slate-300">{pqcStatus.lastRotated}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <span className="text-slate-400 uppercase font-semibold block">Rotate Key Pair</span>
-              <div className="grid grid-cols-3 gap-2">
-                {(['CRYSTALS-Dilithium5', 'Falcon-512', 'SPHINCS+'] as const).map((scheme) => (
-                  <button
-                    key={scheme}
-                    disabled={isRotatingPqc || pqcStatus.algorithm === scheme}
-                    onClick={() => handleRotateKey(scheme)}
-                    className={`py-2.5 rounded-xl font-bold transition-all text-[11px] ${
-                      pqcStatus.algorithm === scheme
-                        ? 'bg-cyan-500 text-slate-950'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    {scheme}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 4: OpenQASM 2.0 Studio */}
+        {/* Tab 3: OpenQASM 2.0 (local simulation) */}
         {activeTab === 'qasm' && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Code size={22} className="text-cyan-400" />
-                  OpenQASM 2.0 Quantum Circuit Editor
+                  OpenQASM 2.0 Circuit (local simulation)
                 </h3>
-                <p className="text-slate-400 mt-1">Compile and dispatch quantum circuits to connected hardware.</p>
+                <p className="text-slate-400 mt-1">
+                  The circuit runs through a small classical sampler in your browser. No quantum
+                  backend is contacted and nothing is submitted on chain.
+                </p>
               </div>
               <button
                 onClick={handleRunQasm}
@@ -514,7 +449,7 @@ export default function KinichPage() {
                 className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md"
               >
                 <Play size={14} weight="fill" />
-                {isRunningCircuit ? 'Executing...' : 'Run on Quantum Engine'}
+                {isRunningCircuit ? 'Sampling…' : 'Run Local Simulation'}
               </button>
             </div>
 
@@ -528,15 +463,13 @@ export default function KinichPage() {
             {circuitResult && (
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
                 <div className="flex justify-between text-slate-400">
-                  <span>Execution Time:</span>
-                  <span className="text-emerald-400 font-bold">{circuitResult.executionTimeMs} ms</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>State Vector Entropy:</span>
-                  <span className="text-cyan-300 font-bold">{circuitResult.stateVectorEntropy.toFixed(4)}</span>
+                  <span>Shots Sampled:</span>
+                  <span className="text-emerald-400 font-bold">{circuitResult.shots}</span>
                 </div>
                 <div className="pt-2 border-t border-slate-800">
-                  <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">State Probabilities:</span>
+                  <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">
+                    Sampled Counts (classical sampler, not a QPU):
+                  </span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {Object.entries(circuitResult.counts).map(([state, count]) => (
                       <div key={state} className="bg-slate-900 p-2 rounded-xl border border-slate-800 text-center">
@@ -551,43 +484,56 @@ export default function KinichPage() {
           </div>
         )}
 
-        {/* Tab 5: PQW Mining Proofs */}
+        {/* Tab 4: PoUW work proofs */}
         {activeTab === 'proofs' && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs max-w-xl mx-auto">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Coins size={22} className="text-amber-400" />
-                  Proof-of-Useful-Quantum-Work (PQW)
+                  Proof-of-Useful-Work Receipts
                 </h3>
-                <p className="text-slate-400 mt-1">Verified quantum job receipts earning PoUW staking bonuses.</p>
+                <p className="text-slate-400 mt-1">
+                  Read from pallet quantum work proofs. The wallet cannot mint one — verification is
+                  a multi-validator round.
+                </p>
               </div>
             </div>
 
-            <div className="space-y-3">
-              {[
-                { id: 'pqw-1', title: 'Xanadu Borealis GBS Matrix Proof', reward: '75.00 Ɗ', status: 'Verified' },
-                { id: 'pqw-2', title: 'Surface Code d=5 Error Syndrome Check', reward: '120.00 Ɗ', status: 'Verified' },
-                { id: 'pqw-3', title: 'NIST Dilithium5 Signature Decoupling', reward: '90.00 Ɗ', status: 'Verified' },
-              ].map((proof) => (
-                <div
-                  key={proof.id}
-                  className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex justify-between items-center font-mono text-[11px]"
-                >
-                  <div>
-                    <span className="text-white font-bold block">{proof.title}</span>
-                    <span className="text-slate-500 text-[10px]">ID: {proof.id}</span>
+            {workProofs.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 text-xs">
+                No verification rounds recorded for jobs submitted by this account.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {workProofs.map((proof) => (
+                  <div
+                    key={proof.jobId}
+                    className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex justify-between items-center font-mono text-[11px]"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-white font-bold block truncate">{proof.jobId}</span>
+                      <span className="text-slate-500 text-[10px]">
+                        {proof.approvals}/{proof.requiredVerifications} approvals •{' '}
+                        {proof.rejections} rejection{proof.rejections === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="block text-slate-300">
+                        {proof.consensusReached ? 'Consensus reached' : 'Awaiting consensus'}
+                      </span>
+                      <span className="text-[10px] text-cyan-300 font-semibold">
+                        {proof.consensusResult == null
+                          ? '—'
+                          : proof.consensusResult
+                            ? 'Accepted'
+                            : 'Rejected'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-emerald-400 font-bold block">+{proof.reward}</span>
-                    <span className="text-[10px] text-cyan-300 font-semibold flex items-center justify-end gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                      {proof.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

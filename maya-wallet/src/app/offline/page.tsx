@@ -41,7 +41,7 @@ export default function OfflineSigningPage() {
   const [step, setStep] = useState<'create' | 'qr' | 'broadcast' | 'result'>('create');
 
   // Payload inputs
-  const [recipient, setRecipient] = useState('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24');
+  const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('100.00');
   const [currency, setCurrency] = useState<'DALLA' | 'bBZD'>('DALLA');
   const [nonce, setNonce] = useState('42');
@@ -101,7 +101,7 @@ let genesis = FALLBACK_GENESIS;
     const payload = JSON.stringify({
       genesis,
       nonce: parseInt(nonce, 10),
-      sender: selectedAccount?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+      sender: selectedAccount?.address ?? '',
       recipient,
       amount: parseFloat(amount),
       currency,
@@ -215,7 +215,7 @@ let genesis = FALLBACK_GENESIS;
       setStep('result');
       addNotification({
         type: 'success',
-        message: `Successfully broadcasted to BelizeChain Node (Block #${res.blockNumber})!`,
+        message: `Extrinsic accepted into the transaction pool (head block #${res.blockNumber} at submission). Inclusion is not confirmed here.`,
       });
     } catch (err) {
       // Node unreachable. We show an honest failure — no fabricated block/hash.
@@ -459,14 +459,16 @@ let genesis = FALLBACK_GENESIS;
                 Hardware Signer Simulator
               </div>
               <p className="text-slate-400 text-[11px]">
-                Testing on local testbed? Simulate cold signing directly using your local sovereign Ed25519 key.
+                Sign the payload with your wallet extension (<span className="font-mono">signRaw</span>, sr25519).
+                With no injector available this produces an explicitly UNSIGNED envelope for hand-off to a
+                cold device — it never fabricates signature bytes.
               </p>
               <button
                 onClick={handleSimulateColdSign}
                 className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2"
               >
                 <Key size={16} weight="bold" />
-                Simulate Air-Gapped Signature on Cold Signer
+                Sign with Wallet Extension
               </button>
             </div>
 
@@ -578,17 +580,21 @@ let genesis = FALLBACK_GENESIS;
               <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/40 shadow-lg">
                 <CheckCircle size={32} weight="fill" />
               </div>
-              <h3 className="text-lg font-bold text-white">Extrinsic In-Block & Finalized!</h3>
-              <p className="text-slate-400">Your air-gapped transaction has been included in the BelizeChain ledger.</p>
+              <h3 className="text-lg font-bold text-white">Extrinsic Accepted into the Pool</h3>
+              <p className="text-slate-400">
+                The node accepted the signed extrinsic into its transaction pool. Inclusion and
+                finalisation are NOT confirmed by this page — the block below was the head at
+                submission time. Verify the extrinsic hash on an explorer before treating it as settled.
+              </p>
             </div>
 
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-[11px]">
               <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400">Block Number:</span>
+                <span className="text-slate-400">Head Block at Submission:</span>
                 <span className="text-emerald-400 font-bold">#{broadcastResult.blockNumber}</span>
               </div>
               <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400">Block Hash:</span>
+                <span className="text-slate-400">Head Block Hash:</span>
                 <span className="text-slate-200 truncate max-w-[240px]">{broadcastResult.blockHash}</span>
               </div>
               <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
@@ -596,7 +602,7 @@ let genesis = FALLBACK_GENESIS;
                 <span className="text-cyan-400 truncate max-w-[240px]">{broadcastResult.extrinsicHash}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Relayed At:</span>
+                <span className="text-slate-400">Submitted At:</span>
                 <span className="text-slate-300">{broadcastResult.timestamp}</span>
               </div>
             </div>

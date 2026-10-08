@@ -361,7 +361,7 @@ export default function ScannerPage() {
                   onClick={() => handleSimulateScan('r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24')}
                   className="px-3 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-slate-300 font-mono text-[11px]"
                 >
-                  Founder Maya Address
+                  Sample SS58 Address (demo)
                 </button>
                 <button
                   onClick={() => handleSimulateScan('sanpedro.bz')}

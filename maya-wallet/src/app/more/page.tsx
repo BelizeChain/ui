@@ -18,8 +18,6 @@ import {
   LockKey,
   ChartLineUp,
   Coins,
-  TrendUp,
-  Buildings,
   QrCode,
   Broadcast,
   GraduationCap,
@@ -46,7 +44,7 @@ export default function MorePage() {
   const menuSections: { title: string; description: string; items: MenuItem[] }[] = [
     {
       title: 'DeFi & Asset Management',
-      description: 'Trading floor, lending, vaults & tokenized real estate',
+      description: 'Trading floor, staking & custody',
       items: [
         {
           icon: <ChartLineUp size={20} weight="fill" />,
@@ -58,38 +56,10 @@ export default function MorePage() {
         },
         {
           icon: <Coins size={20} weight="fill" />,
-          label: 'Collateral Lending',
-          description: 'COMING SOON — market data shown is illustrative',
-          href: '#',
-          disabled: true,
-          color: 'from-emerald-500 to-teal-600',
-          badge: 'Coming Soon',
-        },
-        {
-          icon: <TrendUp size={20} weight="fill" />,
-          label: 'Yield Aggregator',
-          description: 'COMING SOON — sample rates shown are illustrative, not live',
-          href: '#',
-          disabled: true,
-          color: 'from-purple-500 to-indigo-600',
-          badge: 'Coming Soon',
-        },
-        {
-          icon: <Buildings size={20} weight="fill" />,
-          label: 'Tokenized RWA Studio',
-          description: 'COMING SOON — deed listing shown is illustrative',
-          href: '#',
-          disabled: true,
-          color: 'from-amber-500 to-orange-600',
-          badge: 'Coming Soon',
-        },
-        {
-          icon: <Coins size={20} weight="fill" />,
           label: 'Staking & Consensus Hub',
-          description: 'Live 4-node Substrate validators & PoUW claims',
+          description: 'Substrate validators & PoUW claims',
           href: '/staking',
           color: 'from-teal-500 to-emerald-600',
-          badge: '15.5% APR',
         },
         {
           icon: <LockKey size={20} weight="fill" />,
@@ -125,10 +95,9 @@ export default function MorePage() {
         {
           icon: <Atom size={20} weight="fill" />,
           label: 'Kinich Quantum Hub',
-          description: '10x compression & Xanadu photonic',
+          description: 'Quantum job registry & PoUW proofs',
           href: '/kinich',
           color: 'from-purple-500 to-pink-600',
-          badge: 'Photonic GKP',
         },
         {
           icon: <Brain size={20} weight="fill" />,
@@ -152,7 +121,6 @@ export default function MorePage() {
           description: 'Cadastral property titles',
           href: '/landledger',
           color: 'from-orange-500 to-red-600',
-          badge: 'GIS Sealed',
         },
         {
           icon: <GlobeHemisphereWest size={20} weight="fill" />,
@@ -160,7 +128,6 @@ export default function MorePage() {
           description: '.bz, .caye sovereign domains',
           href: '/bns',
           color: 'from-blue-500 to-indigo-600',
-          badge: 'IPFS Ready',
         },
       ],
     },
@@ -211,10 +178,9 @@ export default function MorePage() {
         {
           icon: <ShieldCheck size={20} weight="fill" />,
           label: 'Central Bank Compliance',
-          description: 'Statutory Proof-of-Reserve (100.2%) & FIU limits',
+          description: 'FIU limits, sanctions screening & SAR reporting',
           href: '/compliance',
           color: 'from-blue-500 to-cyan-600',
-          badge: '100.2% Reserve',
         },
       ],
     },
@@ -287,7 +253,6 @@ export default function MorePage() {
           description: 'Ethereum & Polkadot XCM v3',
           href: '/bridge',
           color: 'from-purple-500 to-indigo-600',
-          badge: '5-of-7 Relayers',
         },
         {
           icon: <Briefcase size={20} weight="fill" />,

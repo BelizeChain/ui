@@ -219,9 +219,9 @@ export default function MeshPage() {
     }
   };
 
-  // Compressed LoRa packet sample for active voucher
+  // Illustrative LoRa frame sample for the active voucher
   const compressedPacket = encodeCompressedLoRaPacket(
-    selectedAccount?.address || '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt',
+    selectedAccount?.address ?? '',
     voucherRecipient || 'ANY_BEARER',
     voucherAmount || '25.00',
     voucherCurrency
@@ -440,24 +440,26 @@ export default function MeshPage() {
               )}
             </div>
 
-            {/* Compressed LoRa Telemetry & Redeem */}
+            {/* Illustrative LoRa frame & redeem */}
             <div className="space-y-4">
               <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-3 shadow-xl text-xs">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Cpu size={20} className="text-purple-400" />
-                  LoRa 87-Byte Binary Frame Inspector
+                  Illustrative Voucher Frame
                 </h3>
                 <p className="text-slate-400">
-                  Maya Wallet compresses Substrate extrinsics to 87 bytes to fit into single LoRa radio packets without frame fragmentation.
+                  A frame assembled from your voucher inputs for inspection. It is not a wire-format
+                  encoder and no compression is applied — the size below is simply the length of the
+                  fields shown.
                 </p>
 
                 <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
                   <div className="flex justify-between text-slate-400">
-                    <span>Payload Size:</span>
+                    <span>Frame Length:</span>
                     <span className="text-emerald-400 font-bold">{compressedPacket.byteLength} Bytes</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Frame Efficiency:</span>
+                    <span>Note:</span>
                     <span className="text-purple-300">{compressedPacket.payloadRatio}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-800/80 text-slate-300 break-all text-[10px]">

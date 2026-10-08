@@ -107,24 +107,39 @@ export interface QuantumCompressionResult {
   originalSizeBytes: number;
   compressedSizeBytes: number;
   compressionRatio: number;
-  algorithm: 'Kinich-SurfaceCode';
-  entropyReductionPercentage: number;
-  verificationHash: string;
+  algorithm: 'gzip';
 }
 
-export function executeKinichCompression(rawPayload: string): QuantumCompressionResult {
-  const originalSize = Math.max(128, new Blob([rawPayload]).size);
-  // Target 10x ratio with Kinich surface code entropy encoder
-  const compressedSize = Math.max(16, Math.round(originalSize / 9.8));
-  const ratio = parseFloat((originalSize / compressedSize).toFixed(2));
+/**
+ * Compress a payload with the browser's own gzip implementation and report the
+ * measured byte counts.
+ *
+ * There is no Kinich compression codec reachable from the wallet — the service
+ * is a separate HTTP API and no pallet records a compression job. The previous
+ * version divided by a hardcoded 9.8 to "target 10x", reported an invented
+ * 89.6% entropy reduction, and returned a random 64-hex-character string as a
+ * "verification hash". All three were fabrications.
+ */
+export async function executeKinichCompression(
+  rawPayload: string
+): Promise<QuantumCompressionResult> {
+  if (typeof CompressionStream === 'undefined') {
+    throw new Error('This browser does not expose CompressionStream, so no local gzip demo is possible.');
+  }
+
+  const uncompressed = new TextEncoder().encode(rawPayload);
+  const stream = new Blob([uncompressed]).stream().pipeThrough(new CompressionStream('gzip'));
+  const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+
+  const originalSizeBytes = uncompressed.byteLength;
+  const compressedSizeBytes = compressed.byteLength;
 
   return {
-    originalSizeBytes: originalSize,
-    compressedSizeBytes: compressedSize,
-    compressionRatio: ratio,
-    algorithm: 'Kinich-SurfaceCode',
-    entropyReductionPercentage: 89.6,
-    verificationHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join(''),
+    originalSizeBytes,
+    compressedSizeBytes,
+    compressionRatio:
+      compressedSizeBytes === 0 ? 0 : Number((originalSizeBytes / compressedSizeBytes).toFixed(2)),
+    algorithm: 'gzip',
   };
 }
 
@@ -500,11 +515,18 @@ measure q -> c;`;
 }
 
 /**
- * Post-Quantum Cryptography Key Status
+ * Post-Quantum Cryptography Key Status.
+ *
+ * No pallet stores a per-account PQC key: `pallet_quantum` holds jobs, results,
+ * achievements and bridge requests only, and the runtime's real post-quantum
+ * work lives in `pallet_interoperability` (ML-DSA-87 / NIST FIPS 204) as a
+ * per-message signature — not a rotatable account key. There is therefore
+ * nothing on chain to read, and this type is retained only so callers can keep
+ * type-checking a `null` result.
  */
 export interface PqcKeyStatus {
-  algorithm: 'CRYSTALS-Dilithium5' | 'Falcon-512' | 'SPHINCS+';
-  nistLevel: 5 | 3 | 1;
+  algorithm: string;
+  nistLevel: number;
   quantumResilienceBits: number;
   lastRotated: string;
   isNistApproved: boolean;
@@ -512,50 +534,54 @@ export interface PqcKeyStatus {
 }
 
 /**
- * Get user PQC key security status
+ * Always `null`: no pallet stores a per-account PQC key.
+ *
+ * This used to return a hardcoded Dilithium5 status with a fabricated
+ * `publicKeyHex` and a `lastRotated` date that no issuer ever wrote.
  */
-export async function getPqcKeyStatus(address: string): Promise<PqcKeyStatus> {
+export async function getPqcKeyStatus(address: string): Promise<PqcKeyStatus | null> {
   void address;
-  return {
-    algorithm: 'CRYSTALS-Dilithium5',
-    nistLevel: 5,
-    quantumResilienceBits: 256,
-    lastRotated: '2026-08-14',
-    isNistApproved: true,
-    publicKeyHex: '0x7a8f...4e2d9b01c3a8f5e7',
-  };
+  return null;
 }
 
 /**
- * Rotate user PQC key to a new quantum-resistant signature scheme
+ * Not supported. Account-level PQC key rotation has no extrinsic and no storage
+ * on this runtime, and there is no `rotatePqcKey` call on `pallet_quantum`.
+ *
+ * This previously returned a plausible-looking `0x9e1a…` transaction hash for a
+ * call that was never submitted.
  */
 export async function rotatePqcKey(
   address: string,
-  newAlgorithm: 'CRYSTALS-Dilithium5' | 'Falcon-512' | 'SPHINCS+'
+  newAlgorithm: string
 ): Promise<{ hash: string; newAlgorithm: string }> {
   void address;
-  return {
-    hash: `0x9e1a${Date.now().toString(16)}b7f3`,
-    newAlgorithm,
-  };
+  void newAlgorithm;
+  throw new Error(
+    'PQC key rotation is not available: no pallet stores a per-account post-quantum key. ML-DSA-87 signatures are verified per message in pallet_interoperability.',
+  );
 }
 
 /**
- * Execute simulated quantum circuit and return shot histogram
+ * Deterministic local circuit simulator (NOT a quantum execution).
+ *
+ * The histogram below is produced by classical {@link Math.random} sampling of a
+ * fixed two-qubit state — it is not the output of a QPU, a simulator backend or
+ * the Kinich service. Only the shot counts are returned: the previous version
+ * also reported an invented `executionTimeMs` and a fixed `stateVectorEntropy`
+ * of 0.998, neither of which is measured.
  */
 export function executeSimulatedQuantumCircuit(
   qasm: string,
   shots: number = 1024
-): { counts: Record<string, number>; executionTimeMs: number; stateVectorEntropy: number } {
+): { counts: Record<string, number>; shots: number } {
   const counts: Record<string, number> = {};
   if (qasm.includes('cx')) {
-    // Entangled Bell state (e.g. |00> and |11>)
     const s00 = Math.round(shots * (0.48 + Math.random() * 0.04));
     const s11 = shots - s00;
     counts['00'] = s00;
     counts['11'] = s11;
   } else {
-    // Superposition (e.g. Hadamard on 2 qubits: 00, 01, 10, 11)
     const quarter = Math.floor(shots / 4);
     counts['00'] = quarter;
     counts['01'] = quarter;
@@ -563,11 +589,7 @@ export function executeSimulatedQuantumCircuit(
     counts['11'] = shots - quarter * 3;
   }
 
-  return {
-    counts,
-    executionTimeMs: 142 + Math.floor(Math.random() * 80),
-    stateVectorEntropy: 0.998,
-  };
+  return { counts, shots };
 }
 
 /**

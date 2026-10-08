@@ -288,6 +288,16 @@ export async function claimRelayRewards(address: string): Promise<{ hash: string
 /**
  * Encode a transaction to 87-byte compressed LoRa payload
  */
+/**
+ * Build an illustrative LoRa frame for a voucher.
+ *
+ * This is NOT a wire-format encoder and it does NOT compress anything. The
+ * previous version synthesised an "87-byte" hex string by padding with a
+ * hardcoded 20-byte constant and truncating, then advertised the result as a
+ * "237 byte frame utilisation" — so both the length and the efficiency figure
+ * were artefacts of the truncation, not measurements. This version assembles
+ * the frame from the caller's values only and reports its true length.
+ */
 export function encodeCompressedLoRaPacket(
   sender: string,
   recipient: string,
@@ -296,18 +306,27 @@ export function encodeCompressedLoRaPacket(
 ): { hexPacket: string; byteLength: number; payloadRatio: string } {
   const nonce = (Date.now() % 65535).toString(16).padStart(4, '0');
   const currencyFlag = currency === 'DALLA' ? '01' : '02';
-  const amountPlanck = BigInt(Math.floor(parseFloat(amount || '0') * 1e12)).toString(16).padStart(16, '0');
+  const amountPlanck = BigInt(Math.floor(parseFloat(amount || '0') * 1e12))
+    .toString(16)
+    .padStart(16, '0');
   const senderSlice = sender.slice(0, 16);
   const recipientSlice = recipient.slice(0, 16);
 
-  // Synthesize 87-byte binary string
-  const rawHex = `BZ01${currencyFlag}${nonce}${amountPlanck}${Buffer.from(senderSlice).toString('hex').slice(0, 32)}${Buffer.from(recipientSlice).toString('hex').slice(0, 32)}9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a`.slice(0, 174);
+  const rawHex = [
+    'BZ01',
+    currencyFlag,
+    nonce,
+    amountPlanck,
+    Buffer.from(senderSlice).toString('hex').slice(0, 32),
+    Buffer.from(recipientSlice).toString('hex').slice(0, 32),
+  ].join('');
+
   const byteLength = Math.floor(rawHex.length / 2);
 
   return {
     hexPacket: `0x${rawHex}`,
     byteLength,
-    payloadRatio: `${byteLength} / 237 bytes (${Math.round((byteLength / 237) * 100)}% LoRa frame utilization)`,
+    payloadRatio: `${byteLength} bytes for a truncated sender/recipient pair — illustrative frame, not a compression result`,
   };
 }
 

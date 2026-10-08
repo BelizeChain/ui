@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
+import { getRuntimeConfig } from '@belizechain/shared';
 import {
   Code,
   Key,
@@ -23,17 +24,45 @@ export default function DeveloperPage() {
   const [activeTab, setActiveTab] = useState<'faucet' | 'rpc' | 'sdk' | 'api-keys' | 'cli'>('faucet');
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
 
-  // RPC latency state
-  const [rpcLatency, setRpcLatency] = useState<number | null>(14);
+  // RPC latency state — null until a real round-trip has been measured.
+  const [rpcLatency, setRpcLatency] = useState<number | null>(null);
   const [isPinging, setIsPinging] = useState(false);
 
   // Faucet state
-  const [faucetAddress, setFaucetAddress] = useState(selectedAccount?.address || '5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt');
+  const [faucetAddress, setFaucetAddress] = useState('');
   const [isClaimingFaucet, setIsClaimingFaucet] = useState(false);
-  const [faucetCooldown] = useState<number | null>(null);
 
   // SDK Language selector
   const [sdkLang, setSdkLang] = useState<'typescript' | 'rust' | 'python' | 'solidity'>('typescript');
+
+  // The endpoint is derived at runtime rather than hardcoded, matching how the
+  // blockchain service actually connects.
+  const [endpoint, setEndpoint] = useState<{ url: string; source: string }>({
+    url: '',
+    source: 'unknown',
+  });
+
+  useEffect(() => {
+    // Deferred so the effect body doesn't call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(() => {
+      const config = getRuntimeConfig();
+      setEndpoint({
+        url: config.blockchainWsUrl,
+        source: config.endpointSource,
+      });
+    });
+  }, []);
+
+  // Prefill the faucet recipient with the connected account once it is known,
+  // without overwriting anything the user has typed.
+  useEffect(() => {
+    if (!selectedAccount?.address) return;
+    const address = selectedAccount.address;
+    Promise.resolve().then(() => {
+      setFaucetAddress((current) => current || address);
+    });
+  }, [selectedAccount?.address]);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -85,14 +114,14 @@ export default function DeveloperPage() {
     typescript: `import { ApiPromise, WsProvider } from '@polkadot/api';
 
 async function main() {
-  // Connect to BelizeChain Ceiba Node
-  const provider = new WsProvider('ws://100.81.45.25:9944');
+  // Connect to BelizeChain Ceiba testnet
+  const provider = new WsProvider('wss://testnet.belizechain.org/ws');
   const api = await ApiPromise.create({ provider });
 
   // Query block and DALLA balance
   const [header, balance] = await Promise.all([
     api.rpc.chain.getHeader(),
-    api.query.system.account('5Cg3Ez7Upm8caDfjonnMKPZ14B3H5daWM75DkYj7yEt4XSKt')
+    api.query.system.account('<SS58_ADDRESS>')
   ]);
 
   console.log('Connected to BelizeChain Block:', header.number.toNumber());
@@ -108,8 +137,8 @@ pub mod belizechain {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize Subxt client to BelizeChain node
-    let api = OnlineClient::<PolkadotConfig>::from_url("ws://100.81.45.25:9944").await?;
+    // Initialize Subxt client to the Ceiba testnet
+    let api = OnlineClient::<PolkadotConfig>::from_url("wss://testnet.belizechain.org/ws").await?;
 
     let latest_block = api.blocks().at_latest().await?;
     println!("Latest BelizeChain Block Hash: {:?}", latest_block.hash());
@@ -120,9 +149,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     python: `from substrateinterface import SubstrateInterface, Keypair
 
 # Initialize BelizeChain substrate client
+# SS58 prefix on Ceiba is 1981 (addresses render as r1...)
 substrate = SubstrateInterface(
-    url="ws://100.81.45.25:9944",
-    ss58_format=105,
+    url="wss://testnet.belizechain.org/ws",
+    ss58_format=1981,
     type_registry_preset='substrate'
 )
 
@@ -161,7 +191,7 @@ interface IBelizeXSwap {
                 Developer Hub & Testnet Faucet
               </h1>
               <p className="text-xs text-slate-400">
-                1-Tap Faucet • Multi-Language Client SDKs • Substrate RPC Gateway
+                Faucet Contract Status • Client SDKs • Substrate RPC Endpoint
               </p>
             </div>
           </div>
@@ -208,8 +238,11 @@ interface IBelizeXSwap {
                 <Drop size={26} weight="fill" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Live Testnet Faucet</h3>
-                <p className="text-slate-400 text-xs">Receive 1,000 DALLA (Ɗ) and 500 bBZD for testbed contract development.</p>
+                <h3 className="text-base font-bold text-white">Testnet Faucet</h3>
+                <p className="text-slate-400 text-xs">
+                  The faucet is the GEM ink! faucet contract. Its grant amount and cooldown are
+                  deploy-time constructor parameters, so this wallet cannot state them.
+                </p>
               </div>
             </div>
 
@@ -221,37 +254,29 @@ interface IBelizeXSwap {
                   required
                   value={faucetAddress}
                   onChange={(e) => setFaucetAddress(e.target.value)}
-                  placeholder="e.g. 5Cg3...SKt or r1Sa...9sj24"
+                  placeholder="Your SS58 address (r1…)"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
                 />
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
                 <div className="flex justify-between text-slate-400">
-                  <span>DALLA Grant:</span>
-                  <span className="text-emerald-400 font-bold">1,000.00 Ɗ</span>
+                  <span>Grant Amount:</span>
+                  <span className="text-slate-300">contract parameter — not read by this page</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>bBZD Sandbox Grant:</span>
-                  <span className="text-cyan-300 font-bold">500.00 BZ$</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Cooldown Period:</span>
-                  <span className="text-slate-300">24 Hours per Address / IP</span>
+                  <span>Cooldown:</span>
+                  <span className="text-slate-300">contract parameter — not read by this page</span>
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={isClaimingFaucet || !!faucetCooldown}
+                disabled={isClaimingFaucet}
                 className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2"
               >
                 <Sparkle size={16} weight="bold" />
-                {isClaimingFaucet
-                  ? 'Broadcasting Faucet Extrinsic...'
-                  : faucetCooldown
-                  ? 'Cooldown Active (24h Limit)'
-                  : 'Claim 1,000 DALLA + 500 bBZD'}
+                {isClaimingFaucet ? 'Checking Contract Call…' : 'Claim Testnet DALLA'}
               </button>
             </form>
           </div>
@@ -264,9 +289,12 @@ interface IBelizeXSwap {
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Terminal size={22} className="text-cyan-400" />
-                  Live Ceiba RPC Endpoints
+                  Ceiba RPC Endpoint
                 </h3>
-                <p className="text-slate-400 mt-1">High-availability validator endpoints with native WebSockets.</p>
+                <p className="text-slate-400 mt-1">
+                  The wallet derives its endpoint at runtime — press Ping Ceiba to measure the
+                  actual round-trip. Nothing is shown as “online” before it answers.
+                </p>
               </div>
               <button
                 onClick={handlePingRpc}
@@ -279,28 +307,25 @@ interface IBelizeXSwap {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">HTTP JSON-RPC</span>
-                <span className="font-mono text-cyan-300 text-xs block truncate">http://100.81.45.25:9933</span>
-                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Online (200 OK)
-                </span>
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1 sm:col-span-2">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">Active Endpoint</span>
+                <span className="font-mono text-cyan-300 text-xs block truncate">{endpoint.url || '—'}</span>
+                <span className="text-[10px] text-slate-400">source: {endpoint.source}</span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">WebSocket (WSS)</span>
-                <span className="font-mono text-cyan-300 text-xs block truncate">ws://100.81.45.25:9944</span>
-                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Latency: {rpcLatency}ms
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">Measured Latency</span>
+                <span className="font-mono text-xs block text-white">
+                  {rpcLatency == null ? '— not measured' : `${rpcLatency} ms`}
                 </span>
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">SS58 Format Prefix</span>
-                <span className="font-mono text-white text-xs block">Prefix 105 (BelizeChain)</span>
-                <span className="text-[10px] text-slate-400 block">Substrate Multi-Address</span>
+                <span className="font-mono text-white text-xs block">Prefix 1981 (BelizeChain)</span>
+                <span className="text-[10px] text-slate-400 block">Addresses render as r1…</span>
               </div>
             </div>
           </div>

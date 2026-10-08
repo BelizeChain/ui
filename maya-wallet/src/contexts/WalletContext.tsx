@@ -50,8 +50,7 @@ interface WalletContextType {
   markAllNotificationsAsRead: () => void;
 
   // Actions
-  connect: (fallbackToLocal?: boolean | unknown) => Promise<void>;
-  connectLocal: (customName?: string) => void;
+  connect: () => Promise<void>;
   disconnect: () => void;
   selectAccount: (address: string) => void;
 }
@@ -81,32 +80,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     markAllAsRead: markAllNotificationsAsRead,
   } = useNotifications(isMounted ? (selectedAccount?.address || null) : null);
 
-  const DEMO_ACCOUNTS: WalletAccount[] = [
-    {
-      address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      name: 'Wicked (Belizean Citizen #001)',
-      source: 'sovereign-local',
-    },
-    {
-      address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-      name: 'Bob (Treasury Relayer)',
-      source: 'sovereign-local',
-    },
-  ];
-
-  const connectLocal = (customName: string = 'Wicked (Belizean Citizen #001)') => {
-    setAccounts(DEMO_ACCOUNTS);
-    setSelectedAccount(DEMO_ACCOUNTS[0]);
-    setIsConnected(true);
-    setError(null);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('selectedWalletAddress', DEMO_ACCOUNTS[0].address);
-      localStorage.setItem('walletMode', 'sovereign-local');
-    }
-  };
-
-  const connect = async (fallbackToLocal: boolean | unknown = true) => {
-    const shouldFallback = typeof fallbackToLocal === 'boolean' ? fallbackToLocal : true;
+  /**
+   * Connect through the Polkadot.js extension.
+   *
+   * There is deliberately no fallback: this used to call `connectLocal()`, which
+   * marked the session connected against the Substrate **dev** accounts
+   * (Alice 5GrwvaEF… presented as "Wicked (Belizean Citizen #001)" and Bob as
+   * a treasury relayer). Every balance, staking, title and payroll screen then
+   * rendered another account's testnet data as the user's. No extension now
+   * means no connection.
+   */
+  const connect = async () => {
     setIsConnecting(true);
     setError(null);
 
@@ -115,38 +99,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw new Error('Wallet connection is only available in the browser.');
       }
 
-      // Check if user previously chosen sovereign-local
-      const savedMode = localStorage.getItem('walletMode');
-      if (savedMode === 'sovereign-local' && !shouldFallback) {
-        connectLocal();
-        return;
-      }
-
       const { web3Enable, web3Accounts } = await import('@polkadot/extension-dapp');
-      // Enable Polkadot extension
       const extensions = await web3Enable('Maya Wallet');
 
       if (extensions.length === 0) {
-        if (shouldFallback) {
-          console.info('No extension found. Connecting as Sovereign Citizen Local session.');
-          connectLocal();
-          return;
-        }
         throw new Error(
-          'No Polkadot wallet extension found. Please install Polkadot.js extension.'
+          'No Polkadot wallet extension found. Install the Polkadot.js extension to connect.'
         );
       }
 
-      // Get accounts from extension
       const allAccounts = await web3Accounts();
 
       if (allAccounts.length === 0) {
-        if (shouldFallback) {
-          connectLocal();
-          return;
-        }
         throw new Error(
-          'No accounts found in wallet. Please create an account in your Polkadot.js extension.'
+          'No accounts found in your wallet extension. Create an account there, then connect again.'
         );
       }
 
@@ -157,24 +123,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }));
 
       setAccounts(walletAccounts);
-      const savedAddress = typeof window !== 'undefined' ? localStorage.getItem('selectedWalletAddress') : null;
+      const savedAddress = localStorage.getItem('selectedWalletAddress');
       const targetAccount = walletAccounts.find(acc => acc.address === savedAddress) || walletAccounts[0];
       setSelectedAccount(targetAccount);
       setIsConnected(true);
-
-      // Save to localStorage
-      if (typeof window !== 'undefined' && targetAccount) {
-        localStorage.setItem('selectedWalletAddress', targetAccount.address);
-        localStorage.setItem('walletMode', 'extension');
-      }
+      localStorage.setItem('selectedWalletAddress', targetAccount.address);
     } catch (err) {
-      console.warn('Wallet extension connection fallback triggered:', err);
-      if (shouldFallback) {
-        connectLocal();
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to connect wallet');
-        setIsConnected(false);
-      }
+      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
+      setIsConnected(false);
+      setAccounts([]);
+      setSelectedAccount(null);
     } finally {
       setIsConnecting(false);
     }
@@ -220,7 +178,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     markNotificationAsRead,
     markAllNotificationsAsRead,
     connect,
-    connectLocal,
     disconnect,
     selectAccount,
   };

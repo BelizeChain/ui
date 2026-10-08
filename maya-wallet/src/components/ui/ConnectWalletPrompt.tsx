@@ -8,13 +8,13 @@ interface ConnectWalletPromptProps {
   fullScreen?: boolean;
 }
 
-export function ConnectWalletPrompt({ 
+export function ConnectWalletPrompt({
   message = 'Connect your wallet to access this feature',
   fullScreen = false
 }: ConnectWalletPromptProps) {
-  const { connect, isConnecting } = useWallet();
+  const { connect, isConnecting, error } = useWallet();
 
-  const containerClass = fullScreen 
+  const containerClass = fullScreen
     ? 'fixed inset-0 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm z-50 p-6'
     : 'flex flex-col items-center justify-center min-h-[400px] p-6';
 
@@ -27,7 +27,7 @@ export function ConnectWalletPrompt({
       >
         <Wallet size={64} weight="fill" />
       </motion.div>
-      
+
       <motion.h3
         initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -36,7 +36,7 @@ export function ConnectWalletPrompt({
       >
         Wallet Connection Required
       </motion.h3>
-      
+
       <motion.p
         initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -45,33 +45,27 @@ export function ConnectWalletPrompt({
       >
         {message}
       </motion.p>
-      
+
       <motion.div
         initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
-        className="flex flex-col sm:flex-row items-center gap-3"
+        className="flex flex-col items-center gap-3"
       >
         <motion.button
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => connect(true)}
+          onClick={() => connect()}
           disabled={isConnecting}
           className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
         >
           <Wallet size={20} weight="bold" />
-          {isConnecting ? 'Connecting...' : 'Connect Sovereign Session'}
+          {isConnecting ? 'Connecting…' : 'Connect Polkadot.js Extension'}
         </motion.button>
 
-        <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={() => connect(false)}
-          disabled={isConnecting}
-          className="flex items-center gap-2 px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-medium transition-all"
-        >
-          Browser Extension
-        </motion.button>
+        {error && (
+          <p className="text-xs text-amber-300 max-w-md text-center">{error}</p>
+        )}
       </motion.div>
 
       <motion.div
@@ -92,7 +86,7 @@ export function ConnectWalletPrompt({
             Polkadot.js Extension
           </a>
           <span className="text-slate-600">•</span>
-          <span className="text-slate-400">Ed25519 / NIST PQC Shielded</span>
+          <span className="text-slate-400">sr25519 Substrate account</span>
         </div>
       </motion.div>
     </div>

@@ -97,10 +97,16 @@ export default function EducationModulesPage() {
       lessons: ['Web Bluetooth Radio Pairing', '87-Byte Compressed LoRa Frames', 'Relay Mining Diagnostics'],
       quiz: [
         {
-          question: 'What is the maximum payload size for BelizeChain air-gapped LoRa transactions?',
-          options: ['256 bytes', '87 bytes', '512 bytes', '1024 bytes'],
+          question: 'How does the BelizeChain LoRa voucher flow treat the payload it relays?',
+          options: [
+            'It gzip-compresses extrinsics to exactly 87 bytes',
+            'It carries a settlement hash; the wallet builds an illustrative frame, not a compressed wire format',
+            'It transmits the full signed extrinsic in one packet',
+            'It doubles the payload for redundancy',
+          ],
           correctIndex: 1,
-          explanation: 'Transactions are compressed into an 87-byte binary LoRa frame to maximize transmission range over long-range radio.',
+          explanation:
+            'The mesh settlement path anchors a 32-byte settlement hash via submitMeshTransaction / submitRelayProof. No compression codec is applied to the payload.',
         },
         {
           question: 'What agency utilizes the BelizeChain emergency broadcast system during hurricanes?',
@@ -112,24 +118,31 @@ export default function EducationModulesPage() {
     },
     {
       id: 3,
-      title: 'Post-Quantum Cryptography & NIST FIPS 204 Integration',
+      title: 'Post-Quantum Cryptography: NIST FIPS 204 (ML-DSA-87)',
       category: 'Quantum Cryptography',
       duration: '60 mins',
       rewardDalla: 75,
       completed: false,
-      lessons: ['CRYSTALS-Dilithium5 Primary Signature', 'Falcon-512 & SPHINCS+ Fallbacks', 'OpenQASM 2.0 State Compression'],
+      lessons: ['ML-DSA-87 (FIPS 204) Lattice Signatures', 'Hashing Is Not Encryption — The Real Bridge Threat Model'],
       quiz: [
         {
-          question: 'Which lattice-based signature scheme is standardized under NIST FIPS 204 in Kinich Quantum?',
-          options: ['RSA-4096', 'ML-DSA (CRYSTALS-Dilithium)', 'ECDSA secp256k1', 'Ed25519'],
+          question: 'Which standardised lattice-based signature scheme does BelizeChain implement?',
+          options: ['RSA-4096', 'ML-DSA-87 (NIST FIPS 204)', 'ECDSA secp256k1', 'Ed25519'],
           correctIndex: 1,
-          explanation: 'ML-DSA (CRYSTALS-Dilithium) is the primary NIST FIPS 204 post-quantum signature algorithm.',
+          explanation:
+            'pallet_interoperability verifies ML-DSA-87 (NIST FIPS 204) signatures (2592-byte public key, 4627-byte signature). Earlier drafts of this module named CRYSTALS-Dilithium5, Falcon-512 and SPHINCS+ — none of those are implemented; the Falcon/Dilithium stubs in the pallet are explicitly barred from production use.',
         },
         {
-          question: 'What is the surface code lattice distance used in Kinich quantum syndrome decoding?',
-          options: ['d=1', 'd=3 and d=5', 'd=10', 'd=100'],
+          question: 'Why does putting a SHA-256 hash such as ML-DSA into a bridge help against quantum computers?',
+          options: [
+            'It encrypts the payload so a quantum computer cannot read it',
+            'It does not — a hash is not encryption; the signature scheme is what resists forgery',
+            'It makes the transaction smaller',
+            'It hides the sender address',
+          ],
           correctIndex: 1,
-          explanation: 'Kinich uses rotated 2D surface code error correction lattices at code distances d=3 and d=5.',
+          explanation:
+            'Hashing is a one-way digest, not encryption. Quantum resistance comes from the lattice-based signature scheme being hard to forge, not from the digest.',
         },
       ],
     },
