@@ -6,20 +6,23 @@
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
 
+/** Mirrors `quantum.quantumJobs: Bytes -> QuantumJob`. */
 export interface QuantumJob {
   jobId: string;
   submitter: string;
-  circuit: string; // QASM or circuit description
-  backend: 'Azure' | 'IBM' | 'Simulator' | 'Xanadu';
-  shots: number;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
-  status: 'Queued' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
-  submittedAt: number;
-  startedAt?: number;
-  completedAt?: number;
-  cost: string; // DALLA cost
-  results?: QuantumResult;
-  errorMessage?: string;
+  /** A `QuantumBackend` variant (AzureIonQ, IBMQuantum, SpinQGemini, ...). */
+  backend: string;
+  circuitHash: string;
+  numQubits: number;
+  circuitDepth: number;
+  numShots: number;
+  status: string;
+  verificationStatus: string;
+  submissionTime: number;
+  completionTime?: number;
+  resultHash?: string;
+  cost: string;
+  executor?: string;
 }
 
 export interface QuantumResult {
@@ -35,24 +38,69 @@ export interface QuantumResult {
 }
 
 export interface QuantumWorkProof {
-  proofId: string;
   jobId: string;
-  submitter: string;
-  workHash: string; // Hash of quantum computation
-  reward: string; // DALLA reward for PQW
-  timestamp: number;
-  verificationStatus: 'Pending' | 'Verified' | 'Rejected';
+  requiredVerifications: number;
+  approvals: number;
+  rejections: number;
+  consensusReached: boolean;
+  consensusResult?: boolean;
+  createdAt: number;
+  deadline: number;
 }
 
+/** The chain's `QuantumBackend` variants, in declaration order. */
+const QUANTUM_BACKEND_NAMES = [
+  'AzureIonQ',
+  'AzureQuantinuum',
+  'AzureRigetti',
+  'IBMQuantum',
+  'Qiskit',
+  'SpinQGemini',
+  'SpinQTriangulum',
+  'Other',
+] as const;
+
+function providerFor(name: string): string {
+  if (name.startsWith('Azure')) return 'Azure Quantum';
+  if (name.startsWith('SpinQ')) return 'SpinQ';
+  if (name === 'IBMQuantum' || name === 'Qiskit') return 'IBM Quantum';
+  return 'Other';
+}
+
+function toQuantumJob(jobId: string, data: any): QuantumJob {
+  return {
+    jobId,
+    submitter: String(data.submitter ?? ''),
+    backend: String(data.backend),
+    circuitHash: String(data.circuitHash ?? ''),
+    numQubits: Number(data.numQubits ?? 0),
+    circuitDepth: Number(data.circuitDepth ?? 0),
+    numShots: Number(data.numShots ?? 0),
+    status: String(data.status),
+    verificationStatus: String(data.verificationStatus),
+    submissionTime: Number(data.submissionTime ?? 0),
+    completionTime: data.completionTime != null ? Number(data.completionTime) : undefined,
+    resultHash: data.resultHash ? String(data.resultHash) : undefined,
+    cost: formatBalance(String(data.dallaCost ?? '0')),
+    executor: data.executor ? String(data.executor) : undefined,
+  };
+}
+
+/**
+ * An aggregate over the jobs that ran on one `QuantumBackend` variant.
+ *
+ * The pallet has no backend registry — there is no `backends` storage — so a
+ * backend only exists as a field on the jobs submitted to it. The previous
+ * implementation read a non-existent map and invented queue length, wait time
+ * and per-shot cost.
+ */
 export interface QuantumBackend {
   name: string;
-  provider: 'Azure' | 'IBM' | 'Local' | 'Xanadu';
-  qubits: number;
-  status: 'Available' | 'Busy' | 'Maintenance' | 'Offline';
-  queueLength: number;
-  averageWaitTime: number; // Minutes
-  costPerShot: string; // DALLA per shot
-  features: string[]; // e.g., ['ErrorMitigation', 'HighFidelity', 'PhotonicGKP', 'SurfaceCode']
+  provider: string;
+  /** Highest qubit count observed on a job for this backend. */
+  maxQubits: number;
+  jobCount: number;
+  totalCost: string;
 }
 
 export interface QuantumCompressionResult {
@@ -85,31 +133,37 @@ export function executeKinichCompression(rawPayload: string): QuantumCompression
  */
 export async function getQuantumBackends(): Promise<QuantumBackend[]> {
   const api = await initializeApi();
-  
+
   try {
-    const backends: any = await api.query.quantum?.backends?.entries?.() || [];
-    
-    if (!backends || backends.length === 0) {
-      return [];
+    if (!api.query.quantum?.quantumJobs) return [];
+
+    // Derive per-backend aggregates from the jobs themselves.
+    const entries = await api.query.quantum.quantumJobs.entries();
+    const stats = new Map<string, { jobs: number; qubits: number; cost: bigint }>();
+
+    for (const [, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      const name = String(data.backend);
+      const current = stats.get(name) ?? { jobs: 0, qubits: 0, cost: 0n };
+      current.jobs += 1;
+      current.qubits = Math.max(current.qubits, Number(data.numQubits ?? 0));
+      current.cost += BigInt(String(data.dallaCost ?? '0'));
+      stats.set(name, current);
     }
 
-    return backends.map(([key, value]: [any, any]) => {
-      const name = key.args[0].toString();
-      const data = value.unwrap();
-      
+    return QUANTUM_BACKEND_NAMES.map((name) => {
+      const s = stats.get(name);
       return {
         name,
-        provider: data.provider.toString() as any,
-        qubits: data.qubits.toNumber(),
-        status: data.status.toString() as any,
-        queueLength: data.queueLength.toNumber(),
-        averageWaitTime: data.averageWaitTime.toNumber(),
-        costPerShot: formatBalance(data.costPerShot.toString()),
-        features: data.features.toHuman() as string[],
+        provider: providerFor(name),
+        maxQubits: s?.qubits ?? 0,
+        jobCount: s?.jobs ?? 0,
+        totalCost: formatBalance(String(s?.cost ?? 0n)),
       };
     });
   } catch (error) {
-    console.error('Failed to fetch quantum backends:', error);
+    console.error('Failed to derive quantum backends:', error);
     return [];
   }
 }
@@ -183,31 +237,12 @@ export async function submitQuantumJob(
  */
 export async function getQuantumJob(jobId: string): Promise<QuantumJob | null> {
   const api = await initializeApi();
-  
-  try {
-    const job: any = await api.query.quantum?.jobs(jobId);
-    
-    if (!job || job.isNone) {
-      return null;
-    }
 
-    const data = job.unwrap();
-    
-    return {
-      jobId,
-      submitter: data.submitter.toString(),
-      circuit: data.circuit.toString(),
-      backend: data.backend.toString() as any,
-      shots: data.shots.toNumber(),
-      priority: data.priority.toString() as any,
-      status: data.status.toString() as any,
-      submittedAt: data.submittedAt.toNumber(),
-      startedAt: data.startedAt?.toNumber(),
-      completedAt: data.completedAt?.toNumber(),
-      cost: formatBalance(data.cost.toString()),
-      results: data.results?.toHuman() as QuantumResult,
-      errorMessage: data.errorMessage?.toString(),
-    };
+  try {
+    if (!api.query.quantum?.quantumJobs) return null;
+    const raw: any = await api.query.quantum.quantumJobs(jobId);
+    if (!raw || raw.isNone) return null;
+    return toQuantumJob(jobId, raw.toJSON());
   } catch (error) {
     console.error('Failed to fetch quantum job:', error);
     return null;
@@ -222,41 +257,19 @@ export async function getUserQuantumJobs(
   limit: number = 50
 ): Promise<QuantumJob[]> {
   const api = await initializeApi();
-  
+
   try {
-    const allJobs: any = await api.query.quantum?.jobs?.entries?.() || [];
-    
-    if (!allJobs || allJobs.length === 0) {
-      return [];
+    if (!api.query.quantum?.quantumJobs) return [];
+    const entries = await api.query.quantum.quantumJobs.entries();
+
+    const jobs: QuantumJob[] = [];
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data || String(data.submitter) !== address) continue;
+      jobs.push(toQuantumJob(String(data.jobId ?? key?.args?.[0] ?? ''), data));
     }
 
-    return allJobs
-      .filter(([, value]: [any, any]) => {
-        const data = value.unwrap();
-        return data.submitter.toString() === address;
-      })
-      .map(([key, value]: [any, any]) => {
-        const jobId = key.args[0].toString();
-        const data = value.unwrap();
-        
-        return {
-          jobId,
-          submitter: data.submitter.toString(),
-          circuit: data.circuit.toString(),
-          backend: data.backend.toString() as any,
-          shots: data.shots.toNumber(),
-          priority: data.priority.toString() as any,
-          status: data.status.toString() as any,
-          submittedAt: data.submittedAt.toNumber(),
-          startedAt: data.startedAt?.toNumber(),
-          completedAt: data.completedAt?.toNumber(),
-          cost: formatBalance(data.cost.toString()),
-          results: data.results?.toHuman() as QuantumResult,
-          errorMessage: data.errorMessage?.toString(),
-        };
-      })
-      .sort((a: { submittedAt: number }, b: { submittedAt: number }) => b.submittedAt - a.submittedAt)
-      .slice(0, limit);
+    return jobs.sort((a, b) => b.submissionTime - a.submissionTime).slice(0, limit);
   } catch (error) {
     console.error('Failed to fetch user quantum jobs:', error);
     return [];
@@ -284,30 +297,40 @@ export async function getQuantumWorkProofs(
   limit: number = 20
 ): Promise<QuantumWorkProof[]> {
   const api = await initializeApi();
-  
+
   try {
-    const proofs: any = await api.query.quantum?.workProofs?.entries?.(address) || [];
-    
-    if (!proofs || proofs.length === 0) {
-      return [];
+    // There is no `workProofs` storage. Proof-of-Quantum-Work is the validator
+    // verification round stored in `verificationRequests`, so surface the
+    // rounds whose job was submitted by this account.
+    if (!api.query.quantum?.verificationRequests || !api.query.quantum?.quantumJobs) return [];
+
+    const ownedJobs = new Set<string>();
+    for (const [, raw] of (await api.query.quantum.quantumJobs.entries()) as any[]) {
+      const data = raw?.toJSON?.();
+      if (data && String(data.submitter) === address) ownedJobs.add(String(data.jobId));
+    }
+    if (ownedJobs.size === 0) return [];
+
+    const proofs: QuantumWorkProof[] = [];
+    for (const [, raw] of (await api.query.quantum.verificationRequests.entries()) as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      const jobId = String(data.jobId ?? '');
+      if (!ownedJobs.has(jobId)) continue;
+
+      proofs.push({
+        jobId,
+        requiredVerifications: Number(data.requiredVerifications ?? 0),
+        approvals: Number(data.approvals ?? 0),
+        rejections: Number(data.rejections ?? 0),
+        consensusReached: Boolean(data.consensusReached),
+        consensusResult: data.consensusResult != null ? Boolean(data.consensusResult) : undefined,
+        createdAt: Number(data.createdAt ?? 0),
+        deadline: Number(data.deadline ?? 0),
+      });
     }
 
-    return proofs
-      .map(([key, value]: [any, any]) => {
-        const proofId = key.args[1].toString();
-        const data = value.unwrap();
-        
-        return {
-          proofId,
-          jobId: data.jobId.toString(),
-          submitter: address,
-          workHash: data.workHash.toString(),
-          reward: formatBalance(data.reward.toString()),
-          timestamp: data.timestamp.toNumber(),
-          verificationStatus: data.status.toString() as any,
-        };
-      })
-      .slice(0, limit);
+    return proofs.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
   } catch (error) {
     console.error('Failed to fetch quantum work proofs:', error);
     return [];
@@ -339,23 +362,28 @@ export async function estimateQuantumCost(
   shots: number
 ): Promise<{ cost: string; estimatedTime: number }> {
   const api = await initializeApi();
-  
+
   try {
-    const backendData: any = await api.query.quantum?.backends(backend);
-    
-    if (!backendData || backendData.isNone) {
-      throw new Error('Backend not found');
+    if (!api.query.quantum?.quantumJobs) return { cost: '0.00', estimatedTime: 0 };
+
+    // There is no backend registry, so derive a per-shot rate from the jobs
+    // already run on this backend. With no history there is no rate to quote.
+    let costTotal = 0n;
+    let shotTotal = 0n;
+    for (const [, raw] of (await api.query.quantum.quantumJobs.entries()) as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data || String(data.backend) !== backend) continue;
+      const jobShots = BigInt(String(data.numShots ?? '0'));
+      if (jobShots === 0n) continue;
+      costTotal += BigInt(String(data.dallaCost ?? '0'));
+      shotTotal += jobShots;
     }
 
-    const data = backendData.unwrap();
-    const costPerShot = parseFloat(formatBalance(data.costPerShot.toString()));
-    const cost = (costPerShot * shots).toFixed(2);
-    const estimatedTime = data.averageWaitTime.toNumber();
+    if (shotTotal === 0n) return { cost: '0.00', estimatedTime: 0 };
 
-    return {
-      cost,
-      estimatedTime,
-    };
+    const estimated = (costTotal * BigInt(Math.max(shots, 0))) / shotTotal;
+    // The pallet records no queue or wait time.
+    return { cost: formatBalance(String(estimated)), estimatedTime: 0 };
   } catch (error) {
     console.error('Failed to estimate quantum cost:', error);
     return {
@@ -372,7 +400,8 @@ export async function getQuantumStats(address: string): Promise<{
   totalJobs: number;
   completedJobs: number;
   totalCost: string;
-  totalRewards: string;
+  /** Jobs whose validator verification round reached consensus. */
+  verifiedJobs: number;
   averageExecutionTime: number;
   favoriteBackend: string;
 }> {
@@ -381,11 +410,12 @@ export async function getQuantumStats(address: string): Promise<{
 
   const completedJobs = jobs.filter(j => j.status === 'Completed').length;
   const totalCost = jobs.reduce((sum, j) => sum + parseFloat(j.cost), 0);
-  const totalRewards = proofs.reduce((sum, p) => sum + parseFloat(p.reward), 0);
-  
+  const verifiedJobs = proofs.filter(p => p.consensusReached).length;
+
+  // Execution time is derived from the on-chain submission/completion blocks.
   const executionTimes = jobs
-    .filter(j => j.results?.executionTime)
-    .map(j => j.results!.executionTime);
+    .filter(j => j.completionTime != null && j.completionTime > j.submissionTime)
+    .map(j => (j.completionTime as number) - j.submissionTime);
   const averageExecutionTime = executionTimes.length > 0
     ? executionTimes.reduce((sum, t) => sum + t, 0) / executionTimes.length
     : 0;
@@ -402,7 +432,7 @@ export async function getQuantumStats(address: string): Promise<{
     totalJobs: jobs.length,
     completedJobs,
     totalCost: totalCost.toFixed(2),
-    totalRewards: totalRewards.toFixed(2),
+    verifiedJobs,
     averageExecutionTime: Math.round(averageExecutionTime),
     favoriteBackend,
   };

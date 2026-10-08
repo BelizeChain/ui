@@ -92,52 +92,11 @@ export default function KinichPage() {
         getQuantumBackends(),
         getPqcKeyStatus(address),
       ]);
-      setBackends(
-        backendsList.length > 0
-          ? backendsList
-          : [
-              {
-                name: 'Kinich Statevector-24Q',
-                provider: 'Local',
-                qubits: 24,
-                status: 'Available',
-                queueLength: 1,
-                averageWaitTime: 1,
-                costPerShot: '0.0001',
-                features: ['ExactState', 'ZeroNoise'],
-              },
-              {
-                name: 'Xanadu Borealis (Continuous-Variable Photonic)',
-                provider: 'Xanadu',
-                qubits: 216,
-                status: 'Available',
-                queueLength: 2,
-                averageWaitTime: 3,
-                costPerShot: '0.0008',
-                features: ['PhotonicGKP', 'GaussianBosonSampling', 'SurfaceCode'],
-              },
-              {
-                name: 'Rigetti Aspen-M-3 (Superconducting)',
-                provider: 'Azure',
-                qubits: 80,
-                status: 'Available',
-                queueLength: 3,
-                averageWaitTime: 4,
-                costPerShot: '0.0005',
-                features: ['ErrorMitigation', 'ZNE'],
-              },
-              {
-                name: 'IonQ Aria (Trapped Ion)',
-                provider: 'Azure',
-                qubits: 25,
-                status: 'Busy',
-                queueLength: 6,
-                averageWaitTime: 12,
-                costPerShot: '0.0012',
-                features: ['HighFidelity', 'AllToAll'],
-              },
-            ]
-      );
+      // No fabricated backends. A hardcoded list used to stand in whenever the
+      // chain returned none, advertising capacities, queue lengths, wait times
+      // and per-shot prices that no pallet records. Backends are derived from
+      // the jobs actually submitted, so an empty chain means an empty list.
+      setBackends(backendsList);
       setPqcStatus(pqcInfo);
     } catch (err) {
       console.error('Failed to load Kinich data', err);
@@ -442,7 +401,7 @@ export default function KinichPage() {
                       <div className="flex items-center gap-2">
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            backend.provider === 'Xanadu'
+                            backend.provider.startsWith('Azure')
                               ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                               : 'bg-slate-800 text-slate-300'
                           }`}
@@ -451,43 +410,37 @@ export default function KinichPage() {
                         </span>
                         <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          {backend.status}
+                          {backend.jobCount} job{backend.jobCount === 1 ? '' : 's'}
                         </span>
                       </div>
                       <h4 className="text-base font-bold text-white mt-1.5">{backend.name}</h4>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Capacity</span>
-                      <span className="text-cyan-300 font-bold text-sm">{backend.qubits} Qubits / Modes</span>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Peak Width</span>
+                      <span className="text-cyan-300 font-bold text-sm">{backend.maxQubits} Qubits</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
                     <div className="flex justify-between text-slate-400">
-                      <span>Queue Length:</span>
-                      <span className="text-white font-bold">{backend.queueLength} Jobs in Queue</span>
+                      <span>Jobs Submitted:</span>
+                      <span className="text-white font-bold">{backend.jobCount}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
-                      <span>Avg. Wait Time:</span>
-                      <span className="text-slate-300 font-bold">{backend.averageWaitTime} min</span>
+                      <span>Total Cost:</span>
+                      <span className="text-amber-400 font-bold">{backend.totalCost} DALLA</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
-                      <span>Cost per Shot:</span>
-                      <span className="text-amber-400 font-bold">{backend.costPerShot} DALLA</span>
+                      <span>Queue / Wait Time:</span>
+                      <span className="text-slate-500">Not tracked on-chain</span>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {backend.features.map((feat, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-md text-[10px] text-slate-300 flex items-center gap-1"
-                      >
-                        <Check size={11} weight="bold" className="text-emerald-400 shrink-0" />
-                        {feat}
-                      </span>
-                    ))}
-                  </div>
+                  {backend.jobCount === 0 && (
+                    <p className="text-[10px] text-slate-500 pt-1">
+                      No job has been submitted to this backend yet.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

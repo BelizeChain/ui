@@ -154,18 +154,6 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
     return null;
   }
 }
-        expiryDate: data.expiryDate.toNumber(),
-      };
-    }
-  } catch (error) {
-    console.debug('Failed to fetch on-chain BelizeID:', error);
-  }
-
-  // No fabricated identity. A bootstrap record used to be returned for two
-  // hardcoded addresses, handing back a verified-looking BelizeID (name, DOB,
-  // address, kycStatus 'Verified') that no issuer had ever attested.
-  return null;
-}
 
 /**
  * Resolve a human-readable display name for an address from the Identity pallet.

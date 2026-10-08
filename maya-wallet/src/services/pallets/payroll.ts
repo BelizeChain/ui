@@ -241,7 +241,7 @@ export async function getPayrollStats(address: string): Promise<PayrollStats> {
  */
 export async function downloadSalarySlip(paymentId: string): Promise<Blob> {
   const slip = await getSalarySlip(paymentId);
-  
+
   if (!slip) {
     throw new Error('Salary slip not found');
   }
