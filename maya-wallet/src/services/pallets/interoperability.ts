@@ -298,6 +298,61 @@ export async function getBridges(): Promise<Bridge[]> {
 }
 
 /**
+ * One entry of `interoperability.bridgeValidators`.
+ *
+ * There is no separate relayer registry: a relayer exists only as a
+ * `BridgeValidator` entry keyed by its `BridgeChain`. The previous UI invented
+ * a fixed set of named nodes with stakes and uptimes and a "5/7" threshold;
+ * nothing on chain stores a node name, an uptime percentage or a quorum size.
+ */
+export interface BridgeValidatorView {
+  chain: string;
+  account: string;
+  /** ML-DSA-87 (FIPS 204) public key, hex — 2592 bytes max. */
+  pqPublicKeyHex: string;
+  /** `BridgeChain` variants this validator signs for. */
+  supportedChains: string[];
+  stake: string;
+  /** 0-100 as recorded by the pallet. */
+  reliabilityScore: number;
+  signaturesCount: number;
+  failedSignatures: number;
+}
+
+/** Read every registered bridge validator, across all chains. */
+export async function getBridgeValidators(): Promise<BridgeValidatorView[]> {
+  try {
+    const api = await initializeApi();
+    if (!api.query.interoperability?.bridgeValidators) return [];
+
+    const entries = await api.query.interoperability.bridgeValidators.entries();
+    const validators: BridgeValidatorView[] = [];
+
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      validators.push({
+        chain: String(key?.args?.[0] ?? ''),
+        account: String(data.account ?? ''),
+        pqPublicKeyHex: bytesToHex(data.pqPublicKey),
+        supportedChains: Array.isArray(data.supportedChains)
+          ? data.supportedChains.map((c: unknown) => String(c))
+          : [],
+        stake: formatBalance(String(data.stake ?? '0')),
+        reliabilityScore: Number(data.reliabilityScore ?? 0),
+        signaturesCount: Number(data.signaturesCount ?? 0),
+        failedSignatures: Number(data.failedSignatures ?? 0),
+      });
+    }
+
+    return validators;
+  } catch (error) {
+    console.warn('Failed to read bridge validators:', error);
+    return [];
+  }
+}
+
+/**
  * Initiate cross-chain transfer
  */
 export async function initiateBridgeTransfer(
@@ -612,4 +667,13 @@ export async function claimBridgeRefund(address: string, transferId: string): Pr
 function formatBalance(planck: string): string {
   const value = parseFloat(planck) / Math.pow(10, 12);
   return value.toFixed(2);
+}
+
+/**
+ * Render a `Vec<u8>` decoded by `toJSON()` (an array of numbers) as a `0x…`
+ * hex string. Returns an empty string for anything that is not a byte array.
+ */
+function bytesToHex(raw: unknown): string {
+  if (!Array.isArray(raw) || raw.length === 0) return '';
+  return `0x${raw.map((byte) => Number(byte).toString(16).padStart(2, '0')).join('')}`;
 }

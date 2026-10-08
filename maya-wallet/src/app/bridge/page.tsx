@@ -9,9 +9,14 @@ import {
   SUPPORTED_EXPANDED_CHAINS,
   type ChainMetadata,
   type BridgeTransfer,
+  type BridgeValidatorView,
+  type Bridge,
   validateCrossChainAddress,
   getCrossChainExplorerUrl,
   getUserBridgeTransfers,
+  getBridgeValidators,
+  getBridges,
+  estimateBridgeFee,
   initiateBridgeTransfer,
 } from '@/services/pallets/interoperability';
 import {
@@ -51,6 +56,17 @@ export default function BridgePage() {
   const [amount, setAmount] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
   const [history, setHistory] = useState<BridgeTransfer[]>([]);
+  const [validators, setValidators] = useState<BridgeValidatorView[]>([]);
+  const [bridges, setBridges] = useState<Bridge[]>([]);
+  const [bridgeFee, setBridgeFee] = useState<string | null>(null);
+  const [feeError, setFeeError] = useState('');
+
+  // `chainConfigurations` is keyed by the runtime's `BridgeChain` variant name
+  // (Ethereum, Solana, Bitcoin, …). The picker's ids are lower-case slugs
+  // ('base', 'arbitrum', …), so most selections have no on-chain counterpart.
+  // Until the picker is driven by the on-chain enum, say so rather than
+  // inventing a fee for a chain the pallet does not know.
+  const onChainBridge = bridges.find((b) => b.id === toChain.id) ?? null;
 
   // Transfer Stepper Modal
   const [showBridgeModal, setShowBridgeModal] = useState(false);
@@ -67,6 +83,48 @@ export default function BridgePage() {
     }
   }, [selectedAccount?.address]);
 
+  // Registered bridge validators (no relayer registry exists beyond this map).
+  useEffect(() => {
+    getBridgeValidators().then(setValidators);
+    getBridges().then(setBridges);
+  }, []);
+
+  // Fee comes from the chain's `feeRate` (basis points) for the target chain.
+  // Earlier this page used a hardcoded `amount * 0.001 + 0.05` formula, which
+  // had no relationship to the on-chain fee the extrinsic actually charges.
+  useEffect(() => {
+    let cancelled = false;
+    const amt = parseFloat(amount) || 0;
+
+    const run = async () => {
+      if (amt <= 0 || !onChainBridge) {
+        if (cancelled) return;
+        setBridgeFee(null);
+        setFeeError('');
+        return;
+      }
+
+      try {
+        const estimate = await estimateBridgeFee(onChainBridge.id, amount);
+        if (cancelled) return;
+        setBridgeFee(estimate.fee);
+        setFeeError('');
+      } catch (err) {
+        if (cancelled) return;
+        setBridgeFee(null);
+        setFeeError(err instanceof Error ? err.message : String(err));
+      }
+    };
+
+    // Deferred so the effect body doesn't call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(run);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [amount, onChainBridge]);
+
   // Validation
   const addressValidation = validateCrossChainAddress(destinationAddress, toChain.id);
 
@@ -76,15 +134,10 @@ export default function BridgePage() {
     setToChain(temp);
   };
 
-  const calculateBridgeFee = () => {
-    const amt = parseFloat(amount) || 0;
-    const fee = amt * 0.001 + 0.05;
-    return fee.toFixed(4);
-  };
-
   const calculateReceiveAmount = () => {
     const amt = parseFloat(amount) || 0;
-    const fee = parseFloat(calculateBridgeFee());
+    if (bridgeFee === null) return '';
+    const fee = parseFloat(bridgeFee);
     return Math.max(0, amt - fee).toFixed(4);
   };
 
@@ -94,6 +147,13 @@ export default function BridgePage() {
       addNotification({ type: 'error', message: addressValidation.message || 'Invalid destination address.' });
       return;
     }
+    if (!onChainBridge) {
+      addNotification({
+        type: 'error',
+        message: `pallet interoperability has no chain configuration for "${toChain.id}" — nothing was submitted.`,
+      });
+      return;
+    }
 
     setIsBridging(true);
     setShowBridgeModal(true);
@@ -101,7 +161,7 @@ export default function BridgePage() {
     try {
       const result = await initiateBridgeTransfer(
         selectedAccount.address,
-        toChain.id,
+        onChainBridge.id,
         destinationAddress,
         selectedAsset,
         amount
@@ -127,7 +187,7 @@ export default function BridgePage() {
         toChain: toChain.name,
         asset: selectedAsset,
         amount,
-        fee: result.estimatedFee || calculateBridgeFee(),
+        fee: result.estimatedFee || bridgeFee || '0',
         status: 'Pending',
         initiatedAt: Math.floor(Date.now() / 1000),
         completedAt: undefined,
@@ -376,15 +436,32 @@ export default function BridgePage() {
               <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 text-xs space-y-2 text-slate-400">
                 <div className="flex justify-between">
                   <span>Relayer Fee (0.1% + Gas):</span>
-                  <span className="font-mono text-slate-300 font-semibold">{calculateBridgeFee()} {selectedAsset}</span>
+                  <span className="font-mono text-slate-300 font-semibold">
+                    {bridgeFee === null ? '—' : `${bridgeFee} ${selectedAsset}`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Estimated Delivery Time:</span>
-                  <span className="font-semibold text-emerald-400">~{toChain.estimatedTimeMin * 60} Seconds ({toChain.type.toUpperCase()})</span>
+                  <span className="font-semibold text-slate-400">
+                    not recorded on chain
+                  </span>
                 </div>
+                {feeError && (
+                  <p className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl p-3">
+                    Could not read the on-chain bridge fee: {feeError}
+                  </p>
+                )}
+                {!onChainBridge && (
+                  <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                    <span className="font-mono">{toChain.id}</span> is not a{' '}
+                    <span className="font-mono">BridgeChain</span> variant, so pallet interoperability has no
+                    configuration for it. No fee or transfer is possible until the picker is driven by the
+                    on-chain enum.
+                  </p>
+                )}
                 <div className="flex justify-between pt-2 border-t border-slate-800/80 font-bold text-white text-sm">
                   <span>Estimated Receive:</span>
-                  <span className="font-mono text-emerald-400">{calculateReceiveAmount()} {selectedAsset}</span>
+                  <span className="font-mono text-emerald-400">{calculateReceiveAmount() || '—'} {selectedAsset}</span>
                 </div>
               </div>
 
@@ -392,7 +469,7 @@ export default function BridgePage() {
               <button
                 type="button"
                 onClick={handleStartBridge}
-                disabled={!amount || parseFloat(amount) <= 0 || fromChain.id === toChain.id || (destinationAddress.trim() !== '' && !addressValidation.isValid)}
+                disabled={!amount || parseFloat(amount) <= 0 || fromChain.id === toChain.id || !onChainBridge || (destinationAddress.trim() !== '' && !addressValidation.isValid)}
                 className="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 active:scale-[0.99] text-white rounded-2xl font-bold text-sm shadow-xl shadow-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <ArrowsLeftRight size={18} weight="bold" />
@@ -514,38 +591,53 @@ export default function BridgePage() {
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <LockKey size={20} className="text-emerald-400" />
-                Relayer Validator Quorum (Active Threshold: 5/7)
+                Bridge Validators
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Decentralized nodes securing cross-chain transfers with post-quantum threshold cryptography.
+                Read from <span className="font-mono">interoperability.bridgeValidators</span>. The pallet
+                stores no node name, location or uptime, so none is shown.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              {[
-                { name: 'Ceiba Root Node Alpha', location: 'Belize City', stake: '2,500,000 Ɗ', status: 'Online', uptime: '99.98%' },
-                { name: 'Ambergris Marine Node', location: 'San Pedro', stake: '1,800,000 Ɗ', status: 'Online', uptime: '99.94%' },
-                { name: 'Cayo Valley Oracle Relayer', location: 'San Ignacio', stake: '1,200,000 Ɗ', status: 'Online', uptime: '100%' },
-                { name: 'Placencia Eco Relay', location: 'Placencia', stake: '950,000 Ɗ', status: 'Online', uptime: '99.89%' },
-              ].map((v, i) => (
-                <div key={i} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">{v.name}</span>
-                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold text-[10px]">
-                      {v.status}
-                    </span>
+            {validators.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 text-xs">
+                No bridge validators are registered on chain.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {validators.map((v) => (
+                  <div
+                    key={`${v.chain}:${v.account}`}
+                    className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-white text-[11px] truncate">{v.account}</span>
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold text-[10px] shrink-0">
+                        {v.reliabilityScore}% reliability
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-slate-400 text-[11px]">
+                      <span>Registered under: {v.chain}</span>
+                      <span className="text-slate-300 font-mono">{v.stake} Ɗ stake</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                      <span>Signatures: {v.signaturesCount}</span>
+                      <span className={v.failedSignatures > 0 ? 'text-amber-300' : 'text-slate-400'}>
+                        Failed: {v.failedSignatures}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono break-all">
+                      Chains: {v.supportedChains.join(', ') || '—'}
+                    </div>
+                    {v.pqPublicKeyHex && (
+                      <div className="text-[10px] text-slate-500 font-mono break-all">
+                        ML-DSA-87 key: {v.pqPublicKeyHex.slice(0, 26)}… ({v.pqPublicKeyHex.length / 2} bytes)
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between text-slate-400 text-[11px]">
-                    <span>Location: {v.location}</span>
-                    <span className="text-slate-300 font-mono">Uptime: {v.uptime}</span>
-                  </div>
-                  <div className="pt-1 flex justify-between text-[11px] font-mono">
-                    <span className="text-slate-500">Security Stake:</span>
-                    <span className="text-emerald-400 font-semibold">{v.stake}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

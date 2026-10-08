@@ -1,89 +1,84 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
+import { getEconomySupply, type EconomySupply } from '@/services/pallets/economy';
+import {
+  getComplianceStatus,
+  getAccountRestriction,
+  type ComplianceStatusView,
+  type RestrictionView,
+} from '@/services/pallets/compliance';
 import {
   ArrowLeft,
   ShieldCheck,
   IdentificationCard,
-  FileText,
   Bank,
-  Check,
-  Download,
   Scales,
-  Eye,
+  Warning,
 } from 'phosphor-react';
 
+type Tab = 'reserve' | 'kyc' | 'limits';
+
+/**
+ * Everything on this page is read from `pallet_belize_economy` and
+ * `pallet_belize_compliance`.
+ *
+ * The pallet stores no tier-based transaction limits and no exportable
+ * certificate, and `compliance.totalReserves` / `compliance.totalLiabilities`
+ * do not exist — an earlier version queried them, always failed, and then
+ * displayed hardcoded reserves, a 65/35.2 collateral split, a synthetic
+ * "ZK proof hash" and a PDF export that produced nothing.
+ */
 export default function CompliancePage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<'proof-of-reserve' | 'kyc-aml' | 'fiu-limits' | 'certs'>('proof-of-reserve');
-  const [isAuditing, setIsAuditing] = useState(false);
-  // CONFIG-002: real reserve-ratio query from the compliance pallet.
-  const [auditTimestamp, setAuditTimestamp] = useState('');
-  const [collateralRatio, setCollateralRatio] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('reserve');
+  const [supply, setSupply] = useState<EconomySupply | null>(null);
+  const [status, setStatus] = useState<ComplianceStatusView | null>(null);
+  const [restriction, setRestriction] = useState<RestrictionView | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const address = selectedAccount?.address;
+
+  const load = useCallback(async () => {
+    if (!address) return;
+    setLoading(true);
+    try {
+      const [economy, complianceStatus, restrictionView] = await Promise.all([
+        getEconomySupply(),
+        getComplianceStatus(address),
+        getAccountRestriction(address),
+      ]);
+      setSupply(economy);
+      setStatus(complianceStatus);
+      setRestriction(restrictionView);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [address]);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetchAudit = async () => {
-      try {
-        const { initializeApi } = await import('@/services/blockchain');
-        const api = await initializeApi();
-        // compliance.totalReserves / compliance.issuedStablecoins —
-        // fall back to showing nothing rather than fabricating a ratio.
-        const reserves = (await api.query.compliance?.totalReserves?.()) as any;
-        const liabilities = (await api.query.compliance?.totalLiabilities?.()) as any;
-        if (reserves && liabilities && !reserves.isNone && !liabilities.isNone) {
-          const r = BigInt(reserves.unwrap().toString());
-          const l = BigInt(liabilities.unwrap().toString());
-          const pct = l > 0n ? Number((r * 10000n) / l) / 100 : null;
-          if (!cancelled) {
-            setCollateralRatio(pct !== null ? `${pct.toFixed(1)}%` : null);
-            setAuditTimestamp(`Block #${(await api.rpc.chain.getHeader()).number.toNumber().toLocaleString()}`);
-          }
-        } else if (!cancelled) {
-          setAuditTimestamp('Statutory reserve data not published on-chain yet');
-        }
-      } catch (err) {
-        if (!cancelled) setAuditTimestamp(`Audit lookup failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    };
-    fetchAudit();
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleRefreshAudit = () => {
-    setIsAuditing(true);
-    // re-run the same real query by forcing a state tick
-    setAuditTimestamp('');
-    setTimeout(async () => {
-      try {
-        const { initializeApi } = await import('@/services/blockchain');
-        const api = await initializeApi();
-        const header = await api.rpc.chain.getHeader();
-        const reserves = (await api.query.compliance?.totalReserves?.()) as any;
-        const liabilities = (await api.query.compliance?.totalLiabilities?.()) as any;
-        if (reserves && liabilities && !reserves.isNone && !liabilities.isNone) {
-          const r = BigInt(reserves.unwrap().toString());
-          const l = BigInt(liabilities.unwrap().toString());
-          const pct = l > 0n ? Number((r * 10000n) / l) / 100 : null;
-          setCollateralRatio(pct !== null ? `${pct.toFixed(1)}%` : null);
-          setAuditTimestamp(`Block #${header.number.toNumber().toLocaleString()}`);
-        } else {
-          setAuditTimestamp('Statutory reserve data not published on-chain yet');
-        }
-      } finally {
-        setIsAuditing(false);
-      }
-    }, 100);
-  };
+    // Deferred so the effect body doesn't call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(load);
+  }, [load]);
 
   if (!isConnected || !selectedAccount) {
-    return <ConnectWalletPrompt message="Connect your Maya Wallet to view Central Bank compliance and Proof-of-Reserve audit records." fullScreen />;
+    return (
+      <ConnectWalletPrompt
+        message="Connect your Maya Wallet to view Central Bank reserves and your on-chain compliance record."
+        fullScreen
+      />
+    );
   }
 
   return (
@@ -98,274 +93,267 @@ export default function CompliancePage() {
               </button>
             </Link>
             <div>
-              <h1 className="text-xl font-bold">Central Bank & Regulatory Compliance</h1>
-              <p className="text-xs text-slate-400">bBZD Proof-of-Reserve • FIU AML/CFT Standards • KYC Tier 3</p>
+              <h1 className="text-xl font-bold">Regulatory Compliance</h1>
+              <p className="text-xs text-slate-400">
+                pallet economy reserves • pallet compliance account status
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
-              <ShieldCheck size={16} weight="bold" />
-              Statutory Compliant
-            </span>
-          </div>
+          <button
+            onClick={() => {
+              load();
+              addNotification({ type: 'info', message: 'Re-reading compliance data from chain.' });
+            }}
+            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-full text-xs font-bold"
+          >
+            {loading ? 'Reading…' : 'Refresh'}
+          </button>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
-        {/* Metric Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">bBZD Peg Backing Ratio</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400">
-                {collateralRatio ?? '—'}
-              </span>
-              <span className="text-[10px] text-slate-400">
-                {collateralRatio ? (parseFloat(collateralRatio) >= 100 ? 'Over-Collateralized' : 'Under-Collateralized') : 'Awaiting on-chain data'}
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">Pegged 1:1 to BZD ($0.50 USD)</span>
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 text-xs text-rose-200">
+            {error}
           </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Reserve Vault</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-white font-mono">$10,020,000</span>
-              <span className="text-[10px] text-emerald-300">USD</span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">Central Bank of Belize Depository</span>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">KYC Compliance Tier</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-purple-400">Tier 3 (Sovereign)</span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">SSN & Passport Verified</span>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">FIU AML Screening</span>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="font-bold text-emerald-300 text-sm">Clean / Zero Flags</span>
-            </div>
-            <span className="text-[11px] text-slate-400 block">FATF Travel Rule Compliant</span>
-          </div>
-        </div>
+        )}
 
         {/* Tab Navigation */}
-        <div className="flex bg-slate-900/80 border border-slate-800 rounded-2xl p-1 overflow-x-auto">
-          {(['proof-of-reserve', 'kyc-aml', 'fiu-limits', 'certs'] as const).map((tab) => (
+        <div className="flex bg-slate-900/90 border border-slate-800 rounded-2xl p-1 overflow-x-auto text-xs font-bold gap-1">
+          {(
+            [
+              { id: 'reserve', label: 'Reserves & Backing' },
+              { id: 'kyc', label: 'My Compliance Record' },
+              { id: 'limits', label: 'Reporting Thresholds' },
+            ] as const
+          ).map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 min-w-[130px] py-2.5 text-xs font-bold rounded-xl capitalize transition-all ${
-                activeTab === tab
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-bold shadow-md'
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 min-w-[150px] py-2.5 rounded-xl transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {tab === 'proof-of-reserve'
-                ? 'Proof of Reserve'
-                : tab === 'kyc-aml'
-                ? 'KYC & AML Status'
-                : tab === 'fiu-limits'
-                ? 'Statutory Limits'
-                : 'ZK Compliance Certs'}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Tab 1: Proof of Reserve */}
-        {activeTab === 'proof-of-reserve' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Bank size={22} className="text-emerald-400" />
-                  Central Bank of Belize Statutory Proof of Reserve
-                </h3>
-                <p className="text-slate-400 mt-1">
-                  Verifiable real-time cryptographic audit of the 1:1 reserve backing every minted statutory Belize Dollar Stablecoin (bBZD).
-                </p>
-              </div>
-
-              <button
-                onClick={handleRefreshAudit}
-                disabled={isAuditing}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5"
-              >
-                <Eye size={14} weight="bold" />
-                {isAuditing ? 'Auditing Vault...' : 'Run Audit Proof'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">bBZD Circulating Supply</span>
-                <span className="text-xl font-bold text-white font-mono">20,000,000.00 bBZD</span>
-                <span className="text-[11px] text-slate-400 block">Total supply on BelizeChain</span>
-              </div>
-
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Statutory Reserve Collateral</span>
-                <span className="text-xl font-bold text-emerald-400 font-mono">$10,020,000.00 USD</span>
-                <span className="text-[11px] text-emerald-300 block">Equivalent to BZ$ 20,040,000.00</span>
-              </div>
-
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Last On-Chain Audit</span>
-                <span className="text-sm font-bold text-purple-300 block">{auditTimestamp}</span>
-                <span className="text-[11px] text-slate-400 block">Oracle Merkle Root: 0x4a9b...f21c</span>
-              </div>
-            </div>
-
-            {/* Collateral Breakdown */}
-            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
-              <h4 className="font-bold text-white text-sm">Collateral Asset Breakdown</h4>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-300">Central Bank of Belize Cash Depository (USD/BZD)</span>
-                    <span className="text-emerald-400 font-bold">$6,500,000 USD (65%)</span>
-                  </div>
-                  <div className="w-full bg-slate-900 rounded-full h-2">
-                    <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '65%' }} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-300">Short-Duration US Treasury Bills (30-Day T-Bills)</span>
-                    <span className="text-cyan-400 font-bold">$3,520,000 USD (35.2%)</span>
-                  </div>
-                  <div className="w-full bg-slate-900 rounded-full h-2">
-                    <div className="bg-cyan-400 h-2 rounded-full" style={{ width: '35.2%' }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: KYC & AML */}
-        {activeTab === 'kyc-aml' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
+        {/* Tab 1: Reserves & backing */}
+        {activeTab === 'reserve' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <IdentificationCard size={22} className="text-purple-400" />
-                Decentralized KYC & AML Compliance Status
-              </h3>
-              <p className="text-slate-400 mt-1">Verified on-chain identity records linked to your sovereign BelizeID.</p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <div className="space-y-1">
-                  <span className="font-bold text-white text-sm">Belize Social Security Board (SSB) Validation</span>
-                  <span className="text-slate-400 text-[11px] block">SSN Verified against Government Registry • ZK Hash active</span>
-                </div>
-                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
-                  Verified
-                </span>
-              </div>
-
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <div className="space-y-1">
-                  <span className="font-bold text-white text-sm">Belize Passport / National ID Biometrics</span>
-                  <span className="text-slate-400 text-[11px] block">Cryptographic facial match + ICAO 9303 NFC e-Passport scan</span>
-                </div>
-                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
-                  Verified
-                </span>
-              </div>
-
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <div className="space-y-1">
-                  <span className="font-bold text-white text-sm">FIU Sanctions & Politically Exposed Persons (PEP) Check</span>
-                  <span className="text-slate-400 text-[11px] block">Automated daily screening against UN, OFAC, and domestic lists</span>
-                </div>
-                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
-                  Cleared
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Limits */}
-        {activeTab === 'fiu-limits' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Scales size={22} className="text-cyan-400" />
-                Statutory Transaction & Settlement Limits
+                <Bank size={22} className="text-emerald-400" />
+                bBZD Reserves &amp; Backing
               </h3>
               <p className="text-slate-400 mt-1">
-                Tier-based thresholds determined under the Belize Money Laundering and Terrorism (Prevention) Act.
+                Read from <span className="font-mono">economy.centralBankReserves</span> and{' '}
+                <span className="font-mono">economy.totalBbzdSupply</span>. The pallet documents the
+                reserves as held <em>off-chain</em> and reported on chain for audit transparency, so
+                this ratio is a reported figure — not an independent audit.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-500 block text-[10px]">Daily Transfer Limit</span>
-                <span className="text-lg font-bold text-white font-mono">100,000.00 Ɗ</span>
-                <span className="text-[11px] text-emerald-400">or BZ$ 250,000.00</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                  bBZD Circulating Supply
+                </span>
+                <span className="text-xl font-bold text-white font-mono block">
+                  {supply ? `${supply.bbzdTotalSupply} BZ$` : '—'}
+                </span>
+                <span className="text-[11px] text-slate-400 block font-mono">
+                  economy.totalBbzdSupply
+                </span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-500 block text-[10px]">Monthly Settlement Cap</span>
-                <span className="text-lg font-bold text-white font-mono">2,000,000.00 Ɗ</span>
-                <span className="text-[11px] text-emerald-400">or BZ$ 5,000,000.00</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                  Reported CB Reserves
+                </span>
+                <span className="text-xl font-bold text-emerald-400 font-mono block">
+                  {supply ? `${supply.centralBankReserves} BZ$` : '—'}
+                </span>
+                <span className="text-[11px] text-slate-400 block font-mono">
+                  economy.centralBankReserves
+                </span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-500 block text-[10px]">Cross-Border Bridge Cap</span>
-                <span className="text-lg font-bold text-emerald-400 font-mono">Unlimited (Tier 3)</span>
-                <span className="text-[11px] text-slate-400">Institutional clearance active</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                  Reported Backing Ratio
+                </span>
+                <span
+                  className={`text-xl font-bold font-mono block ${
+                    supply?.backingRatioPercent != null && supply.backingRatioPercent >= 100
+                      ? 'text-emerald-400'
+                      : 'text-amber-300'
+                  }`}
+                >
+                  {supply?.backingRatioPercent == null
+                    ? '—'
+                    : `${supply.backingRatioPercent.toFixed(2)}%`}
+                </span>
+                <span className="text-[11px] text-slate-400 block">
+                  {supply?.backingRatioPercent == null
+                    ? 'undefined while no bBZD is minted'
+                    : 'reserves ÷ bBZD supply'}
+                </span>
               </div>
             </div>
+
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-[11px] space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Minting halted flag:</span>
+                <span className={supply?.mintingHalted ? 'text-rose-300' : 'text-slate-200'}>
+                  {supply ? String(supply.mintingHalted) : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">DALLA total supply:</span>
+                <span className="text-slate-200">
+                  {supply ? `${supply.dallaTotalSupply} Ɗ` : '—'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 flex items-start gap-2">
+              <Warning size={14} className="text-slate-500 shrink-0 mt-0.5" weight="bold" />
+              pallet compliance stores no reserve or liability figures, so no per-asset collateral
+              breakdown can be shown. The previous 65% / 35.2% T-Bill split was hardcoded.
+            </p>
           </div>
         )}
 
-        {/* Tab 4: ZK Certs */}
-        {activeTab === 'certs' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl text-xs">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <FileText size={22} className="text-emerald-400" />
-                  Zero-Knowledge Compliance Credentials
-                </h3>
-                <p className="text-slate-400 mt-1">Exportable zero-knowledge proof credentials for banking and international remittances.</p>
-              </div>
-
-              <button
-                onClick={() => addNotification({ type: 'success', message: 'ZK Tax & Banking Clearance Certificate exported to device storage (PDF)!' })}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5"
-              >
-                <Download size={14} />
-                Export Certificate (PDF)
-              </button>
+        {/* Tab 2: Account compliance record */}
+        {activeTab === 'kyc' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <IdentificationCard size={22} className="text-purple-400" />
+                On-Chain Compliance Record
+              </h3>
+              <p className="text-slate-400 mt-1">
+                Read from <span className="font-mono">compliance.complianceStatusOf</span> and{' '}
+                <span className="font-mono">compliance.restrictedAccounts</span> for{' '}
+                <span className="font-mono">{address?.slice(0, 12)}…</span>
+              </p>
             </div>
 
-            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3 font-mono">
-              <div className="flex justify-between text-slate-400 text-[11px]">
-                <span>Issuer:</span>
-                <span className="text-white font-bold">Central Bank of Belize • DID:did:belize:cbb-01</span>
+            {loading ? (
+              <p className="text-slate-400">Reading…</p>
+            ) : !status ? (
+              <div className="text-center py-8 text-slate-400">
+                No compliance record exists for this account yet.
               </div>
-              <div className="flex justify-between text-slate-400 text-[11px]">
-                <span>Holder:</span>
-                <span className="text-cyan-300 font-bold">{selectedAccount.address.slice(0, 16)}...</span>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-[11px]">
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between">
+                  <span className="text-slate-400">Verification level</span>
+                  <span className="text-white font-bold">{status.verificationLevel || '—'}</span>
+                </div>
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between">
+                  <span className="text-slate-400">Risk level</span>
+                  <span className="text-white font-bold">{status.riskLevel || '—'}</span>
+                </div>
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between">
+                  <span className="text-slate-400">Whitelisted</span>
+                  <span className={status.whitelisted ? 'text-emerald-300' : 'text-slate-300'}>
+                    {String(status.whitelisted)}
+                  </span>
+                </div>
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between">
+                  <span className="text-slate-400">Restricted</span>
+                  <span className={status.restricted ? 'text-rose-300' : 'text-slate-300'}>
+                    {String(status.restricted)}
+                  </span>
+                </div>
+                <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between sm:col-span-2">
+                  <span className="text-slate-400">Last verification</span>
+                  <span className="text-slate-200">
+                    {status.lastVerification > 0
+                      ? new Date(status.lastVerification).toLocaleString()
+                      : '—'}
+                  </span>
+                </div>
+                {restriction && (
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 sm:col-span-2">
+                    <span className="text-slate-400 block mb-1">Restriction entry</span>
+                    <span className="text-slate-200 block">
+                      restricted = {String(restriction.restricted)}
+                    </span>
+                    {restriction.reason && (
+                      <span className="text-slate-400 block mt-1 break-all">
+                        reason: {restriction.reason}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between text-slate-400 text-[11px]">
-                <span>ZK Proof Hash:</span>
-                <span className="text-emerald-400">0x8f3c7e112fa9b0...</span>
-              </div>
-              <div className="pt-2 border-t border-slate-800 text-slate-500 text-[10px]">
-                This credential cryptographically proves statutory tax and AML clearance without revealing confidential income or balance amounts.
-              </div>
+            )}
+
+            <p className="text-[11px] text-slate-500 flex items-start gap-2">
+              <Warning size={14} className="text-slate-500 shrink-0 mt-0.5" weight="bold" />
+              Sanctions-list screening and PEP checks are not exposed per account, and no
+              zero-knowledge clearance certificate is issued — earlier rows claiming
+              &quot;ICAO 9303 NFC e-Passport scan&quot;, a daily UN/OFAC screening and a ZK proof
+              hash were invented.
+            </p>
+          </div>
+        )}
+
+        {/* Tab 3: Reporting thresholds */}
+        {activeTab === 'limits' && (
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-xl text-xs">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Scales size={22} className="text-cyan-400" />
+                Reporting Thresholds
+              </h3>
+              <p className="text-slate-400 mt-1">
+                pallet compliance exposes no tier-based limit storage. Thresholds set under the Belize
+                Money Laundering and Terrorism (Prevention) Act are applied off chain, so nothing can be
+                shown here.
+              </p>
+            </div>
+
+            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
+              <p className="text-slate-300 leading-relaxed">
+                What the pallet <em>does</em> store is activity reporting:
+              </p>
+              <ul className="text-slate-400 space-y-1.5 list-disc pl-5 font-mono text-[11px]">
+                <li>
+                  <span className="text-slate-300">compliance.suspiciousActivities</span> —
+                  AML/CFT flags raised against accounts
+                </li>
+                <li>
+                  <span className="text-slate-300">compliance.auditRecords</span> — audit trail of
+                  compliance actions
+                </li>
+                <li>
+                  <span className="text-slate-300">compliance.sanctionsList</span> — sanctions
+                  entries keyed by a 32-byte identifier
+                </li>
+                <li>
+                  <span className="text-slate-300">compliance.restrictedAccounts</span> — accounts
+                  blocked from operations, with a reason
+                </li>
+              </ul>
+              <p className="text-[11px] text-slate-500">
+                An earlier version of this tab showed a 100,000 Ɗ daily limit, a 2,000,000 Ɗ monthly
+                cap and an &quot;unlimited&quot; cross-border cap. None of those exist on chain.
+              </p>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-start gap-2 text-[11px] text-slate-400">
+              <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" weight="bold" />
+              <span>
+                Your own flags are visible under <em>My Compliance Record</em>, along with any
+                restriction entry the pallet holds for your account.
+              </span>
             </div>
           </div>
         )}
