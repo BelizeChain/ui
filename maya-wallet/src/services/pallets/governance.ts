@@ -28,27 +28,28 @@ export interface Proposal {
   createdAt: number;
 }
 
+/** Mirrors `governance.referendums: u32 -> Referendum`. */
 export interface Referendum {
   index: number;
-  hash: string;
-  proposalHash: string;
-  voteThreshold: 'SimpleMajority' | 'SuperMajority' | 'Unanimous';
-  voteCount: {
-    ayes: string; // Total DALLA voting yes
-    nays: string; // Total DALLA voting no
-    turnout: string; // Total DALLA voted
-  };
-  status: 'Voting' | 'Passed' | 'Failed' | 'Executed';
-  voteEnd: number;
-  delayPeriod: number;
+  title: string;
+  description: string;
+  /** Ballot option labels, in order. */
+  options: string[];
+  /** Vote totals per option — `voteCounts[i]` corresponds to `options[i]`. */
+  voteCounts: number[];
+  totalVotes: number;
+  quorumPercentage: number;
+  votingStart: number;
+  votingEnd: number;
+  status: string;
+  district?: string;
+  winningOption?: number;
 }
 
+/** District representation is a membership list; the pallet stores no motions. */
 export interface DistrictCouncil {
   district: 'Belize' | 'Cayo' | 'Corozal' | 'Orange Walk' | 'Stann Creek' | 'Toledo';
   members: string[];
-  prime?: string; // District representative
-  proposalCount: number;
-  motions: Motion[];
 }
 
 export interface Motion {
@@ -66,13 +67,19 @@ export interface Motion {
   voteEnd: number;
 }
 
+/**
+ * A council vote from the `governanceCouncil` pallet_collective instance.
+ *
+ * `pallet_collective` keys votes by (AccountId, ProposalHash) and stores aye /
+ * balance / conviction — there is no proposal index, no timestamp, and no
+ * `votingOf` accessor.
+ */
 export interface Vote {
-  proposalIndex: number;
+  proposalHash: string;
   voter: string;
   vote: 'Aye' | 'Nay';
-  balance: string; // Conviction-weighted voting power
-  conviction: 'None' | 'Locked1x' | 'Locked2x' | 'Locked4x' | 'Locked8x' | 'Locked16x';
-  timestamp: number;
+  balance: string;
+  conviction: string;
 }
 
 /**
@@ -278,33 +285,38 @@ export async function getActiveReferenda(): Promise<Referendum[]> {
   const api = await initializeApi();
 
   try {
-    const referenda: any = await api.query.governance?.referendumInfoOf?.entries?.() || [];
+    // Storage item is `referendums`; there is no `referendumInfoOf`
+    // (that name belongs to Substrate's pallet_democracy). The shape is also
+    // the custom one: options[], voteCounts[], district, winningOption — not
+    // hash/tally/threshold.
+    if (!api.query.governance?.referendums) return [];
 
-    if (!referenda || referenda.length === 0) {
-      return [];
+    const entries = await api.query.governance.referendums.entries();
+    const referenda: Referendum[] = [];
+
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      const options = Array.isArray(data.options) ? data.options : [];
+      const counts = Array.isArray(data.voteCounts) ? data.voteCounts : [];
+
+      referenda.push({
+        index: Number(data.id ?? key?.args?.[0] ?? 0),
+        title: bytesToString(data.title),
+        description: bytesToString(data.description),
+        options: options.map((o: unknown) => bytesToString(o)),
+        voteCounts: counts.map(Number),
+        totalVotes: Number(data.totalVotes ?? 0),
+        quorumPercentage: Number(data.quorumPercentage ?? 0),
+        votingStart: Number(data.votingStart ?? 0),
+        votingEnd: Number(data.votingEnd ?? 0),
+        status: String(data.status),
+        district: data.district ? String(data.district) : undefined,
+        winningOption: data.winningOption != null ? Number(data.winningOption) : undefined,
+      });
     }
 
-    return referenda
-      .filter(([, info]: [any, any]) => !info.isNone)
-      .map(([key, info]: [any, any]) => {
-        const index = key.args[0].toNumber();
-        const data = info.unwrap();
-
-        return {
-          index,
-          hash: data.hash.toString(),
-          proposalHash: data.proposalHash.toString(),
-          voteThreshold: data.threshold.toString() as any,
-          voteCount: {
-            ayes: formatBalance(data.tally.ayes.toString()),
-            nays: formatBalance(data.tally.nays.toString()),
-            turnout: formatBalance(data.tally.turnout.toString()),
-          },
-          status: data.status.toString() as any,
-          voteEnd: data.end.toNumber(),
-          delayPeriod: data.delay?.toNumber() || 0,
-        };
-      });
+    return referenda.sort((a, b) => b.index - a.index);
   } catch (error) {
     console.error('Failed to fetch referenda:', error);
     return [];
@@ -318,35 +330,20 @@ export async function getDistrictCouncil(district: string): Promise<DistrictCoun
   const api = await initializeApi();
 
   try {
-    const members: any = await api.query.governance?.districtCouncils(district);
-    const motions: any = await api.query.governance?.districtMotions(district);
+    // `districtCouncils` and `districtMotions` do not exist. District
+    // representation is `districtRepresentation: BelizeDistrict -> Vec<AccountId>`,
+    // which is a membership list only — the pallet records no prime, no
+    // proposal count and no per-district motions.
+    if (!api.query.governance?.districtRepresentation) return null;
 
-    if (!members || members.isNone) {
-      return null;
-    }
+    const raw: any = await api.query.governance.districtRepresentation(district as any);
+    if (!raw || raw.isNone) return null;
 
-    const councilData = members.unwrap();
-    const motionData = motions?.toHuman() || [];
+    const members: string[] = (raw.toJSON() as string[] | null) ?? [];
 
     return {
       district: district as any,
-      members: councilData.members.toHuman() as string[],
-      prime: councilData.prime?.toString(),
-      proposalCount: councilData.proposalCount.toNumber(),
-      motions: motionData.map((motion: any, index: number) => ({
-        index,
-        hash: motion.hash,
-        proposer: motion.proposer,
-        title: motion.title || `Motion ${index}`,
-        description: motion.description || '',
-        threshold: motion.threshold,
-        voteCount: {
-          ayes: motion.ayes?.length || 0,
-          nays: motion.nays?.length || 0,
-        },
-        status: motion.status,
-        voteEnd: motion.voteEnd || 0,
-      })),
+      members,
     };
   } catch (error) {
     console.error('Failed to fetch district council:', error);
@@ -361,24 +358,32 @@ export async function getVotingHistory(address: string, limit: number = 50): Pro
   const api = await initializeApi();
 
   try {
-    const votes: any = await api.query.governance?.votingOf(address);
+    // `governance.votingOf` does not exist. Council votes live in the
+    // `governanceCouncil` pallet_collective instance, whose `voting` map is
+    // keyed (AccountId, ProposalHash) — so there is no single-value lookup by
+    // account and the entries must be filtered.
+    if (!api.query.governanceCouncil?.voting) return [];
 
-    if (!votes || votes.isNone) {
-      return [];
+    const entries = await api.query.governanceCouncil.voting.entries();
+    const votes: Vote[] = [];
+
+    for (const [key, raw] of entries as any[]) {
+      const args = key?.args ?? [];
+      if (String(args[0]) !== address) continue;
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+
+      votes.push({
+        proposalHash: String(args[1]),
+        voter: address,
+        // pallet_collective `Voting` uses aye/nay booleans plus a vote index.
+        vote: data.aye ? 'Aye' : 'Nay',
+        balance: formatBalance(String(data.balance ?? '0')),
+        conviction: String(data.conviction ?? 'None'),
+      });
     }
 
-    const votingData = votes.unwrap();
-
-    return votingData.votes
-      .map((vote: any) => ({
-        proposalIndex: vote.proposalIndex.toNumber(),
-        voter: address,
-        vote: vote.aye ? 'Aye' : 'Nay',
-        balance: formatBalance(vote.balance.toString()),
-        conviction: vote.conviction.toString() as any,
-        timestamp: vote.timestamp?.toNumber() || 0,
-      }))
-      .slice(0, limit);
+    return votes.slice(0, limit);
   } catch (error) {
     console.error('Failed to fetch voting history:', error);
     return [];

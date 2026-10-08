@@ -195,8 +195,8 @@ export default function GovernancePage() {
         {activeTab === 'referendums' && (
           <div className="space-y-4">
             {referendums.map((r) => {
-              const ayes = parseFloat(r.voteCount.ayes);
-              const nays = parseFloat(r.voteCount.nays);
+              const ayes = r.voteCounts[0] ?? 0;
+              const nays = r.voteCounts[1] ?? 0;
               const totalVotes = ayes + nays;
               const ayePct = totalVotes > 0 ? Math.round((ayes / totalVotes) * 100) : 0;
 
@@ -209,11 +209,11 @@ export default function GovernancePage() {
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 font-bold rounded-full text-[10px]">
-                          {r.voteThreshold}
+                          Quorum {r.quorumPercentage}%
                         </span>
                         <span className="text-slate-500 text-[11px] font-mono">Referendum #{r.index}</span>
                       </div>
-                      <h3 className="font-bold text-white text-sm">{r === null ? "" : `On-chain Referendum #${r.index}`}</h3>
+                      <h3 className="font-bold text-white text-sm">{r.title || `On-chain Referendum #${r.index}`}</h3>
                     </div>
 
                     <span
@@ -227,18 +227,18 @@ export default function GovernancePage() {
                     </span>
                   </div>
 
-                  <p className="text-slate-300 text-xs leading-relaxed font-mono">Proposal hash: {r.proposalHash.slice(0, 18)}…</p>
+                  <p className="text-slate-300 text-xs leading-relaxed">{r.description || 'No description recorded on chain.'}</p>
 
                   <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400">Turnout:</span>
-                    <span className="text-emerald-400 font-bold font-mono">{r.voteCount.turnout} DALLA</span>
+                    <span className="text-slate-400">Total votes cast:</span>
+                    <span className="text-emerald-400 font-bold font-mono">{r.totalVotes.toLocaleString()}</span>
                   </div>
 
                   {/* Voting Progress */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-[11px] font-mono">
-                      <span className="text-emerald-400 font-bold">Aye: {r.voteCount.ayes} DALLA ({ayePct}%)</span>
-                      <span className="text-rose-400 font-bold">Nay: {r.voteCount.nays} DALLA ({100 - ayePct}%)</span>
+                      <span className="text-emerald-400 font-bold">{r.options[0] ?? 'Option 0'}: {ayes} ({ayePct}%)</span>
+                      <span className="text-rose-400 font-bold">{r.options[1] ?? 'Option 1'}: {nays} ({100 - ayePct}%)</span>
                     </div>
                     <div className="w-full bg-rose-500/30 rounded-full h-2 overflow-hidden flex">
                       <div className="bg-emerald-500 h-2 transition-all duration-500" style={{ width: `${ayePct}%` }} />

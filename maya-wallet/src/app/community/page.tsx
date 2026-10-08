@@ -537,8 +537,8 @@ export default function CommunityPage() {
               </div>
 
               {referendums.map((ref) => {
-                const ayes = parseFloat(ref.voteCount.ayes);
-                const nays = parseFloat(ref.voteCount.nays);
+                const ayes = ref.voteCounts[0] ?? 0;
+                const nays = ref.voteCounts[1] ?? 0;
                 const totalVotes = ayes + nays;
                 const ayesPct = totalVotes > 0 ? (ayes / totalVotes) * 100 : 0;
 
@@ -554,30 +554,32 @@ export default function CommunityPage() {
                             Referendum #{ref.index}
                           </span>
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                            {ref.voteThreshold}
+                            Quorum {ref.quorumPercentage}%
                           </span>
                           <span className="text-[11px] text-slate-400 flex items-center gap-1">
                             <MapPin size={12} className="text-teal-400" />
                             {ref.status}
                           </span>
                         </div>
-                        <h4 className="text-sm sm:text-base font-bold text-white">On-chain Referendum #{ref.index}</h4>
+                        <h4 className="text-sm sm:text-base font-bold text-white">{ref.title || `On-chain Referendum #${ref.index}`}</h4>
                       </div>
                       <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
-                        Turnout: {ref.voteCount.turnout} DALLA
+                        {ref.totalVotes.toLocaleString()} votes cast
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-300 leading-relaxed mb-3 font-mono">Hash: {ref.proposalHash.slice(0, 20)}…</p>
+                    <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                      {ref.description || 'No description recorded on chain.'}
+                    </p>
 
                     {/* Voting Progress Bar */}
                     <div className="space-y-1.5 mb-3">
                       <div className="flex justify-between text-[11px] font-mono">
                         <span className="text-teal-400 font-semibold">
-                          Ayes: {ref.voteCount.ayes} ({ayesPct.toFixed(1)}%)
+                          {ref.options[0] ?? 'Option 0'}: {ayes} ({ayesPct.toFixed(1)}%)
                         </span>
                         <span className="text-rose-400 font-semibold">
-                          Nays: {ref.voteCount.nays} ({(100 - ayesPct).toFixed(1)}%)
+                          {ref.options[1] ?? 'Option 1'}: {nays} ({(100 - ayesPct).toFixed(1)}%)
                         </span>
                       </div>
                       <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800 flex">
@@ -590,7 +592,7 @@ export default function CommunityPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
                       <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
                         <Clock size={13} />
-                        Ballot ends block #{ref.voteEnd.toLocaleString()}
+                        Ballot ends block #{ref.votingEnd.toLocaleString()}
                       </span>
 
                       <div className="flex items-center gap-2">
