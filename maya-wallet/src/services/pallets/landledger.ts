@@ -309,6 +309,34 @@ export async function getPropertyTransferHistory(titleId: string): Promise<Prope
 }
 
 /**
+ * Get every registered property on chain, for the cadastre view.
+ *
+ * Reads `landLedger.properties` directly. `properties` is keyed by a `u32`
+ * property id, so the storage key's first arg is the id.
+ */
+export async function getAllProperties(): Promise<LandTitle[]> {
+  const api = await initializeApi();
+
+  try {
+    if (!api.query.landLedger?.properties) return [];
+    const entries = await api.query.landLedger.properties.entries();
+
+    return (entries as any[])
+      .map(([key, raw]) => {
+        const data = raw?.toJSON?.();
+        if (!data) return null;
+        const propertyId = Number(key?.args?.[0] ?? data.propertyId ?? 0);
+        return toLandTitle(propertyId, data);
+      })
+      .filter((t): t is LandTitle => t !== null)
+      .sort((a, b) => a.propertyId - b.propertyId);
+  } catch (error) {
+    console.warn('Failed to fetch on-chain properties:', error);
+    return [];
+  }
+}
+
+/**
  * Search land titles by location
  */
 export async function searchLandByLocation(district: string, village?: string): Promise<LandTitle[]> {

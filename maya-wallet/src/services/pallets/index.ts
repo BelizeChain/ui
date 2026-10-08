@@ -32,7 +32,7 @@ export { getActiveProposals, getProposalById, submitProposal, voteOnProposal, ge
 export { getStakingInfo, stakeDalla, unstakeDalla, claimStakingRewards, getModelSubmission, getActiveValidators, reportTrainingContribution } from './staking';
 
 // Land Registry & Documents
-export { getLandTitle, getUserLandTitles, getPropertyDocuments, registerDocument, initiatePropertyTransfer, getPropertyTransferHistory, searchLandByLocation, getDocumentDownloadUrl } from './landledger';
+export { getLandTitle, getUserLandTitles, getAllProperties, getPropertyDocuments, registerDocument, initiatePropertyTransfer, getPropertyTransferHistory, searchLandByLocation, getDocumentDownloadUrl } from './landledger';
 
 // Tourism & Merchants
 export { getVerifiedMerchant, getVerifiedMerchants, isMerchantVerified, getTourismRewards, getTourismStats, redeemTourismCashback, reportMerchantTransaction, getMerchantMapMarkers } from './oracle';

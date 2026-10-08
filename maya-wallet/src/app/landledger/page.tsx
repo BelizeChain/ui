@@ -1,13 +1,18 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import { getUserLandTitles, initiatePropertyTransfer, type LandTitle } from '@/services/pallets/landledger';
+import {
+  getUserLandTitles,
+  getAllProperties,
+  initiatePropertyTransfer,
+  type LandTitle,
+} from '@/services/pallets/landledger';
 import {
   House,
   MapPin,
@@ -15,203 +20,135 @@ import {
   ArrowsLeftRight,
   ArrowLeft,
   Coins,
-  ShieldCheck,
   DownloadSimple,
-  Receipt,
-  Check,
-  Compass,
-  Buildings,
-  X,
   Fingerprint,
-  LockKey,
+  ShieldCheck,
+  ShieldWarning,
+  X,
 } from 'phosphor-react';
 
-interface CadastreParcel {
-  parcelId: string;
-  district: string;
-  location: string;
-  sizeAcres: number;
-  tenure: 'Freehold Absolute' | 'Leasehold Crown' | 'Agricultural Grant';
-  assessedValueBBZD: number;
-  annualTaxBBZD: number;
-  taxStatus: 'Paid' | 'Due';
-  ownerName: string;
-  ownerAddress: string;
-  deedCid: string;
-  gpsCoords: string;
-  utmBounds: string;
-  surveyYear: number;
-  zoning: 'Residential Beachfront' | 'Commercial Mixed' | 'Eco-Tourism Resort' | 'Agricultural';
-  isTokenized?: boolean;
-  tokenSymbol?: string;
-  tokenSupply?: number;
-  tokenPriceBBZD?: number;
-  svgPolygon: string;
-  mapCenter: { x: number; y: number };
-  isBelizeIdVerified?: boolean;
+const SQM_PER_ACRE = 4046.8564224;
+
+/** `coordinates` is a raw `(latitude, longitude)` pair, stored as integers. */
+function formatCoordinates(coords: LandTitle['coordinates']): string {
+  if (!coords) return 'Not recorded';
+  return `${coords.latitude}° N, ${coords.longitude}° W`;
 }
 
-const DISTRICT_CADASTRE_DATA: CadastreParcel[] = [
-  {
-    parcelId: 'BZ-AMB-482A',
-    district: 'Belize (Ambergris Caye)',
-    location: 'San Pedro Town, Beachfront North',
-    sizeAcres: 0.75,
-    tenure: 'Freehold Absolute',
-    assessedValueBBZD: 450000,
-    annualTaxBBZD: 675,
-    taxStatus: 'Paid',
-    ownerName: 'Wicked Sovereign Citizen',
-    ownerAddress: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-    deedCid: 'QmZtmD2qtQgStation89uVb1e4R8W3c8jE7a...',
-    gpsCoords: '17.9214° N, 87.9611° W',
-    utmBounds: 'Zone 16N 398124E, 1981923N',
-    surveyYear: 2024,
-    zoning: 'Residential Beachfront',
-    isTokenized: true,
-    tokenSymbol: 'LAND-SP482',
-    tokenSupply: 10000,
-    tokenPriceBBZD: 45.0,
-    svgPolygon: '120,80 240,65 270,160 140,180',
-    mapCenter: { x: 190, y: 120 },
-    isBelizeIdVerified: true,
-  },
-  {
-    parcelId: 'BZ-CYO-1092',
-    district: 'Cayo (Belmopan)',
-    location: 'Mountain View Boulevard, Belmopan',
-    sizeAcres: 2.2,
-    tenure: 'Freehold Absolute',
-    assessedValueBBZD: 180000,
-    annualTaxBBZD: 270,
-    taxStatus: 'Due',
-    ownerName: 'Wicked Sovereign Citizen',
-    ownerAddress: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-    deedCid: 'QmYwAPJzv5CZsnA625s3Xf2nemtK7mP8q...',
-    gpsCoords: '17.2510° N, 88.7590° W',
-    utmBounds: 'Zone 16N 313410E, 1907812N',
-    surveyYear: 2025,
-    zoning: 'Commercial Mixed',
-    isTokenized: false,
-    svgPolygon: '310,90 420,105 390,210 290,190',
-    mapCenter: { x: 350, y: 150 },
-  },
-  {
-    parcelId: 'BZ-PLA-3319',
-    district: 'Stann Creek (Placencia)',
-    location: 'Placencia Peninsula Lagoon Front',
-    sizeAcres: 1.4,
-    tenure: 'Freehold Absolute',
-    assessedValueBBZD: 380000,
-    annualTaxBBZD: 570,
-    taxStatus: 'Paid',
-    ownerName: 'Placencia Eco Ventures Trust',
-    ownerAddress: '5DTestAddressPlacenciaMarina998124',
-    deedCid: 'QmKj81x9LaBc72ZqNw18uPo83dE71nXa4...',
-    gpsCoords: '16.5134° N, 88.3682° W',
-    utmBounds: 'Zone 16N 354120E, 1826190N',
-    surveyYear: 2026,
-    zoning: 'Eco-Tourism Resort',
-    isTokenized: true,
-    tokenSymbol: 'PLMARINA',
-    tokenSupply: 20000,
-    tokenPriceBBZD: 19.0,
-    svgPolygon: '460,180 560,160 590,270 480,290',
-    mapCenter: { x: 520, y: 225 },
-  },
-  {
-    parcelId: 'BZ-CC-0881',
-    district: 'Belize (Ambergris Caye)',
-    location: 'Caye Caulker Split Oceanfront',
-    sizeAcres: 0.5,
-    tenure: 'Leasehold Crown',
-    assessedValueBBZD: 290000,
-    annualTaxBBZD: 435,
-    taxStatus: 'Paid',
-    ownerName: 'Maya Reef Holdings',
-    ownerAddress: '5GR98124CaulkerReefHoldings0012',
-    deedCid: 'QmPZ9gcCEpqKTo6aq61g2Nx7jkq3a9v1b...',
-    gpsCoords: '17.7420° N, 88.0260° W',
-    utmBounds: 'Zone 16N 391200E, 1961800N',
-    surveyYear: 2025,
-    zoning: 'Residential Beachfront',
-    isTokenized: false,
-    svgPolygon: '160,220 270,210 250,310 140,300',
-    mapCenter: { x: 205, y: 260 },
-  },
-];
+function toAcres(areaSqm: number): string {
+  return (areaSqm / SQM_PER_ACRE).toFixed(2);
+}
+
+/**
+ * Normalise the real GPS coordinates into the SVG viewport.
+ *
+ * This is a plain equirectangular scatter of the stored points — not a survey
+ * projection. The pallet stores no polygon geometry, so no parcel outline can
+ * be drawn; only the point and its id are real.
+ */
+function projectCoordinates(
+  all: LandTitle[],
+  coords: LandTitle['coordinates'],
+  width: number,
+  height: number,
+): { x: number; y: number } | null {
+  if (!coords) return null;
+  const points = all
+    .map((p) => p.coordinates)
+    .filter((c): c is { latitude: number; longitude: number } => c !== undefined);
+  if (points.length === 0) return null;
+
+  const lats = points.map((p) => p.latitude);
+  const lngs = points.map((p) => p.longitude);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+
+  const spanLat = maxLat - minLat || 1;
+  const spanLng = maxLng - minLng || 1;
+  const pad = 40;
+
+  return {
+    x: pad + ((coords.longitude - minLng) / spanLng) * (width - 2 * pad),
+    y: pad + ((maxLat - coords.latitude) / spanLat) * (height - 2 * pad),
+  };
+}
+
 
 export default function LandLedgerPage() {
   const router = useRouter();
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<'my-titles' | 'cadastre-map' | 'tax-portal' | 'transfer' | 'tokenize'>('my-titles');
-  const [selectedDistrictFilter, setSelectedDistrictFilter] = useState<string>('ALL');
-  const [selectedParcel, setSelectedParcel] = useState<CadastreParcel>(DISTRICT_CADASTRE_DATA[0]);
+  const [activeTab, setActiveTab] = useState<'my-titles' | 'cadastre-map' | 'transfer'>('my-titles');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
 
-  // On-Chain State
-  const [chainTitles, setChainTitles] = useState<LandTitle[]>([]);
-  const [, setIsLoadingChain] = useState(false);
-
-  // Tax Payment State
-  const [payingTaxId] = useState<string | null>(null);
+  // On-chain state. `allProperties` is the full national register (for the
+  // cadastre view); `myTitles` is the caller's subset.
+  const [allProperties, setAllProperties] = useState<LandTitle[]>([]);
+  const [myTitles, setMyTitles] = useState<LandTitle[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Transfer Escrow Form State
-  const [transferParcelId, setTransferParcelId] = useState('BZ-AMB-482A');
+  const [transferTitleId, setTransferTitleId] = useState('');
   const [transferBuyer, setTransferBuyer] = useState('');
-  const [transferPrice, setTransferPrice] = useState('450000');
+  const [transferPrice, setTransferPrice] = useState('');
   const [isInitializingEscrow, setIsInitializingEscrow] = useState(false);
 
-  // Tokenization State
-  const [tokenizeParcelId, setTokenizeParcelId] = useState('BZ-CYO-1092');
-  const [tokenSymbolInput, setTokenSymbolInput] = useState('BELMOPAN-COML');
-  const [tokenSharesInput, setTokenSharesInput] = useState('10000');
-  const [isTokenizing, setIsTokenizing] = useState(false);
-
   // Title Deed Inspector Modal
-  const [inspectedDeed, setInspectedDeed] = useState<CadastreParcel | null>(null);
+  const [inspectedDeed, setInspectedDeed] = useState<LandTitle | null>(null);
 
-  // Load On-Chain Titles
-  useEffect(() => {
-    async function loadTitles() {
-      if (!selectedAccount?.address) return;
-      setIsLoadingChain(true);
-      try {
-        const titles = await getUserLandTitles(selectedAccount.address);
-        setChainTitles(titles);
-      } catch (err) {
-        console.warn('Could not query on-chain land titles, using verified cadastre state:', err);
-      } finally {
-        setIsLoadingChain(false);
-      }
+  // Hoisted so the callback's deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
+
+  const loadProperties = useCallback(async () => {
+    if (!address) return;
+    setIsLoading(true);
+    try {
+      const [everyProperty, owned] = await Promise.all([
+        getAllProperties(),
+        getUserLandTitles(address),
+      ]);
+      setAllProperties(everyProperty);
+      setMyTitles(owned);
+      setTransferTitleId((current) => current || owned[0]?.titleId || '');
+    } catch (err) {
+      console.warn('LandLedger query failed:', err);
+    } finally {
+      setIsLoading(false);
     }
-    loadTitles();
-  }, [selectedAccount?.address]);
+  }, [address]);
 
-  // My Owned Parcels
-  const myParcels = useMemo(() => {
-    return DISTRICT_CADASTRE_DATA.filter((p) => 
-      p.ownerAddress === selectedAccount?.address || 
-      p.parcelId.startsWith('BZ-AMB') || 
-      p.parcelId.startsWith('BZ-CYO')
-    );
-  }, [selectedAccount?.address]);
+  useEffect(() => {
+    // Deferred so the initial load doesn't set state during the effect body
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadProperties);
+  }, [loadProperties]);
 
-  // Filtered Cadastre
-  const filteredCadastre = useMemo(() => {
-    if (selectedDistrictFilter === 'ALL') return DISTRICT_CADASTRE_DATA;
-    return DISTRICT_CADASTRE_DATA.filter((p) => p.district === selectedDistrictFilter);
-  }, [selectedDistrictFilter]);
+  const filteredProperties = useMemo(() => {
+    if (typeFilter === 'ALL') return allProperties;
+    return allProperties.filter((p) => p.propertyType === typeFilter);
+  }, [allProperties, typeFilter]);
 
-  // CONFIG-002: no on-chain property-tax extrinsic is exposed to this page;
-  // landledger transfers/escrow are real, tax collection is not.
-  const handlePayTax = (parcel: CadastreParcel) => {
-    addNotification({
-      type: 'info',
-      message: `On-chain property tax settlement for ${parcel.parcelId} is not wired yet. Payment rails go through the Ministry registrar portal — no bBZD was moved.`,
-    });
-  };
+  const propertyTypes = useMemo(
+    () => Array.from(new Set(allProperties.map((p) => p.propertyType))).sort(),
+    [allProperties],
+  );
+
+  const totalAreaSqm = myTitles.reduce((acc, p) => acc + p.areaSqm, 0);
+  const totalAssessed = myTitles.reduce((acc, p) => acc + BigInt(p.assessedValue || '0'), 0n);
+  const activeEncumbrances = myTitles.reduce(
+    (acc, p) => acc + p.encumbrances.filter((e) => e.active).length,
+    0,
+  );
+
+  const inspectedSelected = useMemo(
+    () => allProperties.find((p) => p.titleId === selectedPropertyId) ?? null,
+    [allProperties, selectedPropertyId],
+  );
 
   // Handle Transfer Escrow
   const handleInitiateTransfer = async (e: React.FormEvent) => {
@@ -221,50 +158,39 @@ export default function LandLedgerPage() {
       return;
     }
 
-    const title = chainTitles.find((t) => t.titleId === transferParcelId);
+    const title = myTitles.find((t) => t.titleId === transferTitleId);
     if (!title) {
-      addNotification({ type: 'error', message: `Title ${transferParcelId} not found in your on-chain titles.` });
+      addNotification({ type: 'error', message: `Property ${transferTitleId} is not one of your on-chain titles.` });
       return;
     }
+
     setIsInitializingEscrow(true);
     try {
       const res = await initiatePropertyTransfer(
         selectedAccount!.address,
         title.titleId,
-        transferBuyer
+        transferBuyer,
+        transferPrice || undefined,
       );
       addNotification({
         type: 'success',
-        message: `Escrow initiated for ${title.titleId}: ${res.hash.slice(0, 16)}… (stamp duty escrows on chain).`,
+        message: `Transfer of property ${title.titleId} submitted: ${res.hash.slice(0, 16)}…`,
       });
       setTransferBuyer('');
+      setTransferPrice('');
       setActiveTab('my-titles');
-      const titles = await getUserLandTitles(selectedAccount!.address);
-      setChainTitles(titles);
+      await loadProperties();
     } catch (err) {
-      addNotification({ type: 'error', message: `Escrow failed: ${err instanceof Error ? err.message : String(err)}` });
+      addNotification({ type: 'error', message: `Transfer failed: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       setIsInitializingEscrow(false);
     }
   };
 
-  // Handle RWA Fractional Tokenization
-  const handleTokenizeParcel = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsTokenizing(true);
-    // CONFIG-002: fractional RWA tokenization of land titles has no wired
-    // extrinsic yet (no security-token issuance path from this page).
-    setIsTokenizing(false);
-    addNotification({
-      type: 'info',
-      message: `RWA tokenization of ${tokenizeParcelId} is not wired on-chain yet — securities token issuance requires the GEM RWA contract integration. No shares were minted.`,
-    });
-  };
-
   if (!isConnected || !selectedAccount) {
     return (
       <ConnectWalletPrompt
-        message="Connect your Maya Wallet to access your official Belize LandLedger titles and cadastre GIS registry."
+        message="Connect your Maya Wallet to access your Belize LandLedger titles and the national property register."
         fullScreen
       />
     );
@@ -296,10 +222,10 @@ export default function LandLedgerPage() {
             <div>
               <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
                 <House size={22} className="text-emerald-400" weight="fill" />
-                Belize LandLedger & Cadastre Studio
+                Belize LandLedger Register
               </h1>
               <p className="text-[11px] text-teal-200/70 font-mono">
-                Ministry of Natural Resources • Pallet 18 • Vector GIS Cadastre • RWA Real Estate
+                pallet landLedger • on-chain property register
               </p>
             </div>
           </div>
@@ -307,7 +233,7 @@ export default function LandLedgerPage() {
           <div className="flex items-center gap-2">
             <span className="hidden sm:inline-flex px-3 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold font-mono items-center gap-1.5 shadow-sm">
               <ShieldCheck size={14} weight="fill" />
-              Statutory Notary Sealed
+              {allProperties.length} Registered Properties
             </span>
           </div>
         </div>
@@ -326,21 +252,19 @@ export default function LandLedgerPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-bold uppercase tracking-wider text-[10px] text-teal-300">My Freehold Titles</span>
+              <span className="font-bold uppercase tracking-wider text-[10px] text-teal-300">My Registered Titles</span>
               <House size={18} className="text-emerald-400" weight="fill" />
             </div>
             <div>
-              <span className="text-2xl font-black font-mono text-white">{myParcels.length} Properties</span>
+              <span className="text-2xl font-black font-mono text-white">{myTitles.length} Properties</span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-teal-500/10">
               <span>Total Area:</span>
-              <span className="text-emerald-300 font-bold">
-                {myParcels.reduce((acc, p) => acc + p.sizeAcres, 0).toFixed(2)} Acres
-              </span>
+              <span className="text-emerald-300 font-bold">{toAcres(totalAreaSqm)} Acres</span>
             </div>
           </motion.div>
 
-          {/* Card 2: Assessed Cadastre Valuation */}
+          {/* Card 2: Assessed Valuation */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -349,21 +273,21 @@ export default function LandLedgerPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-bold uppercase tracking-wider text-[10px] text-cyan-300">Cadastral Valuation</span>
+              <span className="font-bold uppercase tracking-wider text-[10px] text-cyan-300">Assessed Value</span>
               <Coins size={18} className="text-cyan-400" weight="fill" />
             </div>
             <div>
               <span className="text-2xl font-black font-mono text-cyan-300">
-                BZ$ {myParcels.reduce((acc, p) => acc + p.assessedValueBBZD, 0).toLocaleString()}
+                {totalAssessed.toString()}
               </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-teal-500/10">
-              <span>Valuation Unit:</span>
-              <span className="text-slate-300 font-bold">Statutory bBZD Peg</span>
+              <span>Unit:</span>
+              <span className="text-slate-300 font-bold">bBZD (raw pallet value)</span>
             </div>
           </motion.div>
 
-          {/* Card 3: Municipal Tax Status */}
+          {/* Card 3: Encumbrances */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -372,22 +296,19 @@ export default function LandLedgerPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-bold uppercase tracking-wider text-[10px] text-amber-300">Municipal Land Tax</span>
-              <Receipt size={18} className="text-amber-400" weight="fill" />
+              <span className="font-bold uppercase tracking-wider text-[10px] text-amber-300">Active Encumbrances</span>
+              <ShieldWarning size={18} className="text-amber-400" weight="fill" />
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black font-mono text-amber-300">
-                {myParcels.filter((p) => p.taxStatus === 'Due').reduce((acc, p) => acc + p.annualTaxBBZD, 0)} bBZD
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">Due</span>
+            <div>
+              <span className="text-2xl font-black font-mono text-amber-300">{activeEncumbrances}</span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-teal-500/10">
-              <span>Status:</span>
-              <span className="text-emerald-400 font-bold">1 Paid • 1 Due</span>
+              <span>Effect:</span>
+              <span className="text-slate-300 font-bold">Blocks transfer</span>
             </div>
           </motion.div>
 
-          {/* Card 4: RWA Fractional Yield */}
+          {/* Card 4: Register Coverage */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -396,22 +317,24 @@ export default function LandLedgerPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex justify-between items-center text-slate-400 text-xs">
-              <span className="font-bold uppercase tracking-wider text-[10px] text-purple-300">RWA Security Tokens</span>
-              <Buildings size={18} className="text-purple-400" weight="fill" />
+              <span className="font-bold uppercase tracking-wider text-[10px] text-purple-300">National Register</span>
+              <MapPin size={18} className="text-purple-400" weight="fill" />
             </div>
             <div>
-              <span className="text-2xl font-black font-mono text-purple-300">1 Tokenized</span>
+              <span className="text-2xl font-black font-mono text-purple-300">{allProperties.length} Parcels</span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-teal-500/10">
-              <span>Primary Token:</span>
-              <span className="text-purple-300 font-bold font-mono">LAND-SP482</span>
+              <span>Government verified:</span>
+              <span className="text-purple-300 font-bold">
+                {allProperties.filter((p) => p.governmentVerified).length}
+              </span>
             </div>
           </motion.div>
         </div>
 
         {/* Tab Navigation Dock */}
         <div className="flex bg-slate-950/90 border border-teal-500/25 rounded-2xl p-1.5 overflow-x-auto text-xs font-bold gap-1.5 shadow-xl shadow-teal-950/20 backdrop-blur-2xl">
-          {(['my-titles', 'cadastre-map', 'tax-portal', 'transfer', 'tokenize'] as const).map((tab) => (
+          {(['my-titles', 'cadastre-map', 'transfer'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -424,12 +347,8 @@ export default function LandLedgerPage() {
               {tab === 'my-titles'
                 ? 'My Property Titles'
                 : tab === 'cadastre-map'
-                ? 'GIS Cadastre Map'
-                : tab === 'tax-portal'
-                ? 'Tax & Stamp Clearance'
-                : tab === 'transfer'
-                ? 'Title Transfer Escrow'
-                : 'Tokenize RWA Land'}
+                ? 'National Register Map'
+                : 'Title Transfer'}
             </button>
           ))}
         </div>
@@ -437,453 +356,340 @@ export default function LandLedgerPage() {
         {/* Tab 1: My Property Titles */}
         {activeTab === 'my-titles' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myParcels.map((parcel) => (
-                <motion.div
-                  key={parcel.parcelId}
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-slate-950/80 border border-teal-500/20 hover:border-teal-400/40 rounded-3xl p-6 space-y-4 shadow-xl shadow-teal-950/20 backdrop-blur-2xl flex flex-col justify-between transition-all group"
-                >
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center border-b border-teal-500/10 pb-3">
-                      <div className="flex items-center gap-2">
-                        <House size={20} className="text-emerald-400" weight="bold" />
-                        <span className="font-bold text-white text-base font-mono">{parcel.parcelId}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {parcel.isBelizeIdVerified && (
-                          <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1">
-                            <Fingerprint size={12} weight="bold" />
-                            BelizeID Passport Linked
+            {myTitles.length === 0 ? (
+              <div className="bg-slate-950/80 border border-teal-500/20 rounded-3xl p-10 text-center space-y-2">
+                <House size={32} className="text-slate-600 mx-auto" weight="fill" />
+                <p className="text-sm font-bold text-slate-300">
+                  {isLoading ? 'Reading the on-chain register…' : 'No land titles are registered to this account.'}
+                </p>
+                <p className="text-xs text-slate-500 font-mono">
+                  Titles are read from landLedger.properties by owner. Registration is done by the
+                  land registry through landLedger.registerProperty.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myTitles.map((title) => (
+                  <motion.div
+                    key={title.titleId}
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-slate-950/80 border border-teal-500/20 hover:border-teal-400/40 rounded-3xl p-6 space-y-4 shadow-xl shadow-teal-950/20 backdrop-blur-2xl flex flex-col justify-between transition-all group"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-teal-500/10 pb-3">
+                        <div className="flex items-center gap-2">
+                          <House size={20} className="text-emerald-400" weight="bold" />
+                          <span className="font-bold text-white text-base font-mono">
+                            Property #{title.titleId}
                           </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {title.governmentVerified && (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold font-mono">
+                              Government Verified
+                            </span>
+                          )}
+                          {!title.surveyed && (
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-bold font-mono">
+                              Not Surveyed
+                            </span>
+                          )}
+                          {title.encumbrances.some((e) => e.active) && (
+                            <span className="px-2.5 py-0.5 bg-red-500/20 text-red-300 border border-red-500/30 rounded-full text-[10px] font-bold font-mono">
+                              Encumbered
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="font-bold text-white text-base group-hover:text-teal-200 transition-colors">
+                          {title.titleNumber || 'Untitled'}
+                        </h3>
+                        {title.description && (
+                          <p className="text-xs text-slate-400 mt-1">{title.description}</p>
                         )}
-                        {parcel.isTokenized && (
-                          <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-[10px] font-bold font-mono">
-                            RWA: {parcel.tokenSymbol}
+                        <p className="text-xs text-slate-400 flex items-center gap-1 mt-1 font-mono">
+                          <MapPin size={14} className="text-emerald-400" /> {formatCoordinates(title.coordinates)}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-slate-900/90 p-4 rounded-2xl border border-teal-500/10 text-xs font-mono">
+                        <div>
+                          <span className="text-slate-500 block text-[10px] uppercase">Type</span>
+                          <span className="text-white font-bold">{title.propertyType}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px] uppercase">Area</span>
+                          <span className="text-white font-bold">
+                            {toAcres(title.areaSqm)} ac ({title.areaSqm.toLocaleString()} m²)
                           </span>
-                        )}
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            parcel.taxStatus === 'Paid'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                          }`}
-                        >
-                          Tax: {parcel.taxStatus}
-                        </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px] uppercase">Assessed Value</span>
+                          <span className="text-cyan-300 font-bold">{title.assessedValue} bBZD</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px] uppercase">Zoning</span>
+                          <span className="text-emerald-400 font-bold">{title.zoning}</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div>
-                      <h3 className="font-bold text-white text-base group-hover:text-teal-200 transition-colors">
-                        {parcel.location}
-                      </h3>
-                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-1 font-mono">
-                        <MapPin size={14} className="text-emerald-400" /> {parcel.district} • {parcel.gpsCoords}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 bg-slate-900/90 p-4 rounded-2xl border border-teal-500/10 text-xs font-mono">
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Tenure</span>
-                        <span className="text-white font-bold">{parcel.tenure}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Acreage</span>
-                        <span className="text-white font-bold">{parcel.sizeAcres} Acres</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Cadastral Value</span>
-                        <span className="text-cyan-300 font-bold">BZ$ {parcel.assessedValueBBZD.toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Annual Tax</span>
-                        <span className="text-emerald-400 font-bold">{parcel.annualTaxBBZD} bBZD</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-teal-500/10">
-                    <button
-                      onClick={() => setInspectedDeed(parcel)}
-                      className="flex-1 py-2.5 bg-slate-900 hover:bg-teal-950/40 text-slate-200 hover:text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all border border-teal-500/20"
-                    >
-                      <FileText size={16} /> View Title Deed
-                    </button>
-
-                    {parcel.isBelizeIdVerified && (
-                      <Link href="/belizeid" className="flex-1">
-                        <button
-                          className="w-full py-2.5 bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all border border-cyan-500/30"
-                        >
-                          <LockKey size={16} /> ZK Proof Studio
-                        </button>
-                      </Link>
-                    )}
-
-                    {parcel.taxStatus === 'Due' && (
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-teal-500/10">
                       <button
-                        onClick={() => handlePayTax(parcel)}
-                        disabled={payingTaxId === parcel.parcelId}
-                        className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                        onClick={() => setInspectedDeed(title)}
+                        className="flex-1 py-2.5 bg-slate-900 hover:bg-teal-950/40 text-slate-200 hover:text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all border border-teal-500/20"
                       >
-                        <Receipt size={16} weight="bold" />
-                        {payingTaxId === parcel.parcelId ? 'Paying...' : 'Pay Tax (5% Rebate)'}
+                        <FileText size={16} /> View Record
                       </button>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Tab 2: GIS Vector Cadastre Map */}
+        {/* Tab 2: National Register Map */}
         {activeTab === 'cadastre-map' && (
           <div className="bg-slate-950/80 border border-teal-500/20 rounded-3xl p-6 space-y-6 shadow-xl shadow-teal-950/20 backdrop-blur-2xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-teal-500/10 pb-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Compass size={22} className="text-cyan-400" />
-                  National Vector Cadastre & GPS Boundary Registry
+                  <MapPin size={22} className="text-cyan-400" />
+                  National Property Register
                 </h3>
                 <p className="text-xs text-teal-200/70 mt-0.5 font-mono">
-                  Interactive polygon cadastre anchored to Substrate state. Click any parcel to inspect boundaries.
+                  Live points from landLedger.properties. The pallet stores a GPS coordinate pair, not
+                  polygon boundaries, so no parcel outline is drawn.
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <select
-                  value={selectedDistrictFilter}
-                  onChange={(e) => setSelectedDistrictFilter(e.target.value)}
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
                   className="bg-slate-900 border border-teal-500/30 rounded-xl p-2.5 text-xs text-cyan-300 font-semibold focus:border-cyan-400 focus:outline-none"
                 >
-                  <option value="ALL">All Belize Districts</option>
-                  <option value="Belize (Ambergris Caye)">Belize (Ambergris Caye & Cayes)</option>
-                  <option value="Cayo (Belmopan)">Cayo (Belmopan & Cayo)</option>
-                  <option value="Stann Creek (Placencia)">Stann Creek (Placencia)</option>
+                  <option value="ALL">All Property Types</option>
+                  {propertyTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            {/* Interactive Vector Map Canvas */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-[#020712] rounded-3xl border border-teal-500/20 p-4 relative overflow-hidden flex items-center justify-center min-h-[360px] shadow-inner shadow-teal-950/40">
-                {/* SVG Vector Map */}
-                <svg className="w-full h-80 max-w-lg" viewBox="0 0 650 360">
-                  <defs>
-                    <pattern id="cadastreGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(20, 184, 166, 0.15)" strokeWidth="1" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#cadastreGrid)" />
+            {allProperties.length === 0 ? (
+              <div className="bg-slate-950 rounded-3xl border border-teal-500/20 p-10 text-center space-y-2">
+                <MapPin size={32} className="text-slate-600 mx-auto" weight="fill" />
+                <p className="text-sm font-bold text-slate-300">
+                  {isLoading ? 'Reading the register…' : 'No properties are registered on chain yet.'}
+                </p>
+                <p className="text-xs text-slate-500 font-mono">
+                  Register a parcel through landLedger.registerProperty to see it here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-[#020712] rounded-3xl border border-teal-500/20 p-4 relative overflow-hidden flex items-center justify-center min-h-[360px] shadow-inner shadow-teal-950/40">
+                  <svg className="w-full h-80 max-w-lg" viewBox="0 0 650 360">
+                    <defs>
+                      <pattern id="cadastreGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(20, 184, 166, 0.15)" strokeWidth="1" />
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#cadastreGrid)" />
 
-                  {/* Coastline / Landscape Sim */}
-                  <path
-                    d="M 50,20 Q 200,90 350,60 T 600,100 L 620,340 L 40,340 Z"
-                    fill="rgba(11, 28, 44, 0.6)"
-                    stroke="rgba(20, 184, 166, 0.3)"
-                    strokeWidth="2"
-                  />
-
-                  {/* Cadastral Parcels */}
-                  {filteredCadastre.map((parcel) => {
-                    const isSelected = selectedParcel.parcelId === parcel.parcelId;
-                    return (
-                      <g
-                        key={parcel.parcelId}
-                        onClick={() => setSelectedParcel(parcel)}
-                        className="cursor-pointer transition-transform hover:scale-105"
-                      >
-                        <polygon
-                          points={parcel.svgPolygon}
-                          fill={isSelected ? 'rgba(20, 184, 166, 0.5)' : 'rgba(6, 182, 212, 0.2)'}
-                          stroke={isSelected ? '#2DD4BF' : '#06B6D4'}
-                          strokeWidth={isSelected ? '3' : '1.5'}
-                          className="transition-all"
-                        />
-                        <circle cx={parcel.mapCenter.x} cy={parcel.mapCenter.y} r={5} fill={isSelected ? '#2DD4BF' : '#38BDF8'} />
-                        <text
-                          x={parcel.mapCenter.x}
-                          y={parcel.mapCenter.y - 12}
-                          textAnchor="middle"
-                          fill="white"
-                          fontSize="10"
-                          fontFamily="monospace"
-                          fontWeight="bold"
+                    {filteredProperties.map((property) => {
+                      const point = projectCoordinates(allProperties, property.coordinates, 650, 360);
+                      if (!point) return null;
+                      const isSelected = inspectedSelected?.titleId === property.titleId;
+                      return (
+                        <g
+                          key={property.titleId}
+                          onClick={() => setSelectedPropertyId(property.titleId)}
+                          className="cursor-pointer"
                         >
-                          {parcel.parcelId}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
+                          <circle
+                            cx={point.x}
+                            cy={point.y}
+                            r={isSelected ? 10 : 6}
+                            fill={isSelected ? '#2DD4BF' : '#38BDF8'}
+                            opacity={0.85}
+                          />
+                          <text
+                            x={point.x}
+                            y={point.y - 14}
+                            textAnchor="middle"
+                            fill="white"
+                            fontSize="10"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            #{property.titleId}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
 
-                <div className="absolute bottom-3 left-3 bg-slate-950/90 border border-teal-500/20 px-3 py-1.5 rounded-xl text-[10px] font-mono text-teal-300">
-                  UTM Zone 16N • Datum WGS84 • Belize National Grid
-                </div>
-              </div>
-
-              {/* Selected Parcel Inspector Pane */}
-              <div className="bg-slate-900/90 rounded-3xl border border-teal-500/20 p-5 space-y-4 text-xs flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-bold text-white text-base font-mono block">{selectedParcel.parcelId}</span>
-                      <span className="text-slate-400 text-[11px] block">{selectedParcel.location}</span>
-                    </div>
-                    <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
-                      {selectedParcel.tenure}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 font-mono text-[11px] bg-slate-950 p-3.5 rounded-2xl border border-teal-500/10">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Assessed Value:</span>
-                      <span className="text-cyan-300 font-bold">BZ$ {selectedParcel.assessedValueBBZD.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Acreage:</span>
-                      <span className="text-white font-bold">{selectedParcel.sizeAcres} Acres</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Zoning:</span>
-                      <span className="text-emerald-400">{selectedParcel.zoning}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>GPS Coordinates:</span>
-                      <span className="text-slate-200">{selectedParcel.gpsCoords}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>UTM Grid Bounds:</span>
-                      <span className="text-slate-300">{selectedParcel.utmBounds}</span>
-                    </div>
+                  <div className="absolute bottom-3 left-3 bg-slate-950/90 border border-teal-500/20 px-3 py-1.5 rounded-xl text-[10px] font-mono text-teal-300">
+                    Plain lat/lng scatter • not a survey projection
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setInspectedDeed(selectedParcel)}
-                    className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
-                  >
-                    <FileText size={16} weight="bold" />
-                    Inspect Official Title Deed
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                {/* Selected Property Inspector Pane */}
+                <div className="bg-slate-900/90 rounded-3xl border border-teal-500/20 p-5 space-y-4 text-xs flex flex-col justify-between">
+                  {inspectedSelected ? (
+                    <>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-white text-base font-mono block">
+                              Property #{inspectedSelected.titleId}
+                            </span>
+                            <span className="text-slate-400 text-[11px] block">
+                              {inspectedSelected.titleNumber || 'Untitled'}
+                            </span>
+                          </div>
+                          <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-full text-[10px]">
+                            {inspectedSelected.propertyType}
+                          </span>
+                        </div>
 
-        {/* Tab 3: Tax & Stamp Duty Portal */}
-        {activeTab === 'tax-portal' && (
-          <div className="bg-slate-950/80 border border-teal-500/20 rounded-3xl p-6 space-y-6 shadow-xl shadow-teal-950/20 backdrop-blur-2xl text-xs">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Receipt size={22} className="text-emerald-400" weight="fill" />
-                Ministry Property Tax & Stamp Duty Clearance
-              </h3>
-              <p className="text-slate-400 mt-1 font-mono text-[11px]">
-                Settle municipal land taxes and transfer stamp duties directly in statutory bBZD with automated clearance certificates.
-              </p>
-            </div>
+                        <div className="space-y-2 font-mono text-[11px] bg-slate-950 p-3.5 rounded-2xl border border-teal-500/10">
+                          <div className="flex justify-between text-slate-400">
+                            <span>Assessed Value:</span>
+                            <span className="text-cyan-300 font-bold">{inspectedSelected.assessedValue} bBZD</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>Area:</span>
+                            <span className="text-white font-bold">
+                              {toAcres(inspectedSelected.areaSqm)} ac
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>Zoning:</span>
+                            <span className="text-emerald-400">{inspectedSelected.zoning}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>GPS:</span>
+                            <span className="text-slate-200">{formatCoordinates(inspectedSelected.coordinates)}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>Owner:</span>
+                            <span className="text-slate-300 truncate max-w-[45%]">{inspectedSelected.owner}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>Surveyed / Verified:</span>
+                            <span className="text-slate-200">
+                              {inspectedSelected.surveyed ? 'yes' : 'no'} /{' '}
+                              {inspectedSelected.governmentVerified ? 'yes' : 'no'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-            <div className="space-y-3">
-              {myParcels.map((parcel) => (
-                <div
-                  key={parcel.parcelId}
-                  className="bg-slate-900/90 p-5 rounded-2xl border border-teal-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm font-mono">{parcel.parcelId}</span>
-                      <span className="text-slate-400 text-xs">• {parcel.location}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-slate-400 text-[11px] font-mono">
-                      <span>Assessed: BZ$ {parcel.assessedValueBBZD.toLocaleString()}</span>
-                      <span>• Tax: {parcel.annualTaxBBZD} bBZD / Year</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    {parcel.taxStatus === 'Due' ? (
                       <button
-                        onClick={() => handlePayTax(parcel)}
-                        disabled={payingTaxId === parcel.parcelId}
-                        className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5"
+                        onClick={() => setInspectedDeed(inspectedSelected)}
+                        className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
                       >
-                        <Receipt size={16} weight="bold" />
-                        {payingTaxId === parcel.parcelId ? 'Settling Tax...' : `Pay ${parcel.annualTaxBBZD} bBZD (5% Rebate)`}
+                        <FileText size={16} weight="bold" />
+                        Inspect Property Record
                       </button>
-                    ) : (
-                      <span className="px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl font-bold text-xs flex items-center gap-1">
-                        <Check size={14} weight="bold" /> 2026 Tax Clearance Valid
-                      </span>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <p className="text-slate-500 text-center my-auto">
+                      Select a property on the map to inspect its on-chain record.
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Tab 4: Title Transfer Escrow */}
+        {/* Tab 3: Title Transfer */}
         {activeTab === 'transfer' && (
           <div className="max-w-xl mx-auto bg-slate-950/80 border border-teal-500/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-2xl text-xs">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <ArrowsLeftRight size={22} className="text-cyan-400" />
-                Initiate Sovereign Title Transfer Escrow
+                Transfer a Property Title
               </h3>
               <p className="text-slate-400 mt-1 font-mono text-[11px]">
-                Atomic peer-to-peer real estate conveyance with Ministry of Natural Resources digital verification.
+                Submits landLedger.transferProperty. The chain requires you to be the current owner,
+                the property to be government-verified, the buyer to hold KYC level 2 or above, and
+                no active encumbrance.
               </p>
             </div>
 
-            <form onSubmit={handleInitiateTransfer} className="space-y-4">
-              <div>
-                <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Select Property Title</label>
-                <select
-                  value={transferParcelId}
-                  onChange={(e) => setTransferParcelId(e.target.value)}
-                  className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
-                >
-                  {myParcels.map((p) => (
-                    <option key={p.parcelId} value={p.parcelId}>
-                      {p.parcelId} - {p.location} (BZ$ {p.assessedValueBBZD.toLocaleString()})
-                    </option>
-                  ))}
-                </select>
+            {myTitles.length === 0 ? (
+              <div className="bg-slate-900/90 p-6 rounded-2xl border border-teal-500/15 text-center text-slate-400">
+                You hold no on-chain titles, so there is nothing to transfer.
               </div>
-
-              <div>
-                <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">
-                  Buyer Maya Wallet Address or .bz Domain
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={transferBuyer}
-                  onChange={(e) => setTransferBuyer(e.target.value)}
-                  placeholder="e.g. buyer.bz or 5DTest..."
-                  className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Agreed Consideration (bBZD)</label>
-                <input
-                  type="number"
-                  required
-                  value={transferPrice}
-                  onChange={(e) => setTransferPrice(e.target.value)}
-                  placeholder="450000"
-                  className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
-                />
-              </div>
-
-              <div className="bg-slate-900/90 p-4 rounded-2xl border border-teal-500/15 space-y-2 font-mono text-[11px]">
-                <div className="flex justify-between text-slate-400">
-                  <span>Statutory Stamp Duty (5%):</span>
-                  <span className="text-white font-bold">BZ$ {(parseFloat(transferPrice || '0') * 0.05).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Digital Registry Rebate (1%):</span>
-                  <span className="text-emerald-400 font-bold">-BZ$ {(parseFloat(transferPrice || '0') * 0.01).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-slate-400 pt-1 border-t border-teal-500/10">
-                  <span>Net Buyer Escrow Deposit:</span>
-                  <span className="text-cyan-300 font-bold">
-                    BZ$ {(parseFloat(transferPrice || '0') * 1.04).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isInitializingEscrow || !transferBuyer}
-                className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-xl shadow-teal-500/30 flex items-center justify-center gap-2"
-              >
-                {isInitializingEscrow ? 'Initializing Escrow...' : 'Open Multi-Sig Title Escrow'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Tab 5: Tokenize RWA Land */}
-        {activeTab === 'tokenize' && (
-          <div className="max-w-xl mx-auto bg-slate-950/80 border border-teal-500/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-2xl text-xs">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Buildings size={22} className="text-purple-400" />
-                Fractional Real Estate RWA Tokenization
-              </h3>
-              <p className="text-slate-400 mt-1 font-mono text-[11px]">
-                Tokenize your freehold title deed into fractional security tokens paying automated rental yields in bBZD.
-              </p>
-            </div>
-
-            <form onSubmit={handleTokenizeParcel} className="space-y-4">
-              <div>
-                <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Select Freehold Property</label>
-                <select
-                  value={tokenizeParcelId}
-                  onChange={(e) => setTokenizeParcelId(e.target.value)}
-                  className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3 text-xs text-white font-mono focus:border-purple-400 focus:outline-none"
-                >
-                  {myParcels.map((p) => (
-                    <option key={p.parcelId} value={p.parcelId}>
-                      {p.parcelId} - {p.location} (BZ$ {p.assessedValueBBZD.toLocaleString()})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            ) : (
+              <form onSubmit={handleInitiateTransfer} className="space-y-4">
                 <div>
-                  <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Token Symbol</label>
+                  <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Property Title</label>
+                  <select
+                    value={transferTitleId}
+                    onChange={(e) => setTransferTitleId(e.target.value)}
+                    className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+                  >
+                    {myTitles.map((t) => (
+                      <option key={t.titleId} value={t.titleId}>
+                        Property #{t.titleId} — {t.titleNumber || 'Untitled'} ({t.propertyType},{' '}
+                        {toAcres(t.areaSqm)} ac)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">
+                    Buyer Maya Wallet Address or .bz Domain
+                  </label>
                   <input
                     type="text"
                     required
-                    value={tokenSymbolInput}
-                    onChange={(e) => setTokenSymbolInput(e.target.value)}
-                    placeholder="e.g. SPVILLA"
-                    className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3 text-xs text-white font-mono focus:border-purple-400 focus:outline-none"
+                    value={transferBuyer}
+                    onChange={(e) => setTransferBuyer(e.target.value)}
+                    placeholder="e.g. buyer.bz or r1…"
+                    className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">Fractional Shares</label>
+                  <label className="text-slate-400 uppercase font-semibold mb-1.5 block text-[11px]">
+                    Declared Transfer Price (bBZD)
+                  </label>
                   <input
                     type="number"
-                    required
-                    value={tokenSharesInput}
-                    onChange={(e) => setTokenSharesInput(e.target.value)}
-                    placeholder="10000"
-                    className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3 text-xs text-white font-mono focus:border-purple-400 focus:outline-none"
+                    value={transferPrice}
+                    onChange={(e) => setTransferPrice(e.target.value)}
+                    placeholder="Leave blank for a nil-price transfer"
+                    className="w-full bg-slate-900 border border-teal-500/30 rounded-xl p-3.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
                   />
+                  <p className="text-[10px] text-slate-500 mt-1.5">
+                    Stored verbatim as transferPrice on chain. The pallet applies no stamp duty or
+                    rebate of its own — those figures were previously shown here and were invented.
+                  </p>
                 </div>
-              </div>
 
-              <div className="bg-purple-950/20 border border-purple-500/30 p-4 rounded-2xl space-y-2">
-                <div className="flex items-center gap-2 text-purple-300 font-bold">
-                  <ShieldCheck size={18} weight="fill" />
-                  FSC Belize Statutory Compliance
-                </div>
-                <p className="text-slate-300 text-[11px] leading-relaxed">
-                  Minted security tokens are anchored directly to the Pakit IPFS Title Deed CID and distribute nightly rental yields directly in Belize Dollar (`bBZD`) smart contracts.
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isTokenizing}
-                className="w-full py-4 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 disabled:opacity-50 text-white font-bold rounded-2xl text-xs uppercase tracking-wider transition-all shadow-xl shadow-purple-950/40 flex items-center justify-center gap-2"
-              >
-                {isTokenizing ? 'Minting RWA Security Tokens...' : 'Tokenize & Issue RWA Security Tokens'}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={isInitializingEscrow || !transferBuyer}
+                  className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider transition-all shadow-xl shadow-teal-500/30 flex items-center justify-center gap-2"
+                >
+                  {isInitializingEscrow ? 'Submitting Transfer…' : 'Submit Title Transfer'}
+                </button>
+              </form>
+            )}
           </div>
         )}
       </main>
@@ -909,72 +715,104 @@ export default function LandLedgerPage() {
                 <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/30">
                   <House size={32} className="text-slate-950" weight="fill" />
                 </div>
-                <h3 className="text-lg font-bold text-white tracking-wide">Government of Belize Title Deed</h3>
-                <p className="text-xs text-emerald-400 font-mono">Ministry of Natural Resources • LandLedger Cadastre Certificate</p>
+                <h3 className="text-lg font-bold text-white tracking-wide">LandLedger Property Record</h3>
+                <p className="text-xs text-emerald-400 font-mono">
+                  landLedger.properties #{inspectedDeed.titleId}
+                </p>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-teal-500/15 space-y-2 font-mono text-[11px]">
                 <div className="flex justify-between text-slate-400">
-                  <span>Cadastral Parcel ID:</span>
-                  <span className="text-white font-bold">{inspectedDeed.parcelId}</span>
+                  <span>Title Number:</span>
+                  <span className="text-white font-bold">{inspectedDeed.titleNumber || '—'}</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Tenure Classification:</span>
-                  <span className="text-emerald-400 font-bold">{inspectedDeed.tenure}</span>
+                  <span>Property Type:</span>
+                  <span className="text-emerald-400 font-bold">{inspectedDeed.propertyType}</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Zoning:</span>
+                  <span className="text-emerald-400 font-bold">{inspectedDeed.zoning}</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Registered Owner:</span>
-                  <span className="text-cyan-300 font-bold">{inspectedDeed.ownerName}</span>
+                  <span className="text-cyan-300 font-bold truncate max-w-[50%]">{inspectedDeed.owner}</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Property Location:</span>
-                  <span className="text-slate-200 text-right">{inspectedDeed.location}</span>
+                  <span>Coordinates:</span>
+                  <span className="text-slate-200 text-right">{formatCoordinates(inspectedDeed.coordinates)}</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Acreage / Area:</span>
-                  <span className="text-white font-bold">{inspectedDeed.sizeAcres} Acres</span>
+                  <span>Area:</span>
+                  <span className="text-white font-bold">
+                    {toAcres(inspectedDeed.areaSqm)} ac ({inspectedDeed.areaSqm.toLocaleString()} m²)
+                  </span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Cadastral Valuation:</span>
-                  <span className="text-cyan-300 font-bold">BZ$ {inspectedDeed.assessedValueBBZD.toLocaleString()}</span>
+                  <span>Assessed Value:</span>
+                  <span className="text-cyan-300 font-bold">{inspectedDeed.assessedValue} bBZD</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Pakit IPFS CID:</span>
-                  <span className="text-purple-300">{inspectedDeed.deedCid.slice(0, 20)}...</span>
+                  <span>Verified / Surveyed:</span>
+                  <span className="text-slate-200">
+                    {inspectedDeed.governmentVerified ? 'verified' : 'unverified'} /{' '}
+                    {inspectedDeed.surveyed ? 'surveyed' : 'not surveyed'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Encumbrances:</span>
+                  <span className={inspectedDeed.encumbrances.length > 0 ? 'text-amber-300 font-bold' : 'text-slate-300'}>
+                    {inspectedDeed.encumbrances.length}
+                  </span>
                 </div>
               </div>
+
+              {inspectedDeed.encumbrances.length > 0 && (
+                <div className="bg-slate-950 p-4 rounded-2xl border border-amber-500/20 space-y-2 text-[11px]">
+                  <span className="text-amber-300 font-bold uppercase text-[10px] block">Encumbrances</span>
+                  {inspectedDeed.encumbrances.map((enc, i) => (
+                    <div key={i} className="flex justify-between font-mono text-slate-400">
+                      <span>
+                        {enc.encumbranceType}
+                        {enc.description ? ` — ${enc.description}` : ''}
+                      </span>
+                      <span className={enc.active ? 'text-amber-300' : 'text-slate-500'}>
+                        {enc.active ? 'active' : 'released'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => {
-                    const deedJson = JSON.stringify(inspectedDeed, null, 2);
-                    const blob = new Blob([deedJson], { type: 'application/json' });
+                    const recordJson = JSON.stringify(inspectedDeed, null, 2);
+                    const blob = new Blob([recordJson], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `Belize_LandLedger_${inspectedDeed.parcelId}.json`;
+                    a.download = `LandLedger_Property_${inspectedDeed.titleId}.json`;
                     a.click();
                     URL.revokeObjectURL(url);
-                    addNotification({ type: 'success', message: 'Downloaded LandLedger Title Certificate presentation!' });
+                    addNotification({ type: 'success', message: 'Downloaded the on-chain property record.' });
                   }}
                   className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
                 >
                   <DownloadSimple size={16} weight="bold" />
-                  Download Title Certificate (.json)
+                  Download Record (.json)
                 </button>
 
-                {inspectedDeed.isBelizeIdVerified && (
-                  <button
-                    onClick={() => {
-                      setInspectedDeed(null);
-                      router.push('/belizeid');
-                    }}
-                    className="flex-1 py-3 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-500/30 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Fingerprint size={16} weight="bold" />
-                    BelizeID ZK Selective Disclosure
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setInspectedDeed(null);
+                    router.push('/belizeid');
+                  }}
+                  className="flex-1 py-3 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-500/30 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Fingerprint size={16} weight="bold" />
+                  BelizeID
+                </button>
               </div>
             </motion.div>
           </div>
