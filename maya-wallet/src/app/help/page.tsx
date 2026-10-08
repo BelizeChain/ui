@@ -66,10 +66,10 @@ export default function HelpPage() {
   ];
 
   const quickLinks = [
-    { title: 'Contact Support', icon: <Envelope size={20} weight="fill" />, href: 'mailto:support@belizechain.bz' },
+    { title: 'Contact Support', icon: <Envelope size={20} weight="fill" />, href: 'https://belizechain.org/support' },
     { title: 'Video Tutorials', icon: <VideoCamera size={20} weight="fill" />, href: '/tutorials' },
-    { title: 'Community Forum', icon: <ChatCircleDots size={20} weight="fill" />, href: 'https://forum.belizechain.bz' },
-    { title: 'Developer Docs', icon: <Book size={20} weight="fill" />, href: 'https://docs.belizechain.bz' }
+    { title: 'Community', icon: <ChatCircleDots size={20} weight="fill" />, href: 'https://belizechain.org/community' },
+    { title: 'Developer Docs', icon: <Book size={20} weight="fill" />, href: 'https://belizechain.org/docs' }
   ];
 
   const faqs = [

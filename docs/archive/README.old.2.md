@@ -565,7 +565,7 @@ This UI suite represents **ALL major Belizean cultures**:
 - **Email**: support@belizechain.org
 - **Phone**: 1-800-BELIZE
 - **Discord**: discord.gg/belizechain
-- **Documentation**: docs.belizechain.org
+- **Documentation**: belizechain.org/docs
 
 ---
 
