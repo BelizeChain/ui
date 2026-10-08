@@ -59,13 +59,22 @@ export interface ModelSubmission {
 
 export interface Validator {
   address: string;
-  commission: number; // Percentage
+  /** Always 0 — the PoUW staking pallet has no commission concept. */
+  commission: number;
   totalStake: string;
+  /** Same as `totalStake` — the pallet has no nominators to split stake from. */
   ownStake: string;
+  /** Always 0 — the pallet has no nominators. */
   nominatorCount: number;
   isActive: boolean;
+  /** `ValidatorInfo.totalContributions` — recorded PoUW contributions. */
   rewardPoints: number;
-  name?: string; // From BelizeID
+  /** `ValidatorInfo.computeCapacity` — declared compute weight. */
+  computeCapacity: number;
+  /** `ValidatorInfo.qualityScore` (0-100). */
+  qualityScore: number;
+  /** `ValidatorInfo.location` — free-form node label. */
+  name?: string;
 }
 
 /**
@@ -145,12 +154,17 @@ export async function getStakingInfo(address: string): Promise<StakingInfo> {
 }
 
 /**
- * Stake DALLA tokens
+ * Register as a PoUW validator by bonding DALLA.
+ *
+ * Real signature: `staking.joinValidators(stake, computeCapacity, location)`.
+ * The pallet has no nominator concept — the caller stakes for themselves.
+ * `location` is a free-form node label, not a validator address.
  */
 export async function stakeDalla(
   address: string,
   amount: string,
-  validatorAddress?: string
+  computeCapacity: number | string = 100,
+  location: string = 'Maya Wallet',
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
 
@@ -158,15 +172,10 @@ export async function stakeDalla(
     const injector = await web3FromAddress(address);
     const amountInPlanck = BigInt(Math.floor(parseFloat(amount) * 1e12));
 
-    // Real signature: joinValidators(stake, computeCapacity, location:Bytes).
-    // PoUW staking on BelizeChain registers the caller as a validator with a
-    // compute-capacity weight; nominator-style staking is not supported.
-    const computeCapacity = 100;
-    const location = validatorAddress ?? 'wallet';
     const tx = api.tx.staking.joinValidators(
       amountInPlanck.toString(),
-      computeCapacity,
-      location,
+      Number(computeCapacity) || 100,
+      location || 'Maya Wallet',
     );
 
     return new Promise((resolve, reject) => {
@@ -304,6 +313,8 @@ export async function getActiveValidators(): Promise<Validator[]> {
         nominatorCount: 0,
         isActive: true,
         rewardPoints: Number(data?.totalContributions?.toString() ?? 0),
+        computeCapacity: Number(data?.computeCapacity?.toString() ?? 0),
+        qualityScore: Number(data?.qualityScore?.toString() ?? 0),
         name: bytesToString(data?.location) || undefined,
       };
     });
