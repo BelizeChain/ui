@@ -152,15 +152,12 @@ class BluetoothMeshService {
 
   private async discoverPeers() {
     console.log('[BLE-MESH] Discovering mesh peers via BLE service UUID 0000fff0-0000-1000-8000-00805f9b34fb...');
+    // WebBluetooth exposes no scan API: a page cannot enumerate nearby
+    // advertisers, it can only connect to a device the user selected. So there
+    // is nothing to report here — inventing a peer would put a node that does
+    // not exist into the relay list.
     if (typeof navigator !== 'undefined' && navigator.bluetooth) {
-      this.peers.set('peer_ble_node_01', {
-        id: 'peer_ble_node_01',
-        name: 'Belize Mesh Relay Node',
-        address: 'r1XAsfvRm8Wf8i3CqN8YvQ2PZ9wL7kM4jT6bV5nC3xS1d',
-        rssi: -68,
-        lastSeen: new Date(),
-        isRelay: true,
-      });
+      console.log('[BLE-MESH] No peers discovered — WebBluetooth cannot scan for advertisers.');
     }
   }
 
@@ -214,16 +211,22 @@ class BluetoothMeshService {
       return false;
     }
 
+    const from = this.getLocalAddress();
+    if (!from) {
+      console.error('[BLE-MESH] No connected account — cannot attribute a mesh message.');
+      return false;
+    }
+
     try {
       const message: MeshMessage = {
         id: this.generateMessageId(),
-        from: this.getLocalAddress(),
+        from,
         to,
         content,
         timestamp: new Date(),
         ttl: this.MAX_HOPS,
         signature: await this.signMessage(content),
-        route: [this.getLocalAddress()]
+        route: [from],
       };
 
       // Queue message
@@ -264,12 +267,15 @@ class BluetoothMeshService {
   }
 
   private async relayMessage(message: MeshMessage) {
+    const localAddress = this.getLocalAddress();
+    if (!localAddress) return;
+
     // Decrease TTL
     message.ttl--;
-    message.route.push(this.getLocalAddress());
+    message.route.push(localAddress);
 
     // Check if we've seen this message before (prevent loops)
-    if (message.route.filter(addr => addr === this.getLocalAddress()).length > 1) {
+    if (message.route.filter(addr => addr === localAddress).length > 1) {
       return; // Already relayed this message
     }
 
@@ -293,6 +299,7 @@ class BluetoothMeshService {
     // extension injector is available — receivers must treat such messages
     // as unverified rather than treating any 0x-prefixed blob as proof.
     const from = this.getLocalAddress();
+    if (!from) return '0x00'; // no account to sign with
     try {
       const injector = await web3FromAddress(from);
       const signer = injector?.signer as any;
@@ -321,19 +328,23 @@ class BluetoothMeshService {
     return `mesh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  private getLocalAddress(): string {
+  private getLocalAddress(): string | null {
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('belizechain_active_account');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed?.address) return parsed.address;
+          if (typeof parsed?.address === 'string' && parsed.address.length > 0) {
+            return parsed.address;
+          }
         }
       } catch {
-        // Fallback
+        // Malformed cache — fall through to the honest null below.
       }
     }
-    return 'r1XAsfvRm8Wf8i3CqN8YvQ2PZ9wL7kM4jT6bV5nC3xS1d';
+    // No connected account means no identity to sign or attribute a message
+    // with. Callers must treat this as "cannot send", never invent an address.
+    return null;
   }
 
   private isRelayNode(): boolean {
