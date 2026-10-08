@@ -279,12 +279,18 @@ export async function clearPrimaryDomain(address: string): Promise<{ hash: strin
   }
 }
 
-/** Read the reverse-resolution domain registered for an address, if any. */
+/**
+ * Read the reverse-resolution domain registered for an address, if any.
+ *
+ * `bns.primaryDomain` was added in the spec-110 `aa2b6ab` commit, so it is
+ * absent from the runtime live today; the optional call yields `null` until the
+ * upgrade ships.
+ */
 export async function getPrimaryDomain(address: string): Promise<string | null> {
   const api = await initializeApi();
 
   try {
-    const entry: any = await api.query.bns.primaryDomain(address);
+    const entry: any = await api.query.bns.primaryDomain?.(address);
     if (!entry || entry.isNone) {
       return null;
     }

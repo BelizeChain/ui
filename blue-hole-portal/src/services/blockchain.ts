@@ -630,18 +630,23 @@ class BlockchainService {
   }
 
   /**
-   * Get voting status for proposal
+   * Get the vote tally for a proposal.
+   *
+   * There is no `governance.voting` map: the aggregate counts live on the
+   * proposal itself (`Proposal.voteTally`). Individual ballots are in the
+   * `governance.votes` double map keyed by `(proposalId, AccountId)`, which has
+   * no on-chain index to enumerate.
    */
   async getVotingStatus(proposalId: number): Promise<any> {
     const api = await this.getApi();
 
-    const voting = await api.query.governance?.voting?.(proposalId);
-
-    if (!voting) {
+    const opt: any = await api.query.governance?.proposals?.(proposalId);
+    const proposal: any = opt?.unwrap ? opt.unwrap() : opt;
+    if (!proposal) {
       return null;
     }
 
-    return voting.toJSON();
+    return proposal.voteTally?.toJSON?.() ?? null;
   }
 }
 

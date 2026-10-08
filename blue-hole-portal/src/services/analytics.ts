@@ -295,9 +295,14 @@ class AnalyticsService {
     const proposals = await blockchainService.getGovernanceProposals();
 
     const totalProposals = proposals.length;
-    const activeProposals = proposals.filter((p: any) => p.status === 'active').length;
-    const passedProposals = proposals.filter((p: any) => p.status === 'passed').length;
-    const rejectedProposals = proposals.filter((p: any) => p.status === 'rejected').length;
+    // `ProposalStatus` variant names are capitalised on chain (Pending, Voting,
+    // Approved, Rejected, Cancelled, Executed) — the old lowercase comparisons
+    // never matched anything.
+    const activeProposals = proposals.filter((p: any) => p.status === 'Voting').length;
+    const passedProposals = proposals.filter(
+      (p: any) => p.status === 'Approved' || p.status === 'Executed',
+    ).length;
+    const rejectedProposals = proposals.filter((p: any) => p.status === 'Rejected').length;
 
     const successRate = totalProposals > 0
       ? (passedProposals / totalProposals) * 100
@@ -412,17 +417,18 @@ class AnalyticsService {
     const patterns: VotingPatternData[] = [];
 
     for (const proposal of proposals) {
-      const voting = await blockchainService.getVotingStatus(proposal.id);
+      const tally = await blockchainService.getVotingStatus(proposal.id);
+      if (!tally) continue;
 
-      if (voting) {
-        patterns.push({
-          proposalId: proposal.id,
-          votesFor: voting.ayes?.length || 0,
-          votesAgainst: voting.nays?.length || 0,
-          abstentions: voting.abstentions?.length || 0,
-          quorumMet: voting.threshold ? voting.ayes?.length >= voting.threshold : false,
-        });
-      }
+      patterns.push({
+        proposalId: proposal.id,
+        votesFor: Number(tally.ayes ?? 0),
+        votesAgainst: Number(tally.nays ?? 0),
+        abstentions: Number(tally.abstentions ?? 0),
+        // `VoteTally.participation` is not a quorum test, so treat a proposal as
+        // decided once it leaves the on-chain `Voting` status.
+        quorumMet: proposal.status !== 'Voting',
+      });
     }
 
     return patterns;

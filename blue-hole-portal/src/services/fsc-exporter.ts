@@ -1,6 +1,6 @@
 /**
  * FSC Compliance Exporter
- * 
+ *
  * Generates regulatory compliance reports for Financial Services Commission (FSC) oversight.
  * Supports CSV and PDF formats for KYC records, transaction analytics, and audit trails.
  */

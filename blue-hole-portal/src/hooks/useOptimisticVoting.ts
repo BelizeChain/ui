@@ -189,8 +189,8 @@ export function useOptimisticVoting() {
     });
 
     const total = aye + nay + abstain;
-    const approvalPercentage = total > 0n 
-      ? Number((aye * 10000n) / total) / 100 
+    const approvalPercentage = total > 0n
+      ? Number((aye * 10000n) / total) / 100
       : 0;
 
     return { aye, nay, abstain, total, approvalPercentage };
