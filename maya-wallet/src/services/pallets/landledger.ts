@@ -5,80 +5,121 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '../../lib/codec';
 
+/**
+ * Mirrors `landLedger.properties: u32 -> Property`.
+ *
+ * The pallet stores a title number and description as byte strings and a raw
+ * (latitude, longitude) pair. There is no district, village, area unit, title
+ * type, status or document hash — an earlier version of this file invented
+ * every one of those, and read a `titles` map that does not exist.
+ */
 export interface LandTitle {
+  /** u32 property id, rendered as a string (the storage key). */
   titleId: string;
-  id?: string; // Alias for titleId (UI compatibility)
-  parcelNumber: string;
+  propertyId: number;
   owner: string;
-  name?: string; // Property name/description (UI compatibility)
-  location: {
-    district: string;
-    village?: string;
-    coordinates?: {
-      latitude: number;
-      longitude: number;
-    };
-  };
-  area: number; // Square meters
-  areaUnit: 'sqm' | 'acre' | 'hectare';
-  titleType: 'Freehold' | 'Leasehold' | 'Government' | 'Crown';
-  type?: string; // Alias for titleType (UI compatibility)
-  value?: string; // Assessed property value (UI compatibility)
-  environmental?: string; // Environmental status (UI compatibility)
-  registrationDate: number;
-  lastTransferDate?: number;
-  encumbrances: Encumbrance[];
-  documentHash: string; // Pakit storage proof
-  status: 'Active' | 'Pending' | 'Disputed' | 'Transferred';
-}
-
-export interface Encumbrance {
-  type: 'Mortgage' | 'Lien' | 'Easement' | 'Covenant' | 'Other';
-  holder: string;
-  amount?: string; // For mortgages/liens
+  titleNumber: string;
   description: string;
-  registeredDate: number;
-  expiryDate?: number;
-  status: 'Active' | 'Released';
+  coordinates?: { latitude: number; longitude: number };
+  areaSqm: number;
+  propertyType: string;
+  assessedValue: string;
+  zoning: string;
+  registeredAt: number;
+  lastTransferred?: number;
+  governmentVerified: boolean;
+  surveyed: boolean;
+  environmentalClearance: boolean;
+  isTourismProperty: boolean;
+  encumbrances: Encumbrance[];
 }
 
+/** Mirrors `PalletBelizeLandledgerEncumbrance` — a nested field of a property. */
+export interface Encumbrance {
+  encumbranceType: string;
+  holder: string;
+  amount?: string;
+  description: string;
+  active: boolean;
+}
+
+/**
+ * A property document. The landLedger pallet stores no per-property document
+ * map, so nothing on chain currently produces one of these.
+ */
 export interface PropertyDocument {
   documentId: string;
   titleId: string;
-  type: 'Title' | 'Survey' | 'Deed' | 'Mortgage' | 'Plan' | 'Other';
+  type: string;
   name: string;
-  documentHash: string; // Pakit IPFS/Arweave hash
-  storageProof: string; // On-chain proof
+  documentHash: string;
   uploadedBy: string;
-  uploaded?: string; // Formatted upload date (UI compatibility)
   uploadedAt: number;
   sizeBytes: number;
-  size?: string; // Formatted size (UI compatibility)
   isVerified: boolean;
   verifiedBy?: string;
-  metadata?: {
-    description?: string;
-    surveyor?: string;
-    surveyDate?: number;
-  };
 }
 
+/** Mirrors `landLedger.transferRecords: u32 -> TransferRecord`. */
 export interface PropertyTransfer {
   transferId: string;
-  id?: string; // Alias for transferId (UI compatibility)
-  titleId: string;
-  property?: string; // Property description (UI compatibility)
+  propertyId: number;
   from: string;
   to: string;
-  price?: string; // DALLA or bBZD
-  currency?: 'DALLA' | 'bBZD';
-  transferDate: number;
-  date?: string; // Formatted date (UI compatibility)
-  registrationDate: number;
-  stampDuty: string;
-  transferType: 'Sale' | 'Gift' | 'Inheritance' | 'Partition' | 'Other';
-  status: 'Pending' | 'Completed' | 'Rejected';
+  price: string;
+  taxPaid: string;
+  transferType: string;
+  transferredAt: number;
+  governmentApproved: boolean;
+}
+
+/** The chain's `TransferType` variant order — index into it, do not guess. */
+const TRANSFER_TYPE_INDEX: Record<string, number> = {
+  Sale: 0,
+  Gift: 1,
+  Inheritance: 2,
+  GovernmentAcquisition: 3,
+  Foreclosure: 4,
+  CourtOrder: 5,
+};
+
+function toEncumbrances(data: any): Encumbrance[] {
+  const list = data?.encumbrances;
+  if (!Array.isArray(list)) return [];
+  return list.map((e: any) => ({
+    encumbranceType: String(e.encumbranceType),
+    holder: String(e.holder),
+    amount: e.amount != null ? formatBalance(String(e.amount)) : undefined,
+    description: bytesToString(e.description),
+    active: Boolean(e.active),
+  }));
+}
+
+function toLandTitle(propertyId: number, data: any): LandTitle {
+  const coords = Array.isArray(data.coordinates) ? data.coordinates : null;
+  return {
+    titleId: String(propertyId),
+    propertyId,
+    owner: String(data.owner ?? ''),
+    titleNumber: bytesToString(data.titleNumber),
+    description: bytesToString(data.description),
+    coordinates: coords
+      ? { latitude: Number(coords[0]), longitude: Number(coords[1]) }
+      : undefined,
+    areaSqm: Number(data.areaSqm ?? 0),
+    propertyType: String(data.propertyType),
+    assessedValue: formatBalance(String(data.assessedValue ?? '0')),
+    zoning: String(data.zoning),
+    registeredAt: Number(data.registeredAt ?? 0),
+    lastTransferred: data.lastTransferred != null ? Number(data.lastTransferred) : undefined,
+    governmentVerified: Boolean(data.governmentVerified),
+    surveyed: Boolean(data.surveyed),
+    environmentalClearance: Boolean(data.environmentalClearance),
+    isTourismProperty: Boolean(data.isTourismProperty),
+    encumbrances: toEncumbrances(data),
+  };
 }
 
 /**
@@ -88,33 +129,14 @@ export async function getLandTitle(titleId: string): Promise<LandTitle | null> {
   const api = await initializeApi();
 
   try {
-    const titleData: any = await api.query.landLedger?.titles(titleId);
+    if (!api.query.landLedger?.properties) return null;
+    const propertyId = Number.parseInt(titleId, 10);
+    if (!Number.isFinite(propertyId)) return null;
 
-    if (!titleData || titleData.isNone) {
-      return null;
-    }
+    const raw: any = await api.query.landLedger.properties(propertyId);
+    if (!raw || raw.isNone) return null;
 
-    const data = titleData.unwrap();
-    const encumbrances: any = await api.query.landLedger?.encumbrances(titleId);
-
-    return {
-      titleId,
-      parcelNumber: data.parcelNumber.toString(),
-      owner: data.owner.toString(),
-      location: {
-        district: data.district.toString(),
-        village: data.village?.toString(),
-        coordinates: data.coordinates?.toHuman() as any,
-      },
-      area: data.area.toNumber(),
-      areaUnit: data.areaUnit.toString() as any,
-      titleType: data.titleType.toString() as any,
-      registrationDate: data.registrationDate.toNumber(),
-      lastTransferDate: data.lastTransferDate?.toNumber(),
-      encumbrances: encumbrances?.toHuman() as Encumbrance[] || [],
-      documentHash: data.documentHash.toString(),
-      status: data.status.toString() as any,
-    };
+    return toLandTitle(propertyId, raw.toJSON());
   } catch (error) {
     console.error('Failed to fetch land title:', error);
     return null;
@@ -128,45 +150,18 @@ export async function getUserLandTitles(address: string): Promise<LandTitle[]> {
   const api = await initializeApi();
 
   try {
-    const allTitles: any = await api.query.landLedger?.titles?.entries?.() || [];
+    if (!api.query.landLedger?.properties) return [];
+    const entries = await api.query.landLedger.properties.entries();
 
-    if (!allTitles || allTitles.length === 0) {
-      return [];
+    const userTitles: LandTitle[] = [];
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data || String(data.owner) !== address) continue;
+      const propertyId = Number(key?.args?.[0] ?? data.propertyId ?? 0);
+      userTitles.push(toLandTitle(propertyId, data));
     }
 
-    const userTitles = [];
-
-    for (const [key, value] of allTitles) {
-      const titleId = key.args[0].toString();
-      const data = value.unwrap();
-
-      if (data.owner.toString() === address) {
-        const encumbrances: any = await api.query.landLedger?.encumbrances(titleId);
-
-        userTitles.push({
-          titleId,
-          parcelNumber: data.parcelNumber.toString(),
-          owner: data.owner.toString(),
-          location: {
-            district: data.district.toString(),
-            village: data.village?.toString(),
-            coordinates: data.coordinates?.toHuman() as any,
-          },
-          area: data.area.toNumber(),
-          areaUnit: data.areaUnit.toString() as any,
-          titleType: data.titleType.toString() as any,
-          registrationDate: data.registrationDate.toNumber(),
-          lastTransferDate: data.lastTransferDate?.toNumber(),
-          encumbrances: encumbrances?.toHuman() as Encumbrance[] || [],
-          documentHash: data.documentHash.toString(),
-          status: data.status.toString() as any,
-        });
-      }
-    }
-
-    if (userTitles.length > 0) {
-      return userTitles;
-    }
+    return userTitles;
   } catch (error) {
     console.warn('Failed to fetch on-chain land titles:', error);
   }
@@ -182,38 +177,11 @@ export async function getUserLandTitles(address: string): Promise<LandTitle[]> {
  * Get property documents for a title
  */
 export async function getPropertyDocuments(titleId: string): Promise<PropertyDocument[]> {
-  const api = await initializeApi();
-
-  try {
-    const documents: any = await api.query.landLedger?.documents?.entries?.(titleId) || [];
-
-    if (!documents || documents.length === 0) {
-      return [];
-    }
-
-    return documents.map(([key, value]: [any, any]) => {
-      const documentId = key.args[1].toString();
-      const data = value.unwrap();
-
-      return {
-        documentId,
-        titleId,
-        type: data.docType.toString() as any,
-        name: data.name.toString(),
-        documentHash: data.documentHash.toString(),
-        storageProof: data.storageProof.toString(),
-        uploadedBy: data.uploadedBy.toString(),
-        uploadedAt: data.uploadedAt.toNumber(),
-        sizeBytes: data.sizeBytes.toNumber(),
-        isVerified: data.isVerified.toHuman(),
-        verifiedBy: data.verifiedBy?.toString(),
-        metadata: data.metadata?.toHuman() as any,
-      };
-    });
-  } catch (error) {
-    console.error('Failed to fetch property documents:', error);
-    return [];
-  }
+  // The landLedger pallet has no per-property document map (`documents` does
+  // not exist). Documents are pinned to Pakit and referenced off-chain; until
+  // an on-chain index exists there is nothing to read here.
+  void titleId;
+  return [];
 }
 
 /**
@@ -264,12 +232,11 @@ export async function initiatePropertyTransfer(
     const injector = await web3FromAddress(address);
     const priceInPlanck = price ? BigInt(Math.floor(parseFloat(price) * 1e12)) : 0n;
     // Real signature: transferProperty(propertyId:u32, newOwner, transferPrice:u128, transferTypeIndex:u8).
-    // Currency selection is not represented on chain. Map common transfer
-    // types to the chain's u8 index: 0=Sale, 1=Gift, 2=Inheritance, 3=Court.
+    // Currency selection is not represented on chain. The chain's TransferType
+    // order is Sale, Gift, Inheritance, GovernmentAcquisition, Foreclosure,
+    // CourtOrder — mapping 'Court' to 3 would have sent GovernmentAcquisition.
     void currency;
-    const transferTypeIndex = (
-      { Sale: 0, Gift: 1, Inheritance: 2, Court: 3 } as Record<string, number>
-    )[transferType] ?? 0;
+    const transferTypeIndex = TRANSFER_TYPE_INDEX[transferType] ?? 0;
     const propertyIdNum = Number.parseInt(titleId, 10);
     const tx = api.tx.landLedger.transferProperty(
       propertyIdNum,
@@ -311,30 +278,30 @@ export async function getPropertyTransferHistory(titleId: string): Promise<Prope
   const api = await initializeApi();
 
   try {
-    const transfers: any = await api.query.landLedger?.transfers?.entries?.(titleId) || [];
+    if (!api.query.landLedger?.transferRecords) return [];
+    const propertyId = Number.parseInt(titleId, 10);
+    const entries = await api.query.landLedger.transferRecords.entries();
 
-    if (!transfers || transfers.length === 0) {
-      return [];
+    const transfers: PropertyTransfer[] = [];
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      if (Number.isFinite(propertyId) && Number(data.propertyId) !== propertyId) continue;
+
+      transfers.push({
+        transferId: String(data.transferId ?? key?.args?.[0] ?? ''),
+        propertyId: Number(data.propertyId ?? 0),
+        from: String(data.fromOwner ?? ''),
+        to: String(data.toOwner ?? ''),
+        price: formatBalance(String(data.transferPrice ?? '0')),
+        taxPaid: formatBalance(String(data.taxPaid ?? '0')),
+        transferType: String(data.transferType),
+        transferredAt: Number(data.transferredAt ?? 0),
+        governmentApproved: Boolean(data.governmentApproved),
+      });
     }
 
-    return transfers.map(([key, value]: [any, any]) => {
-      const transferId = key.args[1].toString();
-      const data = value.unwrap();
-
-      return {
-        transferId,
-        titleId,
-        from: data.from.toString(),
-        to: data.to.toString(),
-        price: data.price ? formatBalance(data.price.toString()) : undefined,
-        currency: data.currency?.toString() as any,
-        transferDate: data.transferDate.toNumber(),
-        registrationDate: data.registrationDate.toNumber(),
-        stampDuty: formatBalance(data.stampDuty.toString()),
-        transferType: data.transferType.toString() as any,
-        status: data.status.toString() as any,
-      };
-    });
+    return transfers.sort((a, b) => b.transferredAt - a.transferredAt);
   } catch (error) {
     console.error('Failed to fetch transfer history:', error);
     return [];
@@ -345,53 +312,13 @@ export async function getPropertyTransferHistory(titleId: string): Promise<Prope
  * Search land titles by location
  */
 export async function searchLandByLocation(district: string, village?: string): Promise<LandTitle[]> {
-  const api = await initializeApi();
-
-  try {
-    const allTitles: any = await api.query.landLedger?.titles?.entries?.() || [];
-
-    if (!allTitles || allTitles.length === 0) {
-      return [];
-    }
-
-    const matchingTitles = [];
-
-    for (const [key, value] of allTitles) {
-      const titleId = key.args[0].toString();
-      const data = value.unwrap();
-
-      const districtMatch = data.district.toString().toLowerCase() === district.toLowerCase();
-      const villageMatch = !village || data.village?.toString().toLowerCase() === village.toLowerCase();
-
-      if (districtMatch && villageMatch) {
-        const encumbrances: any = await api.query.landLedger?.encumbrances(titleId);
-
-        matchingTitles.push({
-          titleId,
-          parcelNumber: data.parcelNumber.toString(),
-          owner: data.owner.toString(),
-          location: {
-            district: data.district.toString(),
-            village: data.village?.toString(),
-            coordinates: data.coordinates?.toHuman() as any,
-          },
-          area: data.area.toNumber(),
-          areaUnit: data.areaUnit.toString() as any,
-          titleType: data.titleType.toString() as any,
-          registrationDate: data.registrationDate.toNumber(),
-          lastTransferDate: data.lastTransferDate?.toNumber(),
-          encumbrances: encumbrances?.toHuman() as Encumbrance[] || [],
-          documentHash: data.documentHash.toString(),
-          status: data.status.toString() as any,
-        });
-      }
-    }
-
-    return matchingTitles;
-  } catch (error) {
-    console.error('Failed to search land titles:', error);
-    return [];
-  }
+  // `properties` stores a raw (latitude, longitude) pair and a zoning code.
+  // It has no district or village field, so a location search cannot be
+  // answered from chain state — the previous implementation compared fields
+  // that never existed and therefore always returned an empty list.
+  void district;
+  void village;
+  return [];
 }
 
 /**

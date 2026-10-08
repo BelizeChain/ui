@@ -88,7 +88,7 @@ export default function LandPage() {
       );
       addNotification({
         type: 'success',
-        message: `Property transfer initiated for ${selectedPropertyForTransfer.name || selectedPropertyForTransfer.parcelNumber}! Tx: ${result.hash.slice(0, 10)}...`,
+        message: `Property transfer initiated for ${selectedPropertyForTransfer.titleNumber || selectedPropertyForTransfer.description}! Tx: ${result.hash.slice(0, 10)}...`,
       });
       setShowTransferModal(false);
       setTransferRecipient('');
@@ -108,7 +108,7 @@ export default function LandPage() {
   const handlePayTax = (property: landLedgerService.LandTitle) => {
     addNotification({
       type: 'success',
-      message: `Annual property tax for ${property.name || property.parcelNumber} successfully settled on-chain! Clearance certificate issued.`,
+      message: `Annual property tax for ${property.titleNumber || property.description} successfully settled on-chain! Clearance certificate issued.`,
     });
     setPayingTaxPropertyId(null);
   };
@@ -165,12 +165,12 @@ export default function LandPage() {
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Total Acreage</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Total Registered Area</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-bold text-emerald-400">
-                {properties.reduce((sum, p) => sum + (p.area || 0), 0).toFixed(1)}
+                {properties.reduce((sum, p) => sum + (p.areaSqm || 0), 0).toLocaleString()}
               </span>
-              <span className="text-xs text-slate-400">Acres Freehold</span>
+              <span className="text-xs text-slate-400">sqm on chain</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-2">
               Belize & Ambergris Caye Districts
@@ -231,14 +231,14 @@ export default function LandPage() {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-white text-base">{property.name || property.parcelNumber}</h3>
+                            <h3 className="font-bold text-white text-base">{property.titleNumber || property.description}</h3>
                             <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-full border border-emerald-500/30">
-                              {property.titleType}
+                              {property.propertyType}
                             </span>
                           </div>
                           <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                             <MapPin size={14} className="text-emerald-400" />
-                            {property.location.village}, {property.location.district} District • {property.parcelNumber}
+                            {property.description} • {property.titleNumber}
                           </p>
                         </div>
                       </div>
@@ -267,21 +267,21 @@ export default function LandPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-xs">
                       <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
                         <span className="text-slate-500 block text-[10px]">Parcel Area</span>
-                        <span className="font-bold text-white font-mono">{property.area} {property.areaUnit}s</span>
+                        <span className="font-bold text-white font-mono">{property.areaSqm.toLocaleString()} sqm</span>
                       </div>
                       <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
                         <span className="text-slate-500 block text-[10px]">Assessed Value</span>
-                        <span className="font-bold text-emerald-400 font-mono">{property.value || '1,000,000.00'} Ɗ</span>
+                        <span className="font-bold text-emerald-400 font-mono">{property.assessedValue} Ɗ</span>
                       </div>
                       <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
                         <span className="text-slate-500 block text-[10px]">GPS Coordinates</span>
                         <span className="font-mono text-slate-300 text-[11px]">
-                          {property.location.coordinates ? `${property.location.coordinates.latitude.toFixed(3)}, ${property.location.coordinates.longitude.toFixed(3)}` : '17.499, -88.197'}
+                          {property.coordinates ? `${property.coordinates.latitude}, ${property.coordinates.longitude}` : 'Not recorded'}
                         </span>
                       </div>
                       <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                        <span className="text-slate-500 block text-[10px]">Environmental Status</span>
-                        <span className="text-teal-300 font-semibold text-[11px]">{property.environmental || 'Verified Clean'}</span>
+                        <span className="text-slate-500 block text-[10px]">Environmental Clearance</span>
+                        <span className="text-teal-300 font-semibold text-[11px]">{property.environmentalClearance ? 'On file' : 'Not recorded'}</span>
                       </div>
                     </div>
                   </div>
@@ -316,30 +316,30 @@ export default function LandPage() {
               {properties.map((p) => (
                 <div key={p.titleId} className="bg-slate-950 p-5 rounded-3xl border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-sm">{p.name}</span>
+                    <span className="font-bold text-white text-sm">{p.titleNumber || p.description}</span>
                     <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-full">
-                      {p.location.district} District
+                      {p.zoning}
                     </span>
                   </div>
 
                   {/* Visual Map Representation */}
                   <div className="h-40 rounded-2xl bg-gradient-to-br from-slate-900 to-emerald-950/30 border border-emerald-500/20 p-4 flex flex-col justify-between relative overflow-hidden">
                     <div className="flex justify-between items-start">
-                      <span className="font-mono text-xs text-emerald-400 font-bold">{p.parcelNumber}</span>
+                      <span className="font-mono text-xs text-emerald-400 font-bold">{p.titleNumber}</span>
                       <span className="text-[10px] text-slate-400 bg-slate-900/80 px-2 py-1 rounded-lg">
-                        {p.location.coordinates?.latitude}° N, {p.location.coordinates?.longitude}° W
+                        {p.coordinates ? `${p.coordinates.latitude}, ${p.coordinates.longitude}` : 'No coordinates'}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 text-xs text-slate-300">
                       <MapPin size={16} weight="fill" className="text-emerald-400 animate-bounce" />
-                      <span>{p.location.village}, Belize</span>
+                      <span>{p.description}</span>
                     </div>
                   </div>
 
                   <div className="flex justify-between text-xs font-mono text-slate-400 pt-1">
-                    <span>Survey Proof CID:</span>
-                    <span className="text-slate-300 truncate max-w-[180px]">{p.documentHash}</span>
+                    <span>Property Type:</span>
+                    <span className="text-slate-300 truncate max-w-[180px]">{p.propertyType}</span>
                   </div>
                 </div>
               ))}
@@ -364,7 +364,7 @@ export default function LandPage() {
               {properties.map((p) => (
                 <div key={p.titleId} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="space-y-1">
-                    <h4 className="font-bold text-white">{p.name || p.parcelNumber}</h4>
+                    <h4 className="font-bold text-white">{p.titleNumber || p.description}</h4>
                     <p className="text-slate-400">Assessed Annual Tax: 250.00 bBZD (or 125.00 Ɗ)</p>
                   </div>
 
@@ -414,7 +414,7 @@ export default function LandPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-lg">Transfer Land Title</h3>
-                  <p className="text-xs text-slate-400">{selectedPropertyForTransfer.name || selectedPropertyForTransfer.parcelNumber}</p>
+                  <p className="text-xs text-slate-400">{selectedPropertyForTransfer.titleNumber || selectedPropertyForTransfer.description}</p>
                 </div>
               </div>
               <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white p-2">
@@ -504,15 +504,15 @@ export default function LandPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Parcel Number:</span>
-                  <span className="font-mono text-emerald-400">{selectedDetailProperty.parcelNumber}</span>
+                  <span className="font-mono text-emerald-400">{selectedDetailProperty.titleNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Title Type:</span>
-                  <span className="font-semibold text-white">{selectedDetailProperty.titleType}</span>
+                  <span className="text-slate-400">Property Type:</span>
+                  <span className="font-semibold text-white">{selectedDetailProperty.propertyType}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Pakit Document CID:</span>
-                  <span className="font-mono text-slate-300 text-[11px] truncate max-w-[180px]">{selectedDetailProperty.documentHash}</span>
+                  <span className="text-slate-400">Assessed Value:</span>
+                  <span className="font-mono text-slate-300 text-[11px] truncate max-w-[180px]">{selectedDetailProperty.assessedValue} Ɗ</span>
                 </div>
               </div>
             </div>
