@@ -66,7 +66,7 @@ export default function FinancialReportsPage() {
   const [loading, setLoading] = React.useState(false);
   const [showBuilder, setShowBuilder] = React.useState(false);
   const [analytics, setAnalytics] = React.useState<any>(null);
-  
+
   // Report builder state
   const [selectedTemplate, setSelectedTemplate] = React.useState<string | null>(null);
   const [dateRange, setDateRange] = React.useState({
@@ -110,7 +110,7 @@ export default function FinancialReportsPage() {
       // Fetch fresh data for the report
       await blockchainService.initialize();
       const reportData = await analyticsService.getTreasuryAnalytics();
-      
+
       // In production, this would use a library like jsPDF or call a backend service
       // For now, we'll create a downloadable data file
       const reportContent = {

@@ -102,7 +102,7 @@ export function PostCard({
             {author?.name ? author.name.charAt(0).toUpperCase() : 'U'}
           </div>
         )}
-        
+
         <div className="flex-1">
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
@@ -169,7 +169,7 @@ export function PostCard({
                 {shares > 0 && <span className="text-xs font-semibold font-mono">{shares}</span>}
               </button>
             </div>
-            <span className="text-xs text-slate-500 font-mono">{timestamp}</span>
+            <span className="text-xs text-slate-400 font-mono">{timestamp}</span>
           </div>
         </div>
       </div>

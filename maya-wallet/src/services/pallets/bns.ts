@@ -29,6 +29,10 @@ export interface Domain {
       telegram?: string;
     };
   };
+  /** Free-form text records stored on chain (email, url, social handles, ...). */
+  textRecords?: Array<{ key: string; value: string }>;
+  /** Content hash of the active hosted site, if hosting is enabled. */
+  hostedContentHash?: string;
 }
 
 export interface DomainListing {
@@ -58,11 +62,14 @@ export interface HostedWebsite {
  */
 export async function isDomainAvailable(domain: string): Promise<boolean> {
   const api = await initializeApi();
-  
+
   try {
     const normalizedDomain = normalizeDomain(domain);
-    const domainData: any = await api.query.bns?.domains(normalizedDomain);
-    
+    // `bns.domains` does not exist on this runtime; the registry is
+    // `domainRegistry`, keyed by the domain name. The old name made this query
+    // throw, which the catch turned into `false` — reporting every name as taken.
+    const domainData: any = await api.query.bns.domainRegistry(normalizedDomain);
+
     return domainData.isNone;
   } catch (error) {
     console.error('Failed to check domain availability:', error);
@@ -75,26 +82,33 @@ export async function isDomainAvailable(domain: string): Promise<boolean> {
  */
 export async function getDomain(domain: string): Promise<Domain | null> {
   const api = await initializeApi();
-  
+
   try {
     const normalizedDomain = normalizeDomain(domain);
-    const domainData: any = await api.query.bns?.domains(normalizedDomain);
-    
-    if (!domainData || domainData.isNone) {
+    const [registryEntry, resolutionEntry]: any = await Promise.all([
+      api.query.bns.domainRegistry(normalizedDomain),
+      api.query.bns.domainResolution(normalizedDomain),
+    ]);
+
+    if (!registryEntry || registryEntry.isNone) {
       return null;
     }
 
-    const data = domainData.unwrap();
-    
+    const record = registryEntry.unwrap();
+    const resolution = resolutionEntry && !resolutionEntry.isNone ? resolutionEntry.unwrap() : null;
+    const walletAddress = resolution?.walletAddress;
+
     return {
       name: normalizedDomain,
-      owner: data.owner.toString(),
-      resolvedAddress: data.resolvedAddress?.toString(),
-      registrationDate: data.registrationDate.toNumber(),
-      expiryDate: data.expiryDate.toNumber(),
-      isPremium: data.isPremium.toHuman(),
-      price: data.price ? formatBalance(data.price.toString()) : undefined,
-      metadata: data.metadata?.toHuman() as any,
+      owner: record.owner.toString(),
+      resolvedAddress: walletAddress && !walletAddress.isNone ? walletAddress.unwrap().toString() : undefined,
+      registrationDate: record.registeredAt?.toNumber() ?? 0,
+      // The registry has no expiry field: a domain is held until `lockedUntil`,
+      // which is optional. Report 0 when unset rather than inventing a date.
+      expiryDate: record.lockedUntil?.isSome ? record.lockedUntil.unwrap().toNumber() : 0,
+      isPremium: record.tier?.toString() === 'Premium',
+      status: 'active',
+      price: record.purchasePrice ? formatBalance(record.purchasePrice.toString()) : undefined,
     };
   } catch (error) {
     console.error('Failed to fetch domain:', error);
@@ -111,18 +125,18 @@ export async function registerDomain(
   years: number = 1
 ): Promise<{ hash: string; domain: string; cost: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
-    
+
     const tx = api.tx.bns.registerDomain(normalizedDomain, Math.min(255, Math.max(1, years)));
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let cost = '0.00';
-          
+
           // Extract registration cost from events
           events.forEach(({ event }) => {
             if (api.events.bns?.DomainRegistered?.is(event)) {
@@ -149,8 +163,21 @@ export async function registerDomain(
  * Resolve domain to address
  */
 export async function resolveDomain(domain: string): Promise<string | null> {
-  const domainData = await getDomain(domain);
-  return domainData?.resolvedAddress || null;
+  const api = await initializeApi();
+
+  try {
+    // Resolution lives in its own map, not on the registry record.
+    const normalizedDomain = normalizeDomain(domain);
+    const entry: any = await api.query.bns.domainResolution(normalizedDomain);
+    if (!entry || entry.isNone) {
+      return null;
+    }
+    const wallet = entry.unwrap().walletAddress;
+    return wallet && !wallet.isNone ? wallet.unwrap().toString() : null;
+  } catch (error) {
+    console.error('Failed to resolve domain:', error);
+    return null;
+  }
 }
 
 /**
@@ -158,15 +185,17 @@ export async function resolveDomain(domain: string): Promise<string | null> {
  */
 export async function resolveAddress(address: string): Promise<string | null> {
   const api = await initializeApi();
-  
+
   try {
-    const primaryDomain: any = await api.query.bns?.primaryDomains(address);
-    
-    if (!primaryDomain || primaryDomain.isNone) {
+    // There is no `primaryDomains` storage. `accountDomains` is the reverse index
+    // (account -> domain names); there is no primary flag on record, so the first
+    // entry is returned and no primary/preferred domain is implied.
+    const owned: any = await api.query.bns.accountDomains(address);
+    if (!owned || owned.isEmpty) {
       return null;
     }
-
-    return primaryDomain.unwrap().toString();
+    const names: any[] = owned.toArray ? owned.toArray() : [];
+    return names.length > 0 ? names[0].toString() : null;
   } catch (error) {
     console.error('Failed to resolve address:', error);
     return null;
@@ -182,11 +211,11 @@ export async function setDomainResolution(
   targetAddress: string
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
-    
+
     // Real signature: setResolution(domainName, walletAddress?, contentHash?, metadata).
     const tx = api.tx.bns.setResolution(normalizedDomain, targetAddress, null, '0x');
 
@@ -210,11 +239,179 @@ export async function setPrimaryDomain(
   address: string,
   domain: string
 ): Promise<{ hash: string }> {
-  // bns pallet has no `setPrimaryDomain` extrinsic. Reverse resolution is
-  // not yet wired on chain.
-  void address; void domain;
-  await initializeApi();
-  throw new Error('Primary/reverse domain assignment is not supported by the bns pallet.');
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.bns.setPrimaryDomain(normalizeDomain(domain));
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Set primary domain failed:', error);
+    throw error;
+  }
+}
+
+/** Clear the caller's reverse-resolution domain. */
+export async function clearPrimaryDomain(address: string): Promise<{ hash: string }> {
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.bns.clearPrimaryDomain();
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Clear primary domain failed:', error);
+    throw error;
+  }
+}
+
+/** Read the reverse-resolution domain registered for an address, if any. */
+export async function getPrimaryDomain(address: string): Promise<string | null> {
+  const api = await initializeApi();
+
+  try {
+    const entry: any = await api.query.bns.primaryDomain(address);
+    if (!entry || entry.isNone) {
+      return null;
+    }
+    return entry.unwrap().toString();
+  } catch (error) {
+    console.error('Failed to fetch primary domain:', error);
+    return null;
+  }
+}
+
+/**
+ * Add or replace a text record on a domain you own.
+ *
+ * Real signature: setTextRecord(domainName, key, value). Keys are capped at 32
+ * bytes and values at 128 bytes on chain.
+ */
+export async function setTextRecord(
+  address: string,
+  domain: string,
+  key: string,
+  value: string
+): Promise<{ hash: string }> {
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.bns.setTextRecord(normalizeDomain(domain), key, value);
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Set text record failed:', error);
+    throw error;
+  }
+}
+
+/** Remove a text record from a domain you own. */
+export async function removeTextRecord(
+  address: string,
+  domain: string,
+  key: string
+): Promise<{ hash: string }> {
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.bns.removeTextRecord(normalizeDomain(domain), key);
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Remove text record failed:', error);
+    throw error;
+  }
+}
+
+/** Read the text records stored against a domain. */
+export async function getTextRecords(
+  domain: string
+): Promise<Array<{ key: string; value: string }>> {
+  const api = await initializeApi();
+
+  try {
+    const entry: any = await api.query.bns.domainResolution(normalizeDomain(domain));
+    if (!entry || entry.isNone) {
+      return [];
+    }
+    const resolution = entry.unwrap();
+    return (resolution.textRecords ?? []).map((record: any) => ({
+      key: decodeText(record.key),
+      value: decodeText(record.value),
+    }));
+  } catch (error) {
+    console.error('Failed to fetch text records:', error);
+    return [];
+  }
+}
+
+/** Decode a `BoundedVec<u8>` text record field into a string. */
+function decodeText(raw: unknown): string {
+  const bytes = (raw as { toU8a?: () => Uint8Array })?.toU8a?.();
+  if (!bytes) return String(raw ?? '');
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+}
+
+/**
+ * Create a subdomain beneath a domain you own.
+ *
+ * Real signature: createSubdomain(parentDomain, subdomain, delegateTo).
+ */
+export async function createSubdomain(
+  address: string,
+  parentDomain: string,
+  subdomain: string,
+  delegateTo?: string
+): Promise<{ hash: string }> {
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.bns.createSubdomain(
+      normalizeDomain(parentDomain),
+      subdomain,
+      delegateTo ?? null,
+    );
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Create subdomain failed:', error);
+    throw error;
+  }
 }
 
 /**
@@ -228,7 +425,7 @@ export async function listDomainForSale(
   expiryDays?: number
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
@@ -263,23 +460,25 @@ export async function listDomainForSale(
  */
 export async function getMarketplaceListings(limit: number = 100): Promise<DomainListing[]> {
   const api = await initializeApi();
-  
+
   try {
-    const listings: any = await api.query.bns?.marketplaceListings?.entries?.() || [];
-    
+    // Real storage is `domainListings` (the old `marketplaceListings` name does
+    // not exist, so this always threw and fell through to the fabricated list).
+    const listings: any = await api.query.bns.domainListings.entries();
+
     if (listings && listings.length > 0) {
       return listings
         .map(([key, value]: [any, any]) => {
           const domain = key.args[0].toString();
           const data = value.unwrap();
-          
+
           return {
             domain,
             name: domain,
             seller: data.seller.toString(),
             price: formatBalance(data.price.toString()),
-            currency: (data.currency?.toString() as any) || 'DALLA',
-            listedAt: data.listedAt?.toNumber() || Math.floor(Date.now() / 1000),
+            currency: 'DALLA',
+            listedAt: data.listedAt?.toNumber() || 0,
             expiresAt: data.expiresAt?.toNumber(),
           };
         })
@@ -303,7 +502,7 @@ export async function purchaseDomain(
   price: string
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
@@ -329,19 +528,24 @@ export async function purchaseDomain(
 export async function hostWebsite(
   address: string,
   domain: string,
-  ipfsHash: string,
-  siteHash: string
+  contentHash: string,
+  autoRenew: boolean = true
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const normalizedDomain = normalizeDomain(domain);
-    
+
     // Real signature: activateHosting(domainName, tier, contentHash:[u8;32], autoRenew).
-    void siteHash;
+    // The content hash is a raw 32-byte digest, not a CID string.
     const tier = 1;
-    const tx = api.tx.bns.activateHosting(normalizedDomain, tier, ipfsHash, true);
+    const tx = api.tx.bns.activateHosting(
+      normalizedDomain,
+      tier,
+      toContentHash(contentHash),
+      autoRenew,
+    );
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
@@ -357,28 +561,80 @@ export async function hostWebsite(
 }
 
 /**
+ * Update the content hash of an already-active hosted site.
+ *
+ * Real signature: updateHostingContent(domainName, contentHash:[u8;32], description, sizeBytes).
+ * Requires an active hosting subscription.
+ */
+export async function updateHostingContent(
+  address: string,
+  domain: string,
+  contentHash: string,
+  description: string = ''
+): Promise<{ hash: string }> {
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.bns.updateHostingContent(
+      normalizeDomain(domain),
+      toContentHash(contentHash),
+      description,
+      0,
+    );
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Update hosting content failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Convert a `0x`-prefixed 64-character hex string into the 32-byte array the
+ * hosting extrinsics expect.
+ */
+function toContentHash(value: string): number[] {
+  const hex = value.trim().replace(/^0x/, '');
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error('Content hash must be 32 bytes (0x followed by 64 hex characters).');
+  }
+  const bytes: number[] = [];
+  for (let i = 0; i < 64; i += 2) {
+    bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  }
+  return bytes;
+}
+
+/**
  * Get hosted website info
  */
 export async function getHostedWebsite(domain: string): Promise<HostedWebsite | null> {
   const api = await initializeApi();
-  
+
   try {
     const normalizedDomain = normalizeDomain(domain);
-    const websiteData: any = await api.query.bns?.hostedWebsites(normalizedDomain);
-    
+    const websiteData: any = await api.query.bns.hostedWebsites(normalizedDomain);
+
     if (!websiteData || websiteData.isNone) {
       return null;
     }
 
     const data = websiteData.unwrap();
-    
+
     return {
       domain: normalizedDomain,
-      contentHash: data.ipfsHash?.toString() || data.contentHash?.toString() || '',
-      siteHash: data.siteHash.toString(),
-      updatedAt: data.updatedAt.toNumber(),
-      sizeBytes: data.sizeBytes.toNumber(),
-      isActive: data.isActive.toHuman(),
+      contentHash: data.contentHash?.toHex?.() ?? data.contentHash?.toString() ?? '',
+      siteHash: data.contentHash?.toHex?.() ?? '',
+      updatedAt: data.lastPaymentAt?.toNumber() ?? 0,
+      sizeBytes: data.dataSize?.toNumber() ?? 0,
+      isActive: data.expiresAt?.toNumber?.() > 0,
     };
   } catch (error) {
     console.error('Failed to fetch hosted website:', error);
@@ -391,33 +647,73 @@ export async function getHostedWebsite(domain: string): Promise<HostedWebsite | 
  */
 export async function getUserDomains(address: string): Promise<Domain[]> {
   const api = await initializeApi();
-  
+
   try {
-    const allDomains: any = await api.query.bns?.domains?.entries?.() || [];
-    
-    if (allDomains && allDomains.length > 0) {
-      const userList = allDomains
-        .filter(([, value]: [any, any]) => {
-          const data = value.unwrap();
-          return data.owner.toString() === address;
-        })
-        .map(([key, value]: [any, any]) => {
-          const domain = key.args[0].toString();
-          const data = value.unwrap();
-          
-          return {
-            name: domain,
-            owner: data.owner.toString(),
-            resolvedAddress: data.resolvedAddress?.toString(),
-            registrationDate: data.registrationDate.toNumber(),
-            expiryDate: data.expiryDate.toNumber(),
-            isPremium: data.isPremium.toHuman(),
-            price: data.price ? formatBalance(data.price.toString()) : undefined,
-            metadata: data.metadata?.toHuman() as any,
-          };
-        });
-      if (userList.length > 0) return userList;
+    // `bns.domains` does not exist. The reverse index is `accountDomains`
+    // (account -> domain names); each name is then read from `domainRegistry`.
+    const owned: any = await api.query.bns.accountDomains(address);
+    if (!owned || owned.isEmpty) {
+      return [];
     }
+
+    const names: string[] = owned.toArray ? owned.toArray().map((n: any) => n.toString()) : [];
+    const userList = await Promise.all(
+      names.map(async (name): Promise<Domain | null> => {
+        const entry: any = await api.query.bns.domainRegistry(name);
+        if (!entry || entry.isNone) {
+          return null;
+        }
+        const record = entry.unwrap();
+
+        // Resolution is a separate map; read it so the UI can show the real
+        // wallet address and text records rather than an empty shell.
+        let resolvedAddress: string | undefined;
+        let textRecords: Array<{ key: string; value: string }> = [];
+        try {
+          const resolutionEntry: any = await api.query.bns.domainResolution(name);
+          if (resolutionEntry && resolutionEntry.isSome) {
+            const resolution = resolutionEntry.unwrap();
+            resolvedAddress = resolution.walletAddress?.isSome
+              ? resolution.walletAddress.unwrap().toString()
+              : undefined;
+            textRecords = (resolution.textRecords ?? []).map((item: any) => ({
+              key: decodeText(item.key),
+              value: decodeText(item.value),
+            }));
+          }
+        } catch {
+          // Resolution is optional; ownership data is still valid without it.
+        }
+
+        // Hosting is yet another map; only an active subscription has an entry.
+        let hostedContentHash: string | undefined;
+        try {
+          const hostingEntry: any = await api.query.bns.hostedWebsites(name);
+          if (hostingEntry && hostingEntry.isSome) {
+            const hosting = hostingEntry.unwrap();
+            hostedContentHash = hosting.contentHash?.toHex?.() ?? undefined;
+          }
+        } catch {
+          // Hosting is optional.
+        }
+
+        // `status` is intentionally omitted: the on-chain record carries no
+        // status field, so reporting 'active' here would be a guess.
+        return {
+          name,
+          owner: record.owner.toString(),
+          resolvedAddress,
+          registrationDate: record.registeredAt?.toNumber() ?? 0,
+          expiryDate: record.lockedUntil?.isSome ? record.lockedUntil.unwrap().toNumber() : 0,
+          isPremium: record.tier?.toString() === 'Premium',
+          price: record.purchasePrice ? formatBalance(record.purchasePrice.toString()) : undefined,
+          textRecords,
+          hostedContentHash,
+        };
+      }),
+    );
+
+    return userList.filter((d): d is Domain => d !== null);
   } catch (error) {
     console.warn('Failed to fetch on-chain domains:', error);
   }

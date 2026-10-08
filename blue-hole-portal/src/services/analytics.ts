@@ -170,7 +170,7 @@ class AnalyticsService {
     // Calculate total revenue and expenses from executed proposals
     let totalExpenses = 0n;
     const executedProposals = proposals.filter(p => p.status === 'executed');
-    
+
     executedProposals.forEach(p => {
       totalExpenses += p.amount;
     });
@@ -301,15 +301,15 @@ class AnalyticsService {
     const passedProposals = proposals.filter((p: any) => p.status === 'passed').length;
     const rejectedProposals = proposals.filter((p: any) => p.status === 'rejected').length;
 
-    const successRate = totalProposals > 0 
-      ? (passedProposals / totalProposals) * 100 
+    const successRate = totalProposals > 0
+      ? (passedProposals / totalProposals) * 100
       : 0;
 
     // Calculate average time to resolution
-    const resolvedProposals = proposals.filter((p: any) => 
+    const resolvedProposals = proposals.filter((p: any) =>
       p.status === 'passed' || p.status === 'rejected'
     );
-    
+
     let totalResolutionTime = 0;
     resolvedProposals.forEach((p: any) => {
       if (p.createdAt && p.resolvedAt) {
@@ -380,14 +380,14 @@ class AnalyticsService {
 
     return districts.map(district => {
       // Filter proposals by district (simplified - will use real district field)
-      const districtProposals = proposals.filter((p: any) => 
+      const districtProposals = proposals.filter((p: any) =>
         p.description?.includes(district) || p.proposer?.includes(district)
       );
 
       const proposalsSubmitted = districtProposals.length;
       const proposalsPassed = districtProposals.filter((p: any) => p.status === 'passed').length;
       const proposalsRejected = districtProposals.filter((p: any) => p.status === 'rejected').length;
-      
+
       const successRate = proposalsSubmitted > 0
         ? (proposalsPassed / proposalsSubmitted) * 100
         : 0;
@@ -415,7 +415,7 @@ class AnalyticsService {
 
     for (const proposal of proposals) {
       const voting = await blockchainService.getVotingStatus(proposal.id);
-      
+
       if (voting) {
         patterns.push({
           proposalId: proposal.id,
@@ -442,9 +442,9 @@ class AnalyticsService {
 
     const totalValidators = validators.length;
     const activeValidators = validators.filter(v => v.isActive).length;
-    
+
     const totalStake = validators.reduce((sum, v) => sum + v.totalStake, 0n);
-    
+
     const avgCommission = validators.length > 0
       ? validators.reduce((sum, v) => sum + v.commission, 0) / validators.length
       : 0;
@@ -496,7 +496,7 @@ class AnalyticsService {
 
     // Sort by score and add rank
     scored.sort((a, b) => b.score - a.score);
-    
+
     return scored.map((v, index) => ({
       rank: index + 1,
       ...v,
@@ -549,7 +549,7 @@ class AnalyticsService {
 
   private calculatePerformanceMetrics(validators: ValidatorInfo[]): ValidatorPerformanceMetrics {
     const avgUptime = 99.9; // Will be calculated from block production
-    
+
     const avgBlocksProduced = validators.length > 0
       ? validators.reduce((sum, v) => sum + v.blocksProduced, 0) / validators.length
       : 0;
@@ -618,11 +618,11 @@ class AnalyticsService {
 
     // Get headers from first object
     const headers = Object.keys(data[0]);
-    
+
     // Build CSV content
     const csvContent = [
       headers.join(','),
-      ...data.map(row => 
+      ...data.map(row =>
         headers.map(header => {
           const value = row[header];
           // Escape commas and quotes
@@ -670,10 +670,10 @@ export const analyticsService = (() => {
       }
     });
   }
-  
+
   if (!analyticsServiceInstance) {
     analyticsServiceInstance = new AnalyticsService();
   }
-  
+
   return analyticsServiceInstance;
 })();

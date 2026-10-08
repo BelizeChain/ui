@@ -46,7 +46,7 @@ export interface Validator {
  */
 export async function getStakingInfo(address: string): Promise<StakingInfo> {
   const api = await initializeApi();
-  
+
   try {
     const [stakingLedger, currentEra]: any = await Promise.all([
       api.query.staking?.ledger?.(address),
@@ -68,7 +68,7 @@ export async function getStakingInfo(address: string): Promise<StakingInfo> {
     const ledger = stakingLedger.unwrap();
     const validatorPrefs: any = await api.query.staking?.validators?.(address);
     const nominatorPrefs: any = await api.query.staking?.nominators?.(address);
-    
+
     // Calculate unbonding amount
     const unbonding = ledger.unlocking?.reduce((sum: number, chunk: any) => {
       return sum + parseFloat(chunk.value.toString());
@@ -110,7 +110,7 @@ export async function stakeDalla(
   validatorAddress?: string
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const amountInPlanck = BigInt(Math.floor(parseFloat(amount) * 1e12));
@@ -147,7 +147,7 @@ export async function unstakeDalla(
   amount: string
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real chain has no partial unbond; leaveValidators schedules the full
@@ -173,7 +173,7 @@ export async function unstakeDalla(
  */
 export async function claimStakingRewards(address: string): Promise<{ hash: string; amount: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real extrinsic: claimPouwWithDomainBonus() — distributes accumulated
@@ -184,7 +184,7 @@ export async function claimStakingRewards(address: string): Promise<{ hash: stri
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let rewardAmount = '0.00';
-          
+
           // Extract reward amount from events
           events.forEach(({ event }) => {
             if (api.events.staking.Reward?.is(event)) {
@@ -211,10 +211,10 @@ export async function claimStakingRewards(address: string): Promise<{ hash: stri
  */
 export async function getPoUWContributions(address: string, limit: number = 20): Promise<PoUWContribution[]> {
   const api = await initializeApi();
-  
+
   try {
     const contributions: any = await api.query.staking?.pouwContributions?.entries?.(address);
-    
+
     if (!contributions || contributions.length === 0) {
       return [];
     }
@@ -290,7 +290,7 @@ export async function reportTrainingContribution(
   honestyScore: number
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real signature: submitModelDelta(taskId, encryptedDelta, computationCommitment, computationLog).

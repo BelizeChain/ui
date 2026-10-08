@@ -86,17 +86,17 @@ export interface PropertyTransfer {
  */
 export async function getLandTitle(titleId: string): Promise<LandTitle | null> {
   const api = await initializeApi();
-  
+
   try {
     const titleData: any = await api.query.landLedger?.titles(titleId);
-    
+
     if (!titleData || titleData.isNone) {
       return null;
     }
 
     const data = titleData.unwrap();
     const encumbrances: any = await api.query.landLedger?.encumbrances(titleId);
-    
+
     return {
       titleId,
       parcelNumber: data.parcelNumber.toString(),
@@ -126,23 +126,23 @@ export async function getLandTitle(titleId: string): Promise<LandTitle | null> {
  */
 export async function getUserLandTitles(address: string): Promise<LandTitle[]> {
   const api = await initializeApi();
-  
+
   try {
     const allTitles: any = await api.query.landLedger?.titles?.entries?.() || [];
-    
+
     if (!allTitles || allTitles.length === 0) {
       return [];
     }
 
     const userTitles = [];
-    
+
     for (const [key, value] of allTitles) {
       const titleId = key.args[0].toString();
       const data = value.unwrap();
-      
+
       if (data.owner.toString() === address) {
         const encumbrances: any = await api.query.landLedger?.encumbrances(titleId);
-        
+
         userTitles.push({
           titleId,
           parcelNumber: data.parcelNumber.toString(),
@@ -183,10 +183,10 @@ export async function getUserLandTitles(address: string): Promise<LandTitle[]> {
  */
 export async function getPropertyDocuments(titleId: string): Promise<PropertyDocument[]> {
   const api = await initializeApi();
-  
+
   try {
     const documents: any = await api.query.landLedger?.documents?.entries?.(titleId) || [];
-    
+
     if (!documents || documents.length === 0) {
       return [];
     }
@@ -194,7 +194,7 @@ export async function getPropertyDocuments(titleId: string): Promise<PropertyDoc
     return documents.map(([key, value]: [any, any]) => {
       const documentId = key.args[1].toString();
       const data = value.unwrap();
-      
+
       return {
         documentId,
         titleId,
@@ -231,7 +231,7 @@ export async function registerDocument(
   }
 ): Promise<{ hash: string; documentId: string }> {
   await initializeApi();  // connection init; result unused
-  
+
   try {
     const injector = await web3FromAddress(address);
     // No `registerDocument` extrinsic; per-document attachments are not
@@ -259,7 +259,7 @@ export async function initiatePropertyTransfer(
   transferType: string = 'Sale'
 ): Promise<{ hash: string; transferId: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const priceInPlanck = price ? BigInt(Math.floor(parseFloat(price) * 1e12)) : 0n;
@@ -282,7 +282,7 @@ export async function initiatePropertyTransfer(
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let transferId = '';
-          
+
           // Extract transfer ID from events
           events.forEach(({ event }) => {
             if (api.events.landLedger?.TransferInitiated?.is(event)) {
@@ -309,10 +309,10 @@ export async function initiatePropertyTransfer(
  */
 export async function getPropertyTransferHistory(titleId: string): Promise<PropertyTransfer[]> {
   const api = await initializeApi();
-  
+
   try {
     const transfers: any = await api.query.landLedger?.transfers?.entries?.(titleId) || [];
-    
+
     if (!transfers || transfers.length === 0) {
       return [];
     }
@@ -320,7 +320,7 @@ export async function getPropertyTransferHistory(titleId: string): Promise<Prope
     return transfers.map(([key, value]: [any, any]) => {
       const transferId = key.args[1].toString();
       const data = value.unwrap();
-      
+
       return {
         transferId,
         titleId,
@@ -346,26 +346,26 @@ export async function getPropertyTransferHistory(titleId: string): Promise<Prope
  */
 export async function searchLandByLocation(district: string, village?: string): Promise<LandTitle[]> {
   const api = await initializeApi();
-  
+
   try {
     const allTitles: any = await api.query.landLedger?.titles?.entries?.() || [];
-    
+
     if (!allTitles || allTitles.length === 0) {
       return [];
     }
 
     const matchingTitles = [];
-    
+
     for (const [key, value] of allTitles) {
       const titleId = key.args[0].toString();
       const data = value.unwrap();
-      
+
       const districtMatch = data.district.toString().toLowerCase() === district.toLowerCase();
       const villageMatch = !village || data.village?.toString().toLowerCase() === village.toLowerCase();
-      
+
       if (districtMatch && villageMatch) {
         const encumbrances: any = await api.query.landLedger?.encumbrances(titleId);
-        
+
         matchingTitles.push({
           titleId,
           parcelNumber: data.parcelNumber.toString(),

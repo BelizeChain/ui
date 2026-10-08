@@ -195,7 +195,7 @@ export default function ContactsPage() {
                   <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
                     <PaperPlaneTilt size={20} className="text-forest-400" weight="fill" />
                   </button>
-                  <button 
+                  <button
                     className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();

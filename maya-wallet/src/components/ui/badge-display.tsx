@@ -30,22 +30,22 @@ export function BadgeDisplay({ badges, maxDisplay, className }: BadgeDisplayProp
         <div
           key={badge.id}
           aria-label={`${badge.name}${badge.rarity ? ` (${badge.rarity})` : ''}`}
-          className={cn(
-            'relative group',
-            !badge.earned && 'opacity-40 grayscale'
-          )}
+          className="relative group"
         >
           <div
             className={cn(
               'w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg border',
               badge.rarity && badge.earned
                 ? `bg-gradient-to-br ${rarityColors[badge.rarity]} border-white/20`
-                : 'bg-slate-800/90 border-slate-700/60 text-slate-400'
+                : // Muting is applied to the icon only. Dimming the whole badge
+                  // (the previous `opacity-40`) also dimmed the tooltip and dropped
+                  // it to a 2.17:1 contrast ratio — below WCAG AA and AA-large.
+                  'bg-slate-800/90 border-slate-700/60 text-slate-300 grayscale opacity-80'
             )}
           >
             {typeof badge.icon === 'string' ? badge.icon : badge.icon}
           </div>
-          
+
           {/* Tooltip */}
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2.5 py-1 bg-slate-900/95 border border-slate-700 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 font-mono">
             {badge.name}
@@ -55,7 +55,7 @@ export function BadgeDisplay({ badges, maxDisplay, className }: BadgeDisplayProp
           </div>
         </div>
       ))}
-      
+
       {remaining > 0 && (
         <div className="w-12 h-12 rounded-xl bg-slate-800/90 border border-slate-700/60 flex items-center justify-center text-sm font-semibold text-slate-400">
           +{remaining}

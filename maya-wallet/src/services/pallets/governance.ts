@@ -5,6 +5,7 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '@/lib/codec';
 
 export interface Proposal {
   index: number;
@@ -72,38 +73,6 @@ export interface Vote {
   balance: string; // Conviction-weighted voting power
   conviction: 'None' | 'Locked1x' | 'Locked2x' | 'Locked4x' | 'Locked8x' | 'Locked16x';
   timestamp: number;
-}
-
-/**
- * Decode a `BoundedVec<u8, _>` (Substrate Bytes) into a UTF-8 string.
- * Returns the original hex with `0x` prefix if decoding produces non-printable
- * bytes, so callers always get something displayable.
- */
-function bytesToString(raw: unknown): string {
-  if (raw == null) return '';
-  const codec = raw as { toU8a?: () => Uint8Array; toString?: () => string };
-  let bytes: Uint8Array | null = null;
-  try {
-    if (typeof codec.toU8a === 'function') {
-      bytes = codec.toU8a();
-    }
-  } catch {
-    bytes = null;
-  }
-  if (!bytes || bytes.length === 0) {
-    return typeof codec.toString === 'function' ? codec.toString() : '';
-  }
-  try {
-    const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    // If decode produced any unprintable bytes (other than common whitespace), fall back to hex.
-    // eslint-disable-next-line no-control-regex
-    if (/[\u0000-\u0008\u000B-\u000C\u000E-\u001F]/.test(decoded)) {
-      return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-    }
-    return decoded;
-  } catch {
-    return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-  }
 }
 
 /**
@@ -227,7 +196,7 @@ export async function submitProposal(
   }
 ): Promise<{ hash: string; proposalIndex: number }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     const valueInPlanck = BigInt(Math.floor(parseFloat(data.value) * 1e12));
@@ -246,7 +215,7 @@ export async function submitProposal(
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let proposalIndex = -1;
-          
+
           // Extract proposal index from events
           events.forEach(({ event }) => {
             if (api.events.governance?.Proposed?.is(event)) {
@@ -278,7 +247,7 @@ export async function voteOnProposal(
   conviction: 'None' | 'Locked1x' | 'Locked2x' | 'Locked4x' | 'Locked8x' | 'Locked16x' = 'None'
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real signature: castVote(proposalId, voteChoiceIndex, conviction).
@@ -307,10 +276,10 @@ export async function voteOnProposal(
  */
 export async function getActiveReferenda(): Promise<Referendum[]> {
   const api = await initializeApi();
-  
+
   try {
     const referenda: any = await api.query.governance?.referendumInfoOf?.entries?.() || [];
-    
+
     if (!referenda || referenda.length === 0) {
       return [];
     }
@@ -320,7 +289,7 @@ export async function getActiveReferenda(): Promise<Referendum[]> {
       .map(([key, info]: [any, any]) => {
         const index = key.args[0].toNumber();
         const data = info.unwrap();
-        
+
         return {
           index,
           hash: data.hash.toString(),
@@ -347,11 +316,11 @@ export async function getActiveReferenda(): Promise<Referendum[]> {
  */
 export async function getDistrictCouncil(district: string): Promise<DistrictCouncil | null> {
   const api = await initializeApi();
-  
+
   try {
     const members: any = await api.query.governance?.districtCouncils(district);
     const motions: any = await api.query.governance?.districtMotions(district);
-    
+
     if (!members || members.isNone) {
       return null;
     }
@@ -390,16 +359,16 @@ export async function getDistrictCouncil(district: string): Promise<DistrictCoun
  */
 export async function getVotingHistory(address: string, limit: number = 50): Promise<Vote[]> {
   const api = await initializeApi();
-  
+
   try {
     const votes: any = await api.query.governance?.votingOf(address);
-    
+
     if (!votes || votes.isNone) {
       return [];
     }
 
     const votingData = votes.unwrap();
-    
+
     return votingData.votes
       .map((vote: any) => ({
         proposalIndex: vote.proposalIndex.toNumber(),
@@ -424,7 +393,7 @@ export async function secondProposal(
   proposalIndex: number
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     // The governance pallet has no `second` extrinsic; supporting a proposal
     // is expressed as an Aye cast vote with no conviction.
@@ -445,4 +414,50 @@ export async function secondProposal(
 function formatBalance(planck: string): string {
   const value = parseFloat(planck) / Math.pow(10, 12);
   return value.toFixed(2);
+}
+export interface CouncilMember {
+  account: string;
+  /** Foundation board role, e.g. `Founder`. */
+  role: string;
+  termStart: number;
+  termEnd: number;
+  isRotating: boolean;
+  communityRank: number;
+  votingWeight: number;
+  votesReceived: number;
+  proposalsAuthored: number;
+  participationRate: number;
+  consecutiveTerms: number;
+}
+
+/**
+ * Read the governors council (`governance.councilMembers`, StorageMap AccountId ->
+ * CouncilMember). This is the real, on-chain civic representation — unlike the
+ * delegate leaderboard the community page used to hardcode.
+ */
+export async function getCouncilMembers(): Promise<CouncilMember[]> {
+  const api = await initializeApi();
+
+  try {
+    const entries: any = await api.query.governance.councilMembers.entries();
+    return entries.map(([key, value]: [any, any]) => {
+      const m = value.unwrap();
+      return {
+        account: key.args[0].toString(),
+        role: m.role.toString(),
+        termStart: m.termStart.toNumber(),
+        termEnd: m.termEnd.toNumber(),
+        isRotating: m.isRotating.valueOf() as boolean,
+        communityRank: m.communityRank.toNumber(),
+        votingWeight: m.votingWeight.toNumber(),
+        votesReceived: m.votesReceived.toNumber(),
+        proposalsAuthored: m.proposalsAuthored.toNumber(),
+        participationRate: m.participationRate.toNumber(),
+        consecutiveTerms: m.consecutiveTerms.toNumber(),
+      };
+    });
+  } catch (error) {
+    console.error('Failed to fetch council members:', error);
+    return [];
+  }
 }

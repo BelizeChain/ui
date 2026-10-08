@@ -1,17 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { PostCard, BadgeDisplay, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
-import { CreatePostModal } from '@/components/CreatePostModal';
-import { CommentsModal } from '@/components/CommentsModal';
+import { BadgeDisplay, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
+import { SubmitPetitionModal } from '@/components/SubmitPetitionModal';
 import { useToast } from '@/contexts/ToastContext';
 import { useWallet } from '@/contexts/WalletContext';
 import {
   getActiveReferenda,
+  getCouncilMembers,
   voteOnProposal,
+  type CouncilMember,
   type Referendum as ChainReferendum,
 } from '@/services/pallets/governance';
+import {
+  getCommunityProposals,
+  getEducationModules,
+  getGreenProjects,
+  getUserSRS,
+  voteOnCommunityProposal,
+  type CommunityProposal,
+  type EducationModule,
+  type GreenProject,
+  type SRSInfo,
+} from '@/services/pallets/community';
+import { fetchBalance } from '@/services/blockchain';
+import { BELIZE_DISTRICTS } from '@/lib/districts';
 import {
   PencilSimple,
   ChartBar,
@@ -20,7 +34,6 @@ import {
   ShieldCheck,
   ChartLineUp,
   Trophy,
-  Star,
   UsersThree,
   Scales,
   ThumbsUp,
@@ -31,166 +44,162 @@ import {
   TreeEvergreen,
   Shield,
   Clock,
+  GraduationCap,
+  Coins,
 } from 'phosphor-react';
 
-interface ReferendumItem {
-  id: number;
-  title: string;
-  category: 'District Infrastructure' | 'National Policy' | 'Treasury Grant' | 'Environmental Stewardship';
-  district: string;
-  requestedAmount: string;
-  description: string;
-  ayes: number;
-  nays: number;
-  endBlock: number;
-  status: 'Active' | 'Passed';
-  myVote?: 'Aye' | 'Nay';
+/** Round a `Hash`/bytes value down to a short, displayable identifier. */
+function shortHash(value: string, chars = 6): string {
+  return value.length > chars * 2 ? `${value.slice(0, chars)}…${value.slice(-chars)}` : value;
 }
+
+const PETITION_STATUS_FILTERS = ['All', 'Active', 'EthicsReview', 'Approved', 'Rejected'] as const;
 
 export default function CommunityPage() {
   const { selectedAccount } = useWallet();
-  const [activeTab, setActiveTab] = useState('feed');
+  const [activeTab, setActiveTab] = useState('petitions');
   const { showToast } = useToast();
-  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [districtFilter, setDistrictFilter] = useState<string>('All');
+  const [isSubmitPetitionOpen, setIsSubmitPetitionOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [convictionMultiplier, setConvictionMultiplier] = useState<number>(1);
   const [votingReferendumId, setVotingReferendumId] = useState<number | null>(null);
+  const [votingPetitionId, setVotingPetitionId] = useState<string | null>(null);
 
-  const [commentsModalData, setCommentsModalData] = useState<{
-    isOpen: boolean;
-    postId: string;
-    postAuthor: string;
-    postContent: React.ReactNode;
-  }>({
-    isOpen: false,
-    postId: '',
-    postAuthor: '',
-    postContent: '',
-  });
-
-  // Citizen Petitions & District Assembly Posts (100% emoji-free)
-  const [posts, setPosts] = useState<any[]>([
-    {
-      id: '1',
-      author: {
-        name: 'Maria Garcia',
-        avatar: <User size={20} weight="fill" className="text-teal-400" />,
-        district: 'Belize City',
-      },
-      content: 'Completed municipal PoUW federated learning node cycle #104. Verified 50 DALLA sovereign compute subsidy disbursed directly to local treasury escrow.',
-      timestamp: '2h ago',
-      likes: 24,
-      comments: 8,
-      shares: 3,
-      type: 'community' as const,
-    },
-    {
-      id: '2',
-      author: {
-        name: 'John Martinez',
-        avatar: <User size={20} weight="fill" className="text-cyan-400" />,
-        district: 'Orange Walk',
-      },
-      content: 'Municipal Assembly Resolution #42 passed for the Northern District agricultural cold-storage facility. Recorded 1,250 quadratic voting weight on-chain.',
-      timestamp: '5h ago',
-      likes: 67,
-      comments: 15,
-      shares: 12,
-      type: 'governance' as const,
-    },
-    {
-      id: '3',
-      author: {
-        name: 'Sarah Williams',
-        avatar: <User size={20} weight="fill" className="text-emerald-400" />,
-        district: 'Cayo',
-      },
-      content: 'Planted 250 native mahogany and mangrove saplings under the Belize Forestry Trust verified on-chain carbon registry.',
-      timestamp: '1d ago',
-      likes: 143,
-      comments: 32,
-      shares: 28,
-      type: 'environment' as const,
-    },
-    {
-      id: '4',
-      author: {
-        name: 'Elena Torres',
-        avatar: <User size={20} weight="fill" className="text-teal-300" />,
-        district: 'San Pedro / Islands',
-      },
-      content: 'Submitting civic petition for decentralized marine water-quality LoRaWAN sensor mesh along the barrier reef corridor.',
-      timestamp: '1d ago',
-      likes: 89,
-      comments: 19,
-      shares: 14,
-      type: 'community' as const,
-    },
-  ]);
-
-  // Active Civic Referendums
-  // CONFIG-002: live referenda from the governance pallet (no fake BIP list).
+  // ---- Real chain state ---------------------------------------------------
   const [referendums, setReferendums] = useState<ChainReferendum[]>([]);
-  const [, setCommunityGovLoading] = useState(true);
+  const [petitions, setPetitions] = useState<CommunityProposal[]>([]);
+  const [council, setCouncil] = useState<CouncilMember[]>([]);
+  const [modules, setModules] = useState<EducationModule[]>([]);
+  const [greenProjects, setGreenProjects] = useState<GreenProject[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    const fetchData = async () => {
-      try {
-        const refe = await getActiveReferenda();
-        if (!cancelled) setReferendums(refe);
-      } catch (err) {
-        console.warn('Referenda fetch failed:', err);
-      } finally {
-        if (!cancelled) setCommunityGovLoading(false);
-      }
-    };
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => { cancelled = true; clearInterval(interval); };
+  const loadChainData = useCallback(async () => {
+    const results = await Promise.allSettled([
+      getActiveReferenda(),
+      getCommunityProposals(),
+      getCouncilMembers(),
+      getEducationModules(),
+      getGreenProjects(),
+    ]);
+
+    const [refe, props, members, edu, green] = results;
+    if (refe.status === 'fulfilled') setReferendums(refe.value);
+    if (props.status === 'fulfilled') setPetitions(props.value);
+    if (members.status === 'fulfilled') setCouncil(members.value);
+    if (edu.status === 'fulfilled') setModules(edu.value);
+    if (green.status === 'fulfilled') setGreenProjects(green.value);
+
+    const rejected = results.filter((r) => r.status === 'rejected');
+    if (rejected.length > 0) {
+      console.warn('Some community data failed to load:', rejected);
+    }
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) await loadChainData();
+    };
+    void run();
+    const interval = setInterval(run, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [loadChainData]);
+
+  // Per-account reads. These depend on the connected wallet, so they are kept out
+  // of the polling loop above. Standing is stored keyed by address and derived
+  // below, so disconnecting needs no synchronous state reset.
+  const [standing, setStanding] = useState<{
+    address: string;
+    srs: SRSInfo | null;
+    balance: { dalla: string; bBZD: string } | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const address = selectedAccount?.address;
+    if (!address) return;
+
+    let cancelled = false;
+    Promise.allSettled([getUserSRS(address), fetchBalance(address)])
+      .then(([srsRes, balanceRes]) => {
+        if (cancelled) return;
+        setStanding({
+          address,
+          srs: srsRes.status === 'fulfilled' ? srsRes.value : null,
+          balance:
+            balanceRes.status === 'fulfilled'
+              ? { dalla: balanceRes.value.dalla, bBZD: balanceRes.value.bBZD }
+              : null,
+        });
+      })
+      .catch((error) => console.error('Failed to load civic standing:', error));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccount?.address]);
+
+  // Only surface standing that belongs to the account currently connected.
+  const belongsToConnectedAccount =
+    standing !== null && standing.address === selectedAccount?.address;
+  const srs = belongsToConnectedAccount ? standing.srs : null;
+  const balance = belongsToConnectedAccount ? standing.balance : null;
+
+  const filteredPetitions =
+    statusFilter === 'All' ? petitions : petitions.filter((p) => p.status === statusFilter);
+
   // Sovereign Civic Merits (Badges)
+  //
+  // Every badge is derived from on-chain state on this chain. Nothing is granted
+  // by default — an account with no council seat, no completed modules and no
+  // green contributions correctly shows zero earned merits.
+  const isCouncilMember = council.some(
+    (m) => selectedAccount?.address && m.account === selectedAccount.address,
+  );
+
   const badges = [
     {
-      id: 'genesis-citizen',
-      name: 'Genesis Citizen',
+      id: 'verified-citizen',
+      name: 'Verified Citizen',
       icon: <ShieldCheck size={22} weight="fill" className="text-cyan-400" />,
-      description: 'Authenticated with Verified BelizeID National Credential',
+      description: 'Holds a registered BelizeID identity on chain',
       rarity: 'legendary' as const,
-      earned: true,
+      earned: Boolean(srs),
     },
     {
-      id: 'council-elector',
-      name: 'Council Elector',
+      id: 'council-steward',
+      name: 'Council Steward',
       icon: <Scales size={22} weight="fill" className="text-teal-400" />,
-      description: 'Participated in 50+ on-chain governance referendums',
+      description: 'Holds a seat on the BelizeChain governors council',
       rarity: 'epic' as const,
-      earned: true,
+      earned: isCouncilMember,
+    },
+    {
+      id: 'civic-scholar',
+      name: 'Civic Scholar',
+      icon: <GraduationCap size={22} weight="fill" className="text-sky-400" />,
+      description: 'Completed a BelizeChain civic education module',
+      rarity: 'rare' as const,
+      earned: (srs?.educationModulesCompleted ?? 0) > 0,
     },
     {
       id: 'reef-sentinel',
       name: 'Reef Sentinel',
       icon: <TreeEvergreen size={22} weight="fill" className="text-emerald-400" />,
-      description: 'Verified participant in Blue Economy coastal restoration',
+      description: 'Contributed to a verified green project',
       rarity: 'rare' as const,
-      earned: true,
+      earned: (srs?.greenProjectContributions ?? '0') !== '0.00' && Boolean(srs),
     },
     {
-      id: 'validator-steward',
-      name: 'Validator Steward',
-      icon: <Shield size={22} weight="fill" className="text-sky-400" />,
-      description: 'Active nominator on BelizeChain validator consensus set',
-      rarity: 'epic' as const,
-      earned: false,
-    },
-    {
-      id: 'justice-juror',
-      name: 'Court Juror',
+      id: 'civic-volunteer',
+      name: 'Civic Volunteer',
       icon: <Medal size={22} weight="fill" className="text-amber-400" />,
-      description: 'Appointed juror on Restorative Justice citizen arbitration docket',
+      description: 'Logged verified volunteer hours toward civic standing',
       rarity: 'common' as const,
-      earned: true,
+      earned: (srs?.volunteerHours ?? 0) > 0,
     },
     {
       id: 'pouw-contributor',
@@ -198,128 +207,19 @@ export default function CommunityPage() {
       icon: <ChartLineUp size={22} weight="fill" className="text-purple-400" />,
       description: 'Contributed verifiable compute proofs to Nawal federated AI',
       rarity: 'legendary' as const,
-      earned: false,
+      earned: council.some(
+        (m) => selectedAccount?.address && m.account === selectedAccount.address && m.communityRank > 0,
+      ),
     },
   ];
-
-  // Respected District Delegates & Civic Stewards
-  const districtDelegates = [
-    {
-      rank: 1,
-      name: 'Sarah Williams',
-      district: 'Cayo District',
-      srsScore: 98,
-      standing: 'Exemplary Steward',
-      badgeIcon: <Trophy size={18} weight="fill" className="text-amber-400" />,
-    },
-    {
-      rank: 2,
-      name: 'John Martinez',
-      district: 'Orange Walk',
-      srsScore: 94,
-      standing: 'Senior Delegate',
-      badgeIcon: <Medal size={18} weight="fill" className="text-slate-300" />,
-    },
-    {
-      rank: 3,
-      name: 'Maria Garcia',
-      district: 'Belize City',
-      srsScore: 91,
-      standing: 'Municipal Elector',
-      badgeIcon: <Medal size={18} weight="fill" className="text-amber-600" />,
-    },
-    {
-      rank: 4,
-      name: selectedAccount?.name || 'You',
-      district: 'San Pedro / Islands',
-      srsScore: 88,
-      standing: 'Verified Elector',
-      badgeIcon: <Star size={18} weight="fill" className="text-cyan-400" />,
-      isUser: true,
-    },
-    {
-      rank: 5,
-      name: 'David Chen',
-      district: 'Stann Creek',
-      srsScore: 85,
-      standing: 'District Delegate',
-      badgeIcon: <Star size={18} weight="fill" className="text-cyan-400" />,
-    },
-  ];
-
-  // Handlers
-  const handleCreatePost = (newPost: {
-    content: string;
-    type: 'community' | 'governance' | 'environment';
-    district?: string;
-  }) => {
-    const post = {
-      id: Date.now().toString(),
-      author: {
-        name: selectedAccount?.name || 'Verified Citizen',
-        avatar: <User size={20} weight="fill" className="text-teal-400" />,
-        district: newPost.district ?? 'Belize City',
-      },
-      content: newPost.content,
-      timestamp: 'Just now',
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      type: newPost.type,
-    };
-
-    showToast({
-      type: 'success',
-      message: 'Citizen assembly petition published successfully.',
-    });
-    setPosts([post, ...posts]);
-  };
-
-  const handleOpenComments = (postId: string, postAuthor: string, postContent: React.ReactNode) => {
-    setCommentsModalData({
-      isOpen: true,
-      postId,
-      postAuthor,
-      postContent,
-    });
-  };
-
-  const handleCloseComments = () => {
-    setCommentsModalData({
-      isOpen: false,
-      postId: '',
-      postAuthor: '',
-      postContent: '',
-    });
-  };
-
-  const handleSharePost = async (postAuthor: string, postContent: any) => {
-    const textContent = typeof postContent === 'string' ? postContent : 'BelizeChain Civic Initiative';
-    const shareText = `${postAuthor} on BelizeChain Civic Assembly:\n\n${textContent}`;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title: 'BelizeChain Civic Hub', text: shareText });
-        return;
-      }
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
-        showToast({
-          type: 'success',
-          message: 'Petition link copied to clipboard.',
-        });
-      }
-    } catch (err) {
-      console.debug('Share cancelled:', err);
-    }
-  };
 
   const handleVoteReferendum = async (id: number, vote: 'Aye' | 'Nay') => {
+    if (!selectedAccount?.address) return;
     setVotingReferendumId(id);
     try {
-      await voteOnProposal(selectedAccount!.address, id, vote, 'None');
+      await voteOnProposal(selectedAccount.address, id, vote, 'None');
       showToast({ type: 'success', message: `Recorded ${vote} on referendum #${id}.` });
-      const refe = await getActiveReferenda();
-      setReferendums(refe);
+      setReferendums(await getActiveReferenda());
     } catch (err) {
       showToast({ type: 'error', message: `Vote failed: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
@@ -327,9 +227,22 @@ export default function CommunityPage() {
     }
   };
 
-  const filteredPosts = districtFilter === 'All'
-    ? posts
-    : posts.filter((p) => p.author?.district === districtFilter || p.author?.district?.includes(districtFilter));
+  const handleVotePetition = async (proposalId: string, approve: boolean) => {
+    if (!selectedAccount?.address) return;
+    setVotingPetitionId(proposalId);
+    try {
+      await voteOnCommunityProposal(selectedAccount.address, proposalId, approve ? 'Yes' : 'No');
+      showToast({
+        type: 'success',
+        message: `Recorded ${approve ? 'Aye' : 'Nay'} on petition #${proposalId}.`,
+      });
+      setPetitions(await getCommunityProposals());
+    } catch (err) {
+      showToast({ type: 'error', message: `Vote failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setVotingPetitionId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-24 font-sans bg-gradient-to-b from-slate-950 via-[#030914] to-slate-950">
@@ -345,7 +258,7 @@ export default function CommunityPage() {
                     Sovereign Citizen Governance
                   </span>
                   <span className="px-2.5 py-0.5 bg-teal-500/15 text-teal-300 border border-teal-500/30 rounded-full text-[11px] font-bold">
-                    8 Municipal Districts
+                    {BELIZE_DISTRICTS.length} Municipal Districts
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Civic Hub & Assemblies</h1>
@@ -356,7 +269,7 @@ export default function CommunityPage() {
 
               <div className="flex items-center gap-2.5">
                 <button
-                  onClick={() => setIsCreatePostOpen(true)}
+                  onClick={() => setIsSubmitPetitionOpen(true)}
                   className="bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 shadow-lg shadow-cyan-950/40"
                 >
                   <PencilSimple size={18} weight="bold" />
@@ -365,27 +278,38 @@ export default function CommunityPage() {
               </div>
             </div>
 
-            {/* Quick Metrics */}
+            {/* Quick Metrics — all read from chain */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80">
-                <p className="text-[11px] font-mono text-slate-400 mb-0.5">Verified Citizens</p>
-                <p className="text-lg font-bold text-white font-mono">42,890</p>
-                <span className="text-[10px] text-teal-400">BelizeID Authenticated</span>
+                <p className="text-[11px] font-mono text-slate-400 mb-0.5">Open Petitions</p>
+                <p className="text-lg font-bold text-white font-mono">{petitions.length}</p>
+                <span className="text-[10px] text-teal-400">On-chain proposals</span>
               </div>
               <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80">
                 <p className="text-[11px] font-mono text-slate-400 mb-0.5">Active Referendums</p>
-                <p className="text-lg font-bold text-cyan-300 font-mono">3 Live</p>
+                <p className="text-lg font-bold text-cyan-300 font-mono">{referendums.length}</p>
                 <span className="text-[10px] text-cyan-400">Quadratic Ballots</span>
               </div>
               <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80">
                 <p className="text-[11px] font-mono text-slate-400 mb-0.5">Your Civic SRS</p>
-                <p className="text-lg font-bold text-emerald-400 font-mono">88 / 100</p>
-                <span className="text-[10px] text-emerald-400">Tier 1 Elector (-15% fee)</span>
+                {srs ? (
+                  <>
+                    <p className="text-lg font-bold text-emerald-400 font-mono">
+                      {srs.score.toLocaleString()} / 10,000
+                    </p>
+                    <span className="text-[10px] text-emerald-400">Tier {srs.tier}</span>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-bold text-slate-300 font-mono">—</p>
+                    <span className="text-[10px] text-slate-400">Not established</span>
+                  </>
+                )}
               </div>
               <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80">
-                <p className="text-[11px] font-mono text-slate-400 mb-0.5">Jurisdiction</p>
-                <p className="text-sm font-bold text-slate-200 truncate mt-0.5">San Pedro / Islands</p>
-                <span className="text-[10px] text-slate-500">District Assembly</span>
+                <p className="text-[11px] font-mono text-slate-400 mb-0.5">Council Seats</p>
+                <p className="text-lg font-bold text-amber-300 font-mono">{council.length}</p>
+                <span className="text-[10px] text-slate-400">Governors council</span>
               </div>
             </div>
           </div>
@@ -413,50 +337,142 @@ export default function CommunityPage() {
               value="standing"
               className="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500/20 data-[state=active]:to-cyan-500/20 data-[state=active]:text-cyan-300 data-[state=active]:border data-[state=active]:border-cyan-500/40 data-[state=active]:shadow-sm"
             >
-              Civic Standing & Delegates
+              Civic Standing
+            </TabsTrigger>
+            <TabsTrigger
+              value="learn"
+              className="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all text-slate-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500/20 data-[state=active]:to-cyan-500/20 data-[state=active]:text-cyan-300 data-[state=active]:border data-[state=active]:border-cyan-500/40 data-[state=active]:shadow-sm"
+            >
+              Learn & Green ({modules.length})
             </TabsTrigger>
           </TabsList>
 
           {/* TAB 1: District Assemblies & Petitions */}
-          <TabsContent value="feed" className="space-y-4">
-            {/* District Filter Pill Bar */}
+          <TabsContent value="petitions" className="space-y-4">
+            {/* Status Filter Pill Bar. Community proposals carry no district field
+                on chain, so filtering is by proposal status, which is real. */}
             <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 text-xs">
               <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
-                {(['All', 'Belize City', 'Belmopan', 'Cayo', 'Orange Walk', 'San Pedro / Islands'] as const).map((dst) => (
+                {PETITION_STATUS_FILTERS.map((status) => (
                   <button
-                    key={dst}
-                    onClick={() => setDistrictFilter(dst)}
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
                     className={`px-3 py-1 rounded-lg font-semibold transition-all whitespace-nowrap ${
-                      districtFilter === dst
+                      statusFilter === status
                         ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {dst}
+                    {status === 'EthicsReview' ? 'Ethics Review' : status}
                   </button>
                 ))}
               </div>
-              <span className="text-slate-500 text-xs font-mono hidden sm:inline">
-                {filteredPosts.length} Active Petitions
+              <span className="text-slate-400 text-xs font-mono hidden sm:inline">
+                {filteredPetitions.length} Petitions
               </span>
             </div>
 
-            {/* Posts Stream */}
+            {loading && (
+              <p className="text-center text-slate-400 text-xs font-mono py-8">Loading on-chain petitions…</p>
+            )}
+
+            {!loading && filteredPetitions.length === 0 && (
+              <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-10 text-center space-y-2">
+                <UsersThree size={30} className="mx-auto text-slate-600" />
+                <p className="text-slate-200 text-sm font-bold">No citizen petitions yet</p>
+                <p className="text-slate-400 text-xs font-mono">
+                  {petitions.length === 0
+                    ? 'No community proposals have been submitted to this chain.'
+                    : 'No petitions match the selected status.'}
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3">
-              {filteredPosts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onComment={() => handleOpenComments(post.id, post.author.name, post.content)}
-                  onShare={() => handleSharePost(post.author.name, post.content)}
-                />
-              ))}
+              {filteredPetitions.map((petition) => {
+                const total = petition.votesFor + petition.votesAgainst;
+                const ayesPct = total > 0 ? (petition.votesFor / total) * 100 : 0;
+                const isVoting = votingPetitionId === petition.proposalId;
+                const canVote = petition.status === 'Active';
+
+                return (
+                  <div
+                    key={petition.proposalId}
+                    className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-lg transition-all"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-2.5">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                            Petition #{petition.proposalId}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-200 border border-slate-700">
+                            {petition.proposalType}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-200 border border-teal-500/30">
+                            {petition.status}
+                          </span>
+                        </div>
+                        <h4 className="text-sm sm:text-base font-bold text-white">{petition.title}</h4>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">{petition.description}</p>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                        {petition.amount} DALLA
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 font-mono mb-3">
+                      Proposer: {shortHash(petition.proposer, 8)} • Beneficiary: {shortHash(petition.beneficiary, 8)}
+                    </p>
+
+                    <div className="space-y-1.5 mb-3">
+                      <div className="flex justify-between text-[11px] font-mono">
+                        <span className="text-teal-300 font-semibold">
+                          Ayes: {petition.votesFor} ({ayesPct.toFixed(1)}%)
+                        </span>
+                        <span className="text-rose-300 font-semibold">
+                          Nays: {petition.votesAgainst} ({(100 - ayesPct).toFixed(1)}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800 flex">
+                        <div className="bg-teal-500 h-full transition-all" style={{ width: `${ayesPct}%` }} />
+                        <div className="bg-rose-500 h-full transition-all" style={{ width: `${100 - ayesPct}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
+                      <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
+                        <Clock size={13} />
+                        Voting closes block #{petition.votingDeadline.toLocaleString()}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleVotePetition(petition.proposalId, true)}
+                          disabled={isVoting || !canVote}
+                          className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 disabled:opacity-40 text-teal-200 border border-teal-500/40 text-xs font-bold flex items-center gap-1.5 transition-all"
+                        >
+                          <ThumbsUp size={14} weight="bold" />
+                          <span>Aye</span>
+                        </button>
+                        <button
+                          onClick={() => handleVotePetition(petition.proposalId, false)}
+                          disabled={isVoting || !canVote}
+                          className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 disabled:opacity-40 text-rose-200 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all"
+                        >
+                          <ThumbsDown size={14} weight="bold" />
+                          <span>Nay</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </TabsContent>
 
-          {/* TAB 2: National Referendums & BIP Proposals */}
+          {/* TAB 2: National Referendums */}
           <TabsContent value="governance" className="space-y-4">
-            {/* Citizen Voting Power Card */}
+            {/* Citizen Voting Power Card — balances read from chain */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -465,11 +481,18 @@ export default function CommunityPage() {
                     <h3 className="font-bold text-white text-sm">Your Sovereign Voting Power</h3>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-cyan-300 font-mono">1,250 DALLA</span>
-                    <span className="text-xs text-slate-400">• 2,500 bBZD Liquid Reserves</span>
+                    <span className="text-2xl font-bold text-cyan-300 font-mono">
+                      {balance ? `${Number(balance.dalla).toLocaleString()} DALLA` : '—'}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {balance ? `• ${Number(balance.bBZD).toLocaleString()} bBZD` : 'Wallet not connected'}
+                    </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Jurisdiction: <span className="text-slate-200 font-semibold">San Pedro / Islands</span> • SRS Weight: <span className="text-emerald-400 font-semibold">1.15x</span>
+                    Civil standing:{' '}
+                    <span className="text-emerald-400 font-semibold">
+                      {srs ? `SRS ${srs.score.toLocaleString()} (Tier ${srs.tier})` : 'not established'}
+                    </span>
                   </p>
                 </div>
 
@@ -603,7 +626,7 @@ export default function CommunityPage() {
 
           {/* TAB 3: Civic Standing & District Delegates */}
           <TabsContent value="standing" className="space-y-5">
-            {/* User Standing & SRS Card */}
+            {/* User Standing & SRS Card — read from community.socialResponsibilityScores */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-3">
@@ -612,35 +635,51 @@ export default function CommunityPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                      <span>{selectedAccount?.name || 'Verified Citizen'}</span>
-                      <CheckCircle size={16} weight="fill" className="text-teal-400" />
+                      <span>{selectedAccount?.name || 'Not connected'}</span>
+                      {srs && <CheckCircle size={16} weight="fill" className="text-teal-400" />}
                     </h3>
                     <p className="text-xs text-slate-400 font-mono">
-                      BelizeID #001 • Jurisdiction: San Pedro / Islands
+                      {srs
+                        ? `${srs.participationCount} participation events • ${srs.volunteerHours}h volunteered`
+                        : 'No Social Reputation Score established'}
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right">
                   <span className="text-[10px] uppercase font-mono text-slate-400 block">Social Reputation Score</span>
-                  <span className="text-2xl font-bold text-emerald-400 font-mono">88 / 100</span>
-                  <span className="text-[11px] text-teal-300 block font-semibold">Exemplary Standing</span>
+                  {srs ? (
+                    <span className="text-2xl font-bold text-emerald-400 font-mono">
+                      {srs.score.toLocaleString()} / 10,000
+                    </span>
+                  ) : (
+                    <span className="text-2xl font-bold text-slate-300 font-mono">—</span>
+                  )}
+                  <span className="text-[11px] text-teal-300 block font-semibold">
+                    {srs ? `Tier ${srs.tier}` : 'Not established'}
+                  </span>
                 </div>
               </div>
 
-              {/* SRS Benefits Grid */}
+              {/* SRS Benefits Grid — real SRS fields */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-slate-800/80 text-xs">
                 <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                  <span className="text-slate-400 text-[11px] block">Network Fee Benefit</span>
-                  <span className="font-bold text-teal-300 font-mono">-15% Substrate Tx Fee</span>
+                  <span className="text-slate-400 text-[11px] block">Monthly Fee Exemption</span>
+                  <span className="font-bold text-teal-300 font-mono">
+                    {srs ? `${srs.monthlyFeeExemption} DALLA` : '—'}
+                  </span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                  <span className="text-slate-400 text-[11px] block">Quadratic Voting Weight</span>
-                  <span className="font-bold text-cyan-300 font-mono">1.15x Elector Multiplier</span>
+                  <span className="text-slate-400 text-[11px] block">Education Modules Completed</span>
+                  <span className="font-bold text-cyan-300 font-mono">
+                    {srs ? srs.educationModulesCompleted : '—'}
+                  </span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                  <span className="text-slate-400 text-[11px] block">Restorative Justice Juror</span>
-                  <span className="font-bold text-amber-300 font-mono">Eligible on Docket</span>
+                  <span className="text-slate-400 text-[11px] block">Green Project Contributions</span>
+                  <span className="font-bold text-amber-300 font-mono">
+                    {srs ? `${srs.greenProjectContributions} DALLA` : '—'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -658,65 +697,156 @@ export default function CommunityPage() {
               </div>
             </div>
 
-            {/* District Delegates & Civic Stewards */}
+            {/* Governors Council — real governance.councilMembers */}
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono mb-3 flex items-center gap-2">
                 <UsersThree size={18} className="text-teal-400" weight="fill" />
-                Respected District Delegates & Civic Stewards
+                Governors Council ({council.length})
               </h3>
-              <div className="space-y-2">
-                {districtDelegates.map((delegate) => (
-                  <div
-                    key={delegate.rank}
-                    className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
-                      delegate.isUser
-                        ? 'bg-cyan-500/10 border-cyan-500/40 shadow-lg shadow-cyan-950/20'
-                        : 'bg-slate-900/90 border-slate-800/80 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <div className="flex items-center justify-center w-6 text-sm font-bold text-slate-500 font-mono">
-                        #{delegate.rank}
-                      </div>
-                      <div className="flex items-center justify-center w-7">
-                        {delegate.badgeIcon}
-                      </div>
-                      <div>
-                        <p className={`font-bold text-sm ${delegate.isUser ? 'text-cyan-300' : 'text-white'}`}>
-                          {delegate.name}
-                        </p>
-                        <p className="text-xs text-slate-400 flex items-center gap-1">
-                          <MapPin size={11} className="text-teal-400" />
-                          {delegate.district}
-                        </p>
-                      </div>
-                    </div>
+              {council.length === 0 ? (
+                <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-8 text-center">
+                  <p className="text-slate-400 text-xs font-mono">No council members seated on this chain.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {council.map((member, index) => {
+                    const isUser = Boolean(
+                      selectedAccount?.address && member.account === selectedAccount.address,
+                    );
+                    return (
+                      <div
+                        key={member.account}
+                        className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
+                          isUser
+                            ? 'bg-cyan-500/10 border-cyan-500/40 shadow-lg shadow-cyan-950/20'
+                            : 'bg-slate-900/90 border-slate-800/80 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3.5">
+                          <div className="flex items-center justify-center w-6 text-sm font-bold text-slate-400 font-mono">
+                            #{index + 1}
+                          </div>
+                          <div className="flex items-center justify-center w-7">
+                            <Trophy size={18} weight="fill" className="text-amber-400" />
+                          </div>
+                          <div>
+                            <p className={`font-bold text-sm ${isUser ? 'text-cyan-300' : 'text-white'}`}>
+                              {shortHash(member.account, 6)}
+                              {isUser && <span className="ml-2 text-[10px] text-cyan-400">YOU</span>}
+                            </p>
+                            <p className="text-xs text-slate-400 flex items-center gap-1">
+                              <MapPin size={11} className="text-teal-400" />
+                              {member.role} • term ends block {member.termEnd.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
 
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 font-mono block">Civic SRS</span>
-                      <span className="text-sm font-bold text-emerald-400 font-mono">{delegate.srsScore} / 100</span>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 font-mono block">Participation</span>
+                          <span className="text-sm font-bold text-emerald-400 font-mono">
+                            {member.participationRate}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* TAB 4: Civic Education & Green Projects — real chain content */}
+          <TabsContent value="learn" className="space-y-5">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono mb-3 flex items-center gap-2">
+                <GraduationCap size={18} className="text-cyan-400" weight="fill" />
+                Civic Education Modules ({modules.length})
+              </h3>
+              {modules.length === 0 ? (
+                <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-8 text-center">
+                  <p className="text-slate-400 text-xs font-mono">No education modules registered on this chain.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {modules.map((mod) => (
+                    <div
+                      key={mod.moduleId}
+                      className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="text-sm font-bold text-white">{mod.title}</h4>
+                        <span
+                          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            mod.active
+                              ? 'bg-teal-500/15 text-teal-200 border-teal-500/30'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          {mod.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">{mod.description}</p>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] font-mono">
+                        <span className="text-amber-300 font-bold">{mod.rewardAmount} DALLA</span>
+                        <span className="text-slate-400">
+                          {mod.totalCompletions}
+                          {mod.maxCompletions !== null ? ` / ${mod.maxCompletions}` : ''} completed
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-mono mb-3 flex items-center gap-2">
+                <TreeEvergreen size={18} className="text-emerald-400" weight="fill" />
+                Green Projects ({greenProjects.length})
+              </h3>
+              {greenProjects.length === 0 ? (
+                <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-8 text-center">
+                  <p className="text-slate-400 text-xs font-mono">No green projects registered on this chain.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {greenProjects.map((project) => (
+                    <div
+                      key={project.projectId}
+                      className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
+                        <div>
+                          <h4 className="text-sm font-bold text-white">{project.name}</h4>
+                          <span className="text-[10px] font-mono text-teal-300 uppercase tracking-wide">
+                            {project.category}
+                          </span>
+                        </div>
+                        <div className="text-right font-mono text-[11px]">
+                          <span className="text-emerald-300 font-bold block">
+                            {project.currentFunding} / {project.targetFunding} DALLA
+                          </span>
+                          <span className="text-slate-400">{project.contributorCount} contributors</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">{project.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
       {/* Modals */}
-      <CreatePostModal
-        isOpen={isCreatePostOpen}
-        onClose={() => setIsCreatePostOpen(false)}
-        onPost={handleCreatePost}
-      />
-
-      <CommentsModal
-        isOpen={commentsModalData.isOpen}
-        onClose={handleCloseComments}
-        postId={commentsModalData.postId}
-        postAuthor={commentsModalData.postAuthor}
-        postContent={commentsModalData.postContent}
+      <SubmitPetitionModal
+        isOpen={isSubmitPetitionOpen}
+        onClose={() => setIsSubmitPetitionOpen(false)}
+        onSubmitted={async () => {
+          setIsSubmitPetitionOpen(false);
+          setPetitions(await getCommunityProposals());
+        }}
       />
     </div>
   );

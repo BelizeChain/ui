@@ -2,7 +2,7 @@
  * BelizeChain Blockchain Service
  * Production-grade Polkadot.js integration for government dashboard
  * NO MOCK DATA - All functions query real blockchain
- * 
+ *
  * Client-side only service - uses dynamic imports for SSR compatibility
  */
 
@@ -24,20 +24,20 @@ async function loadPolkadotModules() {
   if (typeof window === 'undefined') {
     throw new Error('Blockchain service can only be used client-side');
   }
-  
+
   if (!polkadotModules) {
     const [apiModule, extensionModule] = await Promise.all([
       import('@polkadot/api'),
       import('@polkadot/extension-dapp'),
     ]);
-    
+
     polkadotModules = {
       ApiPromise: apiModule.ApiPromise,
       WsProvider: apiModule.WsProvider,
       web3FromAddress: extensionModule.web3FromAddress,
     };
   }
-  
+
   return polkadotModules;
 }
 
@@ -99,7 +99,7 @@ class BlockchainService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
-  
+
   // Query cache with TTL
   private cache = new Map<string, { data: unknown; expires: number }>();
   private defaultCacheTTL = 30000; // 30 seconds
@@ -122,11 +122,11 @@ class BlockchainService {
     try {
       // Load Polkadot modules dynamically (client-side only)
       const modules = await loadPolkadotModules();
-      
+
       const nodeEndpoint = getRuntimeConfig().blockchainWsUrl;
-      
+
       this.wsProvider = new modules.WsProvider(nodeEndpoint, 1000, {}, 30000);
-      
+
       this.wsProvider.on('connected', () => {
         console.info('[BLOCKCHAIN-SERVICE] Connected to BelizeChain node');
         this.reconnectAttempts = 0;
@@ -141,7 +141,7 @@ class BlockchainService {
         console.error('[BLOCKCHAIN-SERVICE] WebSocket error:', error);
       });
 
-      this.api = await modules.ApiPromise.create({ 
+      this.api = await modules.ApiPromise.create({
         provider: this.wsProvider,
         throwOnConnect: true,
       });
@@ -232,7 +232,7 @@ class BlockchainService {
 
   private getCached<T>(key: string): T | null {
     const cached = this.cache.get(key);
-    
+
     if (!cached) {
       return null;
     }
@@ -671,10 +671,10 @@ export const blockchainService = (() => {
       }
     });
   }
-  
+
   if (!blockchainServiceInstance) {
     blockchainServiceInstance = new BlockchainService();
   }
-  
+
   return blockchainServiceInstance;
 })();

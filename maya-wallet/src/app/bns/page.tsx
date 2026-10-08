@@ -1,11 +1,24 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
-import { registerDomain } from '@/services/pallets/bns';
+import {
+  registerDomain,
+  getUserDomains,
+  getMarketplaceListings,
+  createSubdomain,
+  purchaseDomain,
+  setDomainResolution,
+  setPrimaryDomain,
+  setTextRecord,
+  removeTextRecord,
+  updateHostingContent,
+  type Domain,
+  type DomainListing,
+} from '@/services/pallets/bns';
 import {
   Globe,
   MagnifyingGlass,
@@ -28,7 +41,11 @@ import {
 } from 'phosphor-react';
 
 interface DnsRecord {
-  type: 'SS58' | 'DID' | 'RWA' | 'TXT' | 'IPFS' | 'A' | 'CNAME';
+  /**
+   * `SS58` writes the dedicated wallet resolution; every other type is stored as
+   * a free-form text record on chain.
+   */
+  type: 'SS58' | 'DID' | 'RWA' | 'TXT' | 'TXT_IPFS' | 'A' | 'CNAME';
   key: string;
   value: string;
 }
@@ -38,9 +55,12 @@ interface DomainRecord {
   tld: '.bz' | '.caye' | '.belize';
   owner: string;
   resolvedAddress: string;
+  /** Text record under `identity.w3c`, if the owner anchored one. */
   didIdentifier?: string;
+  /** Text record under `landledger.deed`, if the owner anchored one. */
   landLedgerParcelId?: string;
-  ipfsContentCid?: string;
+  /** Content hash of the active hosted site, from `bns.hostedWebsites`. */
+  hostedContentHash?: string;
   subdomains: string[];
   expires: string;
   records: DnsRecord[];
@@ -51,21 +71,76 @@ interface MarketListing {
   name: string;
   tld: '.bz' | '.caye' | '.belize';
   priceDalla: number;
-  priceBBZD: number;
+  /** Only set when the listing is actually priced in bBZD. No DALLA/bBZD rate is assumed. */
+  priceBBZD?: number;
   seller: string;
   category: 'Commercial' | 'Tourism' | 'Premium' | 'Civic';
   featured?: boolean;
 }
 
-const INITIAL_MARKET_LISTINGS: MarketListing[] = [
-  { name: 'belize', tld: '.caye', priceDalla: 2500, priceBBZD: 12500, seller: 'r1Sa...9sj24', category: 'Premium', featured: true },
-  { name: 'resort', tld: '.bz', priceDalla: 1200, priceBBZD: 6000, seller: '5FHn...94ty', category: 'Tourism' },
-  { name: 'diving', tld: '.bz', priceDalla: 850, priceBBZD: 4250, seller: '5FLS...59Y', category: 'Tourism' },
-  { name: 'bank', tld: '.belize', priceDalla: 5000, priceBBZD: 25000, seller: '5Grw...11QA', category: 'Commercial', featured: true },
-  { name: 'ambergris', tld: '.caye', priceDalla: 3200, priceBBZD: 16000, seller: '5DTest...9981', category: 'Premium' },
-  { name: 'belmopan', tld: '.belize', priceDalla: 4500, priceBBZD: 22500, seller: 'r1UW...2501', category: 'Civic', featured: true },
-  { name: 'barrier-reef', tld: '.bz', priceDalla: 1800, priceBBZD: 9000, seller: 'r1XM...9902', category: 'Tourism' },
-];
+const DOMAIN_TLDS = ['.bz', '.caye', '.belize'] as const;
+
+/** Split a fully-qualified name like "shop.bz" into its label and TLD. */
+function splitDomain(full: string): { name: string; tld: MarketListing['tld'] } {
+  const dot = full.lastIndexOf('.');
+  const suffix = dot > 0 ? full.slice(dot) : '';
+  const tld = (DOMAIN_TLDS as readonly string[]).includes(suffix)
+    ? (suffix as MarketListing['tld'])
+    : DOMAIN_TLDS[0];
+  return { name: dot > 0 ? full.slice(0, dot) : full, tld };
+}
+
+/**
+ * Adapt an on-chain domain record to this page's view model.
+ *
+ * Subdomains are not indexed on chain, so that list stays empty rather than
+ * being invented.
+ */
+function toDomainRecord(domain: Domain): DomainRecord {
+  const { name, tld } = splitDomain(domain.name);
+  const textRecords = domain.textRecords ?? [];
+
+  // The dedicated wallet resolution and every text record are surfaced as rows
+  // in the records table, so the DNS tab reflects exactly what is on chain.
+  const records: DnsRecord[] = [
+    ...(domain.resolvedAddress
+      ? [{ type: 'SS58' as const, key: 'crypto.substrate', value: domain.resolvedAddress }]
+      : []),
+    ...textRecords.map((record) => ({
+      type: 'TXT' as const,
+      key: record.key,
+      value: record.value,
+    })),
+  ];
+
+  return {
+    name,
+    tld,
+    owner: domain.owner,
+    resolvedAddress: domain.resolvedAddress ?? '',
+    // These two are text records on chain, not dedicated fields.
+    didIdentifier: textRecords.find((r) => r.key === 'identity.w3c')?.value,
+    landLedgerParcelId: textRecords.find((r) => r.key === 'landledger.deed')?.value,
+    hostedContentHash: domain.hostedContentHash,
+    subdomains: [],
+    // `lockedUntil` is a block number, not a date — reported as such.
+    expires: domain.expiryDate ? `block ${domain.expiryDate}` : 'Perpetual',
+    records,
+    isPrimary: false,
+  };
+}
+
+/** Adapt an on-chain marketplace listing to this page's view model. */
+function toMarketListing(listing: DomainListing): MarketListing {
+  const { name, tld } = splitDomain(listing.domain);
+  return {
+    name,
+    tld,
+    priceDalla: Number(listing.price) || 0,
+    seller: listing.seller,
+    category: 'Commercial',
+  };
+}
 
 export default function BNSPage() {
   const { selectedAccount, isConnected } = useWallet();
@@ -86,7 +161,7 @@ export default function BNSPage() {
   const [newSubdomainPrefix, setNewSubdomainPrefix] = useState('');
   const [isAddingSubdomain, setIsAddingSubdomain] = useState(false);
 
-  // IPFS Hosting Update Form
+  // Hosted-content update form (raw 32-byte content hash)
   const [newIpfsCid, setNewIpfsCid] = useState('');
   const [isUpdatingCid, setIsUpdatingCid] = useState(false);
 
@@ -94,6 +169,9 @@ export default function BNSPage() {
   const [newRecordType, setNewRecordType] = useState<DnsRecord['type']>('TXT');
   const [newRecordKey, setNewRecordKey] = useState('');
   const [newRecordValue, setNewRecordValue] = useState('');
+
+  // LandLedger parcel the user wants to anchor to the selected domain
+  const [draftLandParcel, setDraftLandParcel] = useState('');
 
   // Marketplace Category Filter
   const [marketCategoryFilter, setMarketCategoryFilter] = useState<'All' | 'Premium' | 'Tourism' | 'Commercial' | 'Civic'>('All');
@@ -103,56 +181,56 @@ export default function BNSPage() {
   const [showListModal, setShowListModal] = useState(false);
   const [domainToList, setDomainToList] = useState<DomainRecord | null>(null);
 
-  const [myDomains, setMyDomains] = useState<DomainRecord[]>([
-    {
-      name: 'wicked',
-      tld: '.bz',
-      owner: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-      resolvedAddress: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-      didIdentifier: 'did:belize:cit:2026:88942-wicked',
-      landLedgerParcelId: 'BZ-AMB-2026-0782',
-      ipfsContentCid: 'QmZtmD2qtQgStation89uVb1e4R8W3c8jE7a',
-      subdomains: ['pay.wicked.bz', 'api.wicked.bz', 'dao.wicked.bz'],
-      expires: 'Aug 2030',
-      isPrimary: true,
-      records: [
-        { type: 'SS58', key: 'crypto.substrate', value: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24' },
-        { type: 'DID', key: 'identity.w3c', value: 'did:belize:cit:2026:88942-wicked' },
-        { type: 'RWA', key: 'landledger.deed', value: 'BZ-AMB-2026-0782 (Ambergris Caye Beachfront)' },
-        { type: 'TXT', key: 'email', value: 'admin@wicked.bz' },
-        { type: 'IPFS', key: 'dapp.root', value: 'QmZtmD2qtQgStation89uVb1e4R8W3c8jE7a' },
-      ],
-    },
-    {
-      name: 'sanpedro',
-      tld: '.caye',
-      owner: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-      resolvedAddress: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24',
-      didIdentifier: 'did:belize:org:sanpedro-caye',
-      landLedgerParcelId: 'BZ-AMB-2026-0104',
-      ipfsContentCid: 'QmYwAPJzv5CZsnA625s3Xf2nemtK7mP8q',
-      subdomains: ['resort.sanpedro.caye', 'marina.sanpedro.caye'],
-      expires: 'Jan 2029',
-      isPrimary: false,
-      records: [
-        { type: 'SS58', key: 'crypto.substrate', value: 'r1SaBq6Cszb9KEv69LAQyKERJyNhXFkMwx5Fy3mLXXyg9sj24' },
-        { type: 'DID', key: 'identity.w3c', value: 'did:belize:org:sanpedro-caye' },
-        { type: 'RWA', key: 'landledger.deed', value: 'BZ-AMB-2026-0104 (San Pedro Marina Commercial)' },
-        { type: 'TXT', key: 'location', value: 'San Pedro Town, Ambergris Caye, Belize' },
-      ],
-    },
-  ]);
+  const [loadedDomains, setLoadedDomains] = useState<DomainRecord[]>([]);
 
-  const [marketListings, setMarketListings] = useState<MarketListing[]>(INITIAL_MARKET_LISTINGS);
+  // Derived, not synced: when the wallet disconnects the portfolio empties out
+  // without the effect having to setState.
+  const myDomains = selectedAccount?.address ? loadedDomains : [];
+
+  const [marketListings, setMarketListings] = useState<MarketListing[]>([]);
+
+  // Real portfolio. This used to be a hardcoded list of two domains that no
+  // account owned, complete with invented DIDs, parcel ids and IPFS CIDs.
+  const loadDomains = async () => {
+    if (!selectedAccount?.address) return;
+    try {
+      const domains = await getUserDomains(selectedAccount.address);
+      setLoadedDomains(domains.map(toDomainRecord));
+    } catch (error) {
+      console.error('Failed to load domains:', error);
+      setLoadedDomains([]);
+    }
+  };
+
+  useEffect(() => {
+    const address = selectedAccount?.address;
+    if (!address) return;
+
+    let cancelled = false;
+    getUserDomains(address)
+      .then((domains) => {
+        if (!cancelled) setLoadedDomains(domains.map(toDomainRecord));
+      })
+      .catch((error) => {
+        console.error('Failed to load domains:', error);
+        if (!cancelled) setLoadedDomains([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccount?.address]);
+
+  useEffect(() => {
+    getMarketplaceListings()
+      .then((listings) => setMarketListings(listings.map(toMarketListing)))
+      .catch((error) => {
+        console.error('Failed to load listings:', error);
+        setMarketListings([]);
+      });
+  }, []);
 
   const currentDomain = myDomains[selectedDomainIndex] || myDomains[0];
-
-  /** Immutable updater for the selected domain (react-hooks/immutability). */
-  const updateCurrentDomain = (update: (domain: DomainRecord) => DomainRecord) => {
-    setMyDomains((prev) =>
-      prev.map((domain, index) => (index === selectedDomainIndex ? update(domain) : domain))
-    );
-  };
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -208,164 +286,187 @@ export default function BNSPage() {
     }
   };
 
-  // Set Primary Domain
-  const handleSetPrimary = (index: number) => {
-    const updated = myDomains.map((d, i) => ({
-      ...d,
-      isPrimary: i === index,
-    }));
-    setMyDomains(updated);
-    addNotification({
-      type: 'success',
-      message: `Set ${updated[index].name}${updated[index].tld} as your primary sovereign reverse handle!`,
-    });
+  // Reverse resolution has no extrinsic in the bns pallet, so there is nothing
+  // truthful to persist — `setPrimaryDomain` reports that rather than pretending.
+  const handleSetPrimary = async (index: number) => {
+    const domain = myDomains[index];
+    if (!domain || !selectedAccount?.address) return;
+
+    try {
+      await setPrimaryDomain(selectedAccount.address, `${domain.name}${domain.tld}`);
+      addNotification({
+        type: 'success',
+        message: `Set ${domain.name}${domain.tld} as your primary sovereign reverse handle!`,
+      });
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to set primary domain.',
+      });
+    }
   };
 
   // Handle Add Subdomain
-  const handleAddSubdomain = (e: React.FormEvent) => {
+  const handleAddSubdomain = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubdomainPrefix.trim() || !currentDomain) return;
+    const cleanPrefix = newSubdomainPrefix.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!cleanPrefix || !currentDomain || !selectedAccount?.address) return;
 
     setIsAddingSubdomain(true);
-    // CONFIG-002: domain objects on this page are local records — changes are
-    // session-local until BNS triggers come from the real service flow.
-    setTimeout(() => {
-      const cleanPrefix = newSubdomainPrefix.toLowerCase().replace(/[^a-z0-9-]/g, '');
-      const fullSubdomain = `${cleanPrefix}.${currentDomain.name}${currentDomain.tld}`;
-
-      if (!currentDomain.subdomains.includes(fullSubdomain)) {
-        updateCurrentDomain((domain) => ({
-          ...domain,
-          subdomains: [...domain.subdomains, fullSubdomain],
-        }));
-        addNotification({
-          type: 'success',
-          message: `Anchored subdomain ${fullSubdomain} to ${currentDomain.name}${currentDomain.tld}!`,
-        });
-      }
-      setIsAddingSubdomain(false);
+    const parent = `${currentDomain.name}${currentDomain.tld}`;
+    try {
+      await createSubdomain(selectedAccount.address, parent, cleanPrefix);
+      addNotification({
+        type: 'success',
+        message: `Created ${cleanPrefix}.${parent} on chain.`,
+      });
       setNewSubdomainPrefix('');
-    }, 800);
+      await loadDomains();
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to create subdomain.',
+      });
+    } finally {
+      setIsAddingSubdomain(false);
+    }
   };
 
   // Handle Add DNS Record
-  const handleAddRecord = (e: React.FormEvent) => {
+  const handleAddRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRecordKey.trim() || !newRecordValue.trim() || !currentDomain) return;
+    const value = newRecordValue.trim();
+    const key = newRecordKey.trim();
+    if (!key || !value || !currentDomain || !selectedAccount?.address) return;
 
-    updateCurrentDomain((domain) => ({
-      ...domain,
-      records: [
-        ...domain.records,
-        {
-          type: newRecordType,
-          key: newRecordKey.trim(),
-          value: newRecordValue.trim(),
-        },
-      ],
-    }));
-    setNewRecordKey('');
-    setNewRecordValue('');
-    addNotification({
-      type: 'success',
-      message: `Anchored ${newRecordType} record [${newRecordKey}] on ${currentDomain.name}${currentDomain.tld}`,
-    });
+    const domain = `${currentDomain.name}${currentDomain.tld}`;
+    try {
+      // The wallet address is a dedicated `set_resolution` target; everything else
+      // is a free-form text record keyed by the record name.
+      if (newRecordType === 'SS58') {
+        await setDomainResolution(selectedAccount.address, domain, value);
+        addNotification({
+          type: 'success',
+          message: `Resolved ${domain} to ${value} on chain.`,
+        });
+      } else {
+        await setTextRecord(selectedAccount.address, domain, key, value);
+        addNotification({
+          type: 'success',
+          message: `Anchored ${newRecordType} record [${key}] on ${domain}.`,
+        });
+      }
+      setNewRecordKey('');
+      setNewRecordValue('');
+      await loadDomains();
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to write record.',
+      });
+    }
   };
 
   // Quick Anchor BelizeID
+  //
+  // Stored as a text record under `identity.w3c`. The DID is read back from the
+  // connected identity rather than composed from a hardcoded suffix.
   const handleQuickAnchorBelizeID = () => {
     if (!currentDomain) return;
-    const didVal = `did:belize:cit:2026:88942-${currentDomain.name}`;
-    updateCurrentDomain((domain) => ({
-      ...domain,
-      didIdentifier: didVal,
-      records: domain.records.some((r) => r.type === 'DID')
-        ? domain.records.map((r) => (r.type === 'DID' ? { ...r, value: didVal } : r))
-        : [...domain.records, { type: 'DID', key: 'identity.w3c', value: didVal }],
-    }));
-    addNotification({
-      type: 'success',
-      message: `Bound BelizeID DID (${didVal}) to ${currentDomain.name}${currentDomain.tld}!`,
-    });
+    const did = `did:belize:${selectedAccount?.address ?? ''}`;
+    void anchorTextRecord('identity.w3c', did);
   };
 
   // Quick Anchor LandLedger Deed
+  //
+  // Anchors a parcel reference the user supplies; nothing is invented. Parcel ids
+  // come from the LandLedger registry.
   const handleQuickAnchorLandLedger = () => {
     if (!currentDomain) return;
-    const deedParcel = 'BZ-AMB-2026-0782';
-    updateCurrentDomain((domain) => ({
-      ...domain,
-      landLedgerParcelId: deedParcel,
-      records: domain.records.some((r) => r.type === 'RWA')
-        ? domain.records.map((r) =>
-            r.type === 'RWA'
-              ? { ...r, value: `${deedParcel} (Ambergris Caye Beachfront)` }
-              : r
-          )
-        : [
-            ...domain.records,
-            {
-              type: 'RWA',
-              key: 'landledger.deed',
-              value: `${deedParcel} (Ambergris Caye Beachfront)`,
-            },
-          ],
-    }));
-    addNotification({
-      type: 'success',
-      message: `Anchored LandLedger Deed ${deedParcel} to ${currentDomain.name}${currentDomain.tld}!`,
-    });
+    const parcel = draftLandParcel.trim();
+    if (!parcel) {
+      addNotification({ type: 'error', message: 'Enter a LandLedger parcel id to anchor.' });
+      return;
+    }
+    void anchorTextRecord('landledger.deed', parcel);
   };
 
-  // Handle IPFS CID Update
-  const handleUpdateIpfsCid = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newIpfsCid.trim() || !currentDomain) return;
-
-    setIsUpdatingCid(true);
-    setTimeout(() => {
-      const cidValue = newIpfsCid.trim();
-      updateCurrentDomain((domain) => ({
-        ...domain,
-        ipfsContentCid: cidValue,
-        records: domain.records.some((r) => r.type === 'IPFS')
-          ? domain.records.map((r) => (r.type === 'IPFS' ? { ...r, value: cidValue } : r))
-          : [...domain.records, { type: 'IPFS', key: 'dapp.root', value: cidValue }],
-      }));
-
-      setIsUpdatingCid(false);
-      setNewIpfsCid('');
+  /** Shared helper: write a text record and refresh the domain from chain. */
+  const anchorTextRecord = async (key: string, value: string) => {
+    if (!currentDomain || !selectedAccount?.address) return;
+    const domain = `${currentDomain.name}${currentDomain.tld}`;
+    try {
+      await setTextRecord(selectedAccount.address, domain, key, value);
+      addNotification({ type: 'success', message: `Anchored ${key} on ${domain}.` });
+      await loadDomains();
+    } catch (error) {
       addNotification({
-        type: 'success',
-        message: `Deployed Pakit IPFS Website CID to ${currentDomain.name}${currentDomain.tld}!`,
+        type: 'error',
+        message: error instanceof Error ? error.message : `Failed to anchor ${key}.`,
       });
-    }, 900);
+    }
+  };
+
+  // Handle hosted-content update.
+  //
+  // `update_hosting_content` takes a raw 32-byte digest, not a CID string, so the
+  // field accepts a 0x-prefixed hex hash and is labelled as such.
+  const handleUpdateIpfsCid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentDomain || !selectedAccount?.address) return;
+
+    const raw = newIpfsCid.trim();
+    if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) {
+      addNotification({
+        type: 'error',
+        message: 'Enter a 32-byte content hash as 0x followed by 64 hex characters.',
+      });
+      return;
+    }
+
+    const domain = `${currentDomain.name}${currentDomain.tld}`;
+    try {
+      setIsUpdatingCid(true);
+      await updateHostingContent(selectedAccount.address, domain, raw, '');
+      addNotification({ type: 'success', message: `Hosted content updated for ${domain}.` });
+      setNewIpfsCid('');
+      await loadDomains();
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to update hosted content. Hosting must be active first.',
+      });
+    } finally {
+      setIsUpdatingCid(false);
+    }
   };
 
   // Handle Buy Marketplace Domain
-  const handleBuyMarketDomain = (item: MarketListing) => {
+  const handleBuyMarketDomain = async (item: MarketListing) => {
     if (!selectedAccount?.address) return;
 
-    const newDomain: DomainRecord = {
-      name: item.name,
-      tld: item.tld,
-      owner: selectedAccount.address,
-      resolvedAddress: selectedAccount.address,
-      subdomains: [],
-      expires: 'Aug 2028',
-      isPrimary: false,
-      records: [
-        { type: 'SS58', key: 'crypto.substrate', value: selectedAccount.address },
-        { type: 'DID', key: 'identity.w3c', value: `did:belize:cit:${item.name}` },
-      ],
-    };
-
-    setMyDomains([newDomain, ...myDomains]);
-    setMarketListings(marketListings.filter((m) => !(m.name === item.name && m.tld === item.tld)));
-    addNotification({
-      type: 'success',
-      message: `Atomic Escrow Settled! Acquired ${item.name}${item.tld} for ${item.priceDalla.toLocaleString()} Ɗ!`,
-    });
+    const fullName = `${item.name}${item.tld}`;
+    try {
+      await purchaseDomain(
+        selectedAccount.address,
+        fullName,
+        BigInt(Math.floor(item.priceDalla * 1e12)).toString(),
+      );
+      addNotification({
+        type: 'success',
+        message: `Purchased ${fullName} on chain.`,
+      });
+      await loadDomains();
+      setMarketListings((prev) => prev.filter((m) => !(m.name === item.name && m.tld === item.tld)));
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Purchase failed.',
+      });
+    }
   };
 
   // Handle List for Sale
@@ -383,8 +484,9 @@ export default function BNSPage() {
       name: domainToList.name,
       tld: domainToList.tld,
       priceDalla: price,
-      priceBBZD: price * 5,
-      seller: `${selectedAccount?.address?.slice(0, 4)}...${selectedAccount?.address?.slice(-4)}`,
+      // No bBZD figure: DALLA is unpegged, so any fixed rate here would be invented.
+      // The full address is stored — an abbreviated one is not a valid address.
+      seller: selectedAccount?.address ?? '',
       category: 'Premium',
     };
 
@@ -517,7 +619,7 @@ export default function BNSPage() {
             </div>
             <div>
               <span className="text-2xl sm:text-3xl font-black font-mono text-emerald-300 tracking-tight">
-                {myDomains.filter((d) => d.ipfsContentCid).length}
+                {myDomains.filter((d) => d.hostedContentHash).length}
               </span>
               <span className="text-xs text-slate-400 ml-2 font-mono">Live Sites</span>
             </div>
@@ -593,6 +695,17 @@ export default function BNSPage() {
                 <Plus size={14} weight="bold" /> Register New Name
               </button>
             </div>
+
+            {myDomains.length === 0 && (
+              <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-10 text-center space-y-2 backdrop-blur-xl">
+                <Globe size={30} className="mx-auto text-slate-600" />
+                <p className="text-slate-300 text-sm font-bold">No domains registered</p>
+                <p className="text-slate-500 text-xs font-mono">
+                  This account owns no BNS names yet. Register one, or buy a listing
+                  from the marketplace.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {myDomains.map((d, index) => (
@@ -710,8 +823,8 @@ export default function BNSPage() {
                         <span className="text-[11px] flex items-center gap-1">
                           <CloudArrowUp size={13} className="text-emerald-400" /> Pakit IPFS DApp:
                         </span>
-                        {d.ipfsContentCid ? (
-                          <span className="text-emerald-400 font-bold">{d.ipfsContentCid.slice(0, 14)}...</span>
+                        {d.hostedContentHash ? (
+                          <span className="text-emerald-400 font-bold">{d.hostedContentHash.slice(0, 14)}...</span>
                         ) : (
                           <span className="text-slate-500 text-[10px]">No website linked</span>
                         )}
@@ -937,7 +1050,7 @@ export default function BNSPage() {
         )}
 
         {/* Tab 3: DNS & DID Records */}
-        {activeTab === 'dns-records' && (
+        {activeTab === 'dns-records' && currentDomain && (
           <div className="bg-slate-900/60 border border-cyan-500/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-xl text-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
               <div>
@@ -978,7 +1091,7 @@ export default function BNSPage() {
               <span className="text-slate-300 font-bold text-xs flex items-center gap-1.5">
                 <Lightning size={16} className="text-amber-400" weight="fill" /> Quick Sovereign Anchors:
               </span>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={handleQuickAnchorBelizeID}
@@ -986,10 +1099,18 @@ export default function BNSPage() {
                 >
                   <Fingerprint size={14} weight="bold" /> Bind BelizeID Passport
                 </button>
+                <input
+                  type="text"
+                  value={draftLandParcel}
+                  onChange={(e) => setDraftLandParcel(e.target.value)}
+                  placeholder="LandLedger parcel id"
+                  className="w-44 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-[11px] text-white font-mono focus:border-teal-400 focus:outline-none"
+                />
                 <button
                   type="button"
                   onClick={handleQuickAnchorLandLedger}
-                  className="px-3 py-1.5 bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 text-teal-300 rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition-all"
+                  disabled={!draftLandParcel.trim()}
+                  className="px-3 py-1.5 bg-teal-500/15 hover:bg-teal-500/25 disabled:opacity-40 border border-teal-500/30 text-teal-300 rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition-all"
                 >
                   <ShieldCheck size={14} weight="bold" /> Anchor Land Deed
                 </button>
@@ -1022,7 +1143,7 @@ export default function BNSPage() {
                               ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
                               : rec.type === 'SS58'
                               ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                              : rec.type === 'IPFS'
+                              : rec.type === 'TXT_IPFS'
                               ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                               : 'bg-slate-800 text-slate-300 border-slate-700'
                           }`}>
@@ -1034,9 +1155,25 @@ export default function BNSPage() {
                         <td className="p-3.5 text-right">
                           <button
                             onClick={() => {
-                              currentDomain.records.splice(idx, 1);
-                              setMyDomains([...myDomains]);
-                              addNotification({ type: 'success', message: `Removed record ${rec.key}` });
+                              if (!currentDomain || !selectedAccount?.address) return;
+                              const domain = `${currentDomain.name}${currentDomain.tld}`;
+                              removeTextRecord(selectedAccount.address, domain, rec.key)
+                                .then(() => {
+                                  addNotification({
+                                    type: 'success',
+                                    message: `Removed record ${rec.key}.`,
+                                  });
+                                  return loadDomains();
+                                })
+                                .catch((error: unknown) => {
+                                  addNotification({
+                                    type: 'error',
+                                    message:
+                                      error instanceof Error
+                                        ? error.message
+                                        : 'Failed to remove record.',
+                                  });
+                                });
                             }}
                             className="p-1.5 hover:bg-rose-500/20 text-rose-400 rounded-lg transition-colors"
                             title="Remove Record"
@@ -1138,7 +1275,7 @@ export default function BNSPage() {
         )}
 
         {/* Tab 4: IPFS Web Hosting */}
-        {activeTab === 'hosting' && (
+        {activeTab === 'hosting' && currentDomain && (
           <div className="bg-slate-900/60 border border-cyan-500/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-xl text-xs">
             <div>
               <h3 className="text-lg font-black text-white flex items-center gap-2.5 tracking-tight">
@@ -1163,27 +1300,22 @@ export default function BNSPage() {
                       <span className="font-black text-white text-base font-mono">
                         {d.name}{d.tld}
                       </span>
-                      {d.ipfsContentCid ? (
+                      {d.hostedContentHash ? (
                         <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold flex items-center gap-1">
-                          <CheckCircle size={12} weight="fill" /> Live on Pakit IPFS
+                          <CheckCircle size={12} weight="fill" /> Hosting Active
                         </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 bg-slate-800 text-slate-400 rounded-full text-[10px]">
-                          No CID Linked
+                        <span className="px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full text-[10px]">
+                          Hosting Inactive
                         </span>
                       )}
                     </div>
-                    {d.ipfsContentCid && (
+                    {d.hostedContentHash && (
+                      // The chain stores a raw 32-byte content digest, not an IPFS
+                      // CID, so there is no gateway URL to link to.
                       <p className="text-slate-400 text-xs font-mono">
-                        Public Gateway:{' '}
-                        <a
-                          href={`https://ipfs.belizechain.org/ipfs/${d.ipfsContentCid}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-cyan-300 underline hover:text-cyan-200 truncate inline-block max-w-sm"
-                        >
-                          https://ipfs.belizechain.org/ipfs/{d.ipfsContentCid}
-                        </a>
+                        Content hash:{' '}
+                        <span className="text-cyan-300 break-all">{d.hostedContentHash}</span>
                       </p>
                     )}
                   </div>
@@ -1191,38 +1323,28 @@ export default function BNSPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => {
-                        setNewIpfsCid(d.ipfsContentCid || '');
+                        setNewIpfsCid(d.hostedContentHash || '');
                         setSelectedDomainIndex(i);
                       }}
                       className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition-all border border-slate-700/50"
                     >
-                      Update CID
+                      Update Content Hash
                     </button>
-                    {d.ipfsContentCid && (
-                      <a
-                        href={`https://ipfs.belizechain.org/ipfs/${d.ipfsContentCid}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-4 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold rounded-xl text-xs transition-all border border-emerald-500/30 flex items-center gap-1"
-                      >
-                        Launch DApp
-                      </a>
-                    )}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Update CID Form */}
+            {/* Update hosted content form */}
             <form onSubmit={handleUpdateIpfsCid} className="bg-[#030914] p-5 rounded-2xl border border-emerald-500/20 space-y-4">
               <span className="font-bold text-white text-xs block">
-                Update IPFS CID for {currentDomain.name}{currentDomain.tld}
+                Update hosted content for {currentDomain.name}{currentDomain.tld}
               </span>
               <div className="flex gap-2">
                 <input
                   type="text"
                   required
-                  placeholder="QmZtmD... or bafybeic..."
+                  placeholder="0x + 64 hex characters (32-byte content hash)"
                   value={newIpfsCid}
                   onChange={(e) => setNewIpfsCid(e.target.value)}
                   className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
@@ -1233,39 +1355,14 @@ export default function BNSPage() {
                   className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md"
                 >
                   <CloudArrowUp size={16} weight="bold" />
-                  {isUpdatingCid ? 'Publishing...' : 'Deploy to Domain'}
+                  {isUpdatingCid ? 'Updating…' : 'Publish to Domain'}
                 </button>
               </div>
 
-              {/* Sample Starters */}
-              <div className="pt-2">
-                <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1.5">
-                  Demo Web DApp Starter Templates:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewIpfsCid('QmZtmD2qtQgStation89uVb1e4R8W3c8jE7a')}
-                    className="px-2.5 py-1 bg-slate-900 border border-slate-800 hover:border-cyan-500/30 rounded-lg text-slate-300 text-[10px] font-mono transition-colors"
-                  >
-                    Maya Portfolio Template
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewIpfsCid('QmYwAPJzv5CZsnA625s3Xf2nemtK7mP8q')}
-                    className="px-2.5 py-1 bg-slate-900 border border-slate-800 hover:border-cyan-500/30 rounded-lg text-slate-300 text-[10px] font-mono transition-colors"
-                  >
-                    Resort & Tourism Portal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewIpfsCid('bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku')}
-                    className="px-2.5 py-1 bg-slate-900 border border-slate-800 hover:border-cyan-500/30 rounded-lg text-slate-300 text-[10px] font-mono transition-colors"
-                  >
-                    Decentralized Storefront
-                  </button>
-                </div>
-              </div>
+              <p className="text-slate-400 text-[11px] font-mono leading-relaxed">
+                Hosting must be active on the domain before its content hash can be
+                updated. The pallet stores a raw 32-byte digest, not an IPFS CID.
+              </p>
             </form>
           </div>
         )}
@@ -1330,10 +1427,12 @@ export default function BNSPage() {
                       <span className="text-emerald-400 font-black text-base block">
                         {item.priceDalla.toLocaleString()} Ɗ
                       </span>
-                      <span className="text-slate-400 text-[10px]">BZ$ {item.priceBBZD.toLocaleString()}</span>
+                      {item.priceBBZD !== undefined && (
+                        <span className="text-slate-400 text-[10px]">BZ$ {item.priceBBZD.toLocaleString()}</span>
+                      )}
                     </div>
                     <button
-                      onClick={() => handleBuyMarketDomain(item)}
+                      onClick={() => { void handleBuyMarketDomain(item); }}
                       className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-purple-500/20"
                     >
                       Buy Escrow

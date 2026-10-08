@@ -10,6 +10,7 @@ import {
   Scales,
 } from 'phosphor-react';
 import { cn } from '@/lib/utils';
+import { BELIZE_DISTRICTS } from '@/lib/districts';
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -34,16 +35,7 @@ export function CreatePostModal({ isOpen, onClose, onPost }: CreatePostModalProp
     { value: 'environment', label: 'Reef & Ecology', icon: Leaf, color: 'text-emerald-300 bg-emerald-500/15' },
   ];
 
-  const districts = [
-    'Belize City',
-    'Belmopan',
-    'Orange Walk',
-    'Corozal',
-    'Cayo',
-    'Stann Creek',
-    'Toledo',
-    'San Pedro / Islands'
-  ];
+const districts = BELIZE_DISTRICTS;
 
   const handleSubmit = async () => {
     if (!content.trim()) return;

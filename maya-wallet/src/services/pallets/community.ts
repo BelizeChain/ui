@@ -5,6 +5,7 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '@/lib/codec';
 
 export interface CommunityGroup {
   groupId: string;
@@ -26,23 +27,30 @@ export interface CommunityGroup {
 
 export interface CommunityProposal {
   proposalId: string;
-  groupId: string;
   proposer: string;
+  beneficiary: string;
+  proposalType: string;
   title: string;
   description: string;
-  requestedAmount: string; // From community treasury
-  category: string;
-  milestones: Milestone[];
-  votes: {
-    yes: number;
-    no: number;
-    abstain: number;
-  };
-  threshold: number; // Percentage required to pass
-  status: 'Draft' | 'Voting' | 'Approved' | 'Rejected' | 'InProgress' | 'Completed';
-  voteDeadline: number;
-  createdAt: number;
+  amount: string;
+  deposit: string;
+  status: 'EthicsReview' | 'Active' | 'Approved' | 'Rejected' | 'Cancelled';
+  submissionBlock: number;
+  votingDeadline: number;
+  votesFor: number;
+  votesAgainst: number;
+  totalVotes: number;
 }
+
+/** Proposal type codes accepted by `submitCommunityProposal` (u8). */
+export const COMMUNITY_PROPOSAL_TYPES = [
+  { code: 0, label: 'Local Project' },
+  { code: 1, label: 'Education Module' },
+  { code: 2, label: 'Green Initiative' },
+  { code: 3, label: 'Cultural Preservation' },
+  { code: 4, label: 'Disaster Relief' },
+  { code: 5, label: 'Community Bounty' },
+] as const;
 
 export interface Milestone {
   id: string;
@@ -87,18 +95,15 @@ export interface EducationModule {
   title: string;
   description: string;
   rewardAmount: string; // In DALLA
-  currentParticipants: number;
-  maxParticipants: number;
-  isActive: boolean;
-  completionRequirements: string[];
-  estimatedDuration: string; // e.g., "2 hours"
+  totalCompletions: number;
+  /** `null` means unlimited completions are allowed. */
+  maxCompletions: number | null;
+  active: boolean;
 }
 
 export interface UserEducationProgress {
   moduleId: number;
-  startedAt: number;
   completedAt?: number;
-  progress: number; // 0-100
   rewardClaimed: boolean;
 }
 
@@ -141,10 +146,10 @@ export async function getCommunityGroups(
   category?: string
 ): Promise<CommunityGroup[]> {
   const api = await initializeApi();
-  
+
   try {
     const groups: any = await api.query.community?.groups?.entries?.() || [];
-    
+
     if (!groups || groups.length === 0) {
       return [];
     }
@@ -159,7 +164,7 @@ export async function getCommunityGroups(
       .map(([key, value]: [any, any]) => {
         const groupId = key.args[0].toString();
         const data = value.unwrap();
-        
+
         return {
           groupId,
           name: data.name.toString(),
@@ -198,7 +203,7 @@ export async function createCommunityGroup(
   }
 ): Promise<{ hash: string; groupId: string }> {
   await initializeApi();  // connection init; result unused
-  
+
   try {
     void data;
     // The community pallet has no `createGroup` extrinsic; community groups
@@ -219,7 +224,7 @@ export async function joinCommunityGroup(
   groupId: string
 ): Promise<{ hash: string }> {
   await initializeApi();  // connection init; result unused
-  
+
   try {
     const injector = await web3FromAddress(address);
     // No `joinGroup` extrinsic; joining is implicit. Best-effort: record
@@ -237,49 +242,40 @@ export async function joinCommunityGroup(
  * Get community proposals
  */
 export async function getCommunityProposals(
-  groupId?: string,
   status?: string
 ): Promise<CommunityProposal[]> {
   const api = await initializeApi();
-  
+
   try {
-    const proposals: any = await api.query.community?.proposals?.entries?.() || [];
-    
+    // Real storage is `communityProposals`. The previous name (`proposals`) does
+    // not exist, so this always threw and silently returned an empty list.
+    const proposals: any = await api.query.community.communityProposals.entries();
+
     if (!proposals || proposals.length === 0) {
       return [];
     }
 
     return proposals
-      .filter(([, value]: [any, any]) => {
-        const data = value.unwrap();
-        const groupMatch = !groupId || data.groupId.toString() === groupId;
-        const statusMatch = !status || data.status.toString() === status;
-        return groupMatch && statusMatch;
-      })
       .map(([key, value]: [any, any]) => {
-        const proposalId = key.args[0].toString();
         const data = value.unwrap();
-        
         return {
-          proposalId,
-          groupId: data.groupId.toString(),
+          proposalId: key.args[0].toString(),
           proposer: data.proposer.toString(),
-          title: data.title.toString(),
-          description: data.description.toString(),
-          requestedAmount: formatBalance(data.requestedAmount.toString()),
-          category: data.category.toString(),
-          milestones: data.milestones.toHuman() as Milestone[],
-          votes: {
-            yes: data.votesYes.toNumber(),
-            no: data.votesNo.toNumber(),
-            abstain: data.votesAbstain.toNumber(),
-          },
-          threshold: data.threshold.toNumber(),
-          status: data.status.toString() as any,
-          voteDeadline: data.voteDeadline.toNumber(),
-          createdAt: data.createdAt.toNumber(),
+          beneficiary: data.beneficiary.toString(),
+          proposalType: data.proposalType.toString(),
+          title: bytesToString(data.title),
+          description: bytesToString(data.description),
+          amount: formatBalance(data.amount.toString()),
+          deposit: formatBalance(data.deposit.toString()),
+          status: data.status.toString() as CommunityProposal['status'],
+          submissionBlock: data.submissionBlock.toNumber(),
+          votingDeadline: data.votingDeadline.toNumber(),
+          votesFor: data.votesFor.toNumber(),
+          votesAgainst: data.votesAgainst.toNumber(),
+          totalVotes: data.totalVotes.toNumber(),
         };
-      });
+      })
+      .filter((p: CommunityProposal) => !status || p.status === status);
   } catch (error) {
     console.error('Failed to fetch community proposals:', error);
     return [];
@@ -291,29 +287,24 @@ export async function getCommunityProposals(
  */
 export async function submitCommunityProposal(
   address: string,
-  groupId: string,
   data: {
+    proposalTypeCode: number;
+    beneficiary: string;
+    amount: string;
     title: string;
     description: string;
-    requestedAmount: string;
-    category: string;
-    milestones: Array<{ description: string; amount: string; deadline: number }>;
   }
 ): Promise<{ hash: string; proposalId: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
-    const amountInPlanck = BigInt(Math.floor(parseFloat(data.requestedAmount) * 1e12));
+    const amountInPlanck = BigInt(Math.floor(parseFloat(data.amount) * 1e12));
     // Real signature: submitCommunityProposal(proposalTypeCode:u8, beneficiary:AccountId,
     //   amount:u128, title:Bytes, description:Bytes).
-    // Group/milestones are not represented on chain; persist them off-chain
-    // and use proposalTypeCode=0 (default).
-    void groupId; void data.milestones; void data.category;
-    const proposalTypeCode = 0;
     const tx = api.tx.community.submitCommunityProposal(
-      proposalTypeCode,
-      address,
+      data.proposalTypeCode,
+      data.beneficiary,
       amountInPlanck.toString(),
       data.title,
       data.description,
@@ -323,7 +314,7 @@ export async function submitCommunityProposal(
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let proposalId = '';
-          
+
           events.forEach(({ event }) => {
             if (api.events.community?.ProposalSubmitted?.is(event)) {
               const [, id] = event.data;
@@ -353,7 +344,7 @@ export async function voteOnCommunityProposal(
   vote: 'Yes' | 'No' | 'Abstain'
 ): Promise<{ hash: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real signature: voteCommunityProposal(proposalId:u32, approve:bool).
@@ -388,7 +379,7 @@ export async function contributeToCommunityFund(
   amount: string
 ): Promise<{ hash: string }> {
   await initializeApi();  // connection init; result unused
-  
+
   try {
     const injector = await web3FromAddress(address);
     // No `contributeFund` extrinsic; funding flows through proposal execution
@@ -411,10 +402,10 @@ export async function getCommunityEvents(
   upcoming: boolean = true
 ): Promise<CommunityEvent[]> {
   const api = await initializeApi();
-  
+
   try {
     const events: any = await api.query.community?.events?.entries?.() || [];
-    
+
     if (!events || events.length === 0) {
       return [];
     }
@@ -431,7 +422,7 @@ export async function getCommunityEvents(
       .map(([key, value]: [any, any]) => {
         const eventId = key.args[0].toString();
         const data = value.unwrap();
-        
+
         return {
           eventId,
           groupId: data.groupId.toString(),
@@ -462,7 +453,7 @@ export async function rsvpToEvent(
   eventId: string
 ): Promise<{ hash: string }> {
   await initializeApi();  // connection init; result unused
-  
+
   try {
     const injector = await web3FromAddress(address);
     // No `rsvpEvent` extrinsic on chain; events live off-chain. Throw so the
@@ -496,10 +487,10 @@ function formatBalance(planck: string): string {
  */
 export async function getEducationModules(): Promise<EducationModule[]> {
   const api = await initializeApi();
-  
+
   try {
     const modules: any = await api.query.community?.educationModules?.entries();
-    
+
     if (!modules || modules.length === 0) {
       return [];
     }
@@ -507,17 +498,17 @@ export async function getEducationModules(): Promise<EducationModule[]> {
     return modules.map(([key, value]: [any, any]) => {
       const moduleId = key.args[0].toNumber();
       const data = value.unwrap();
-      
+
       return {
         moduleId,
-        title: data.title.toString(),
-        description: data.description.toString(),
+        title: bytesToString(data.title),
+        description: bytesToString(data.description),
         rewardAmount: formatBalance(data.rewardAmount.toString()),
-        currentParticipants: data.currentParticipants.toNumber(),
-        maxParticipants: data.maxParticipants.toNumber(),
-        isActive: data.isActive.toHuman(),
-        completionRequirements: data.completionRequirements?.toHuman() as string[] || [],
-        estimatedDuration: data.estimatedDuration?.toString() || 'Unknown',
+        totalCompletions: data.totalCompletions.toNumber(),
+        maxCompletions: data.maxCompletions.isSome
+          ? data.maxCompletions.unwrap().toNumber()
+          : null,
+        active: data.active.valueOf() as boolean,
       };
     });
   } catch (error) {
@@ -533,10 +524,12 @@ export async function getUserEducationProgress(
   address: string
 ): Promise<UserEducationProgress[]> {
   const api = await initializeApi();
-  
+
   try {
-    const progress: any = await api.query.community?.userEducationProgress?.entries(address);
-    
+    // Real storage is `completedEducation` (StorageDoubleMap AccountId, u32 ->
+    // CompletionData). `userEducationProgress` does not exist on this chain.
+    const progress: any = await api.query.community.completedEducation.entries(address);
+
     if (!progress || progress.length === 0) {
       return [];
     }
@@ -544,13 +537,11 @@ export async function getUserEducationProgress(
     return progress.map(([key, value]: [any, any]) => {
       const moduleId = key.args[1].toNumber();
       const data = value.unwrap();
-      
+
       return {
         moduleId,
-        startedAt: data.startedAt.toNumber(),
         completedAt: data.completedAt?.toNumber(),
-        progress: data.progress.toNumber(),
-        rewardClaimed: data.rewardClaimed.toHuman(),
+        rewardClaimed: data.rewardClaimed.valueOf() as boolean,
       };
     });
   } catch (error) {
@@ -567,7 +558,7 @@ export async function completeEducationModule(
   moduleId: number
 ): Promise<{ hash: string; rewardAmount: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real signature: completeEducationModule(moduleId:u32, completionProof:Bytes).
@@ -577,7 +568,7 @@ export async function completeEducationModule(
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let rewardAmount = '0';
-          
+
           events.forEach(({ event }) => {
             if (api.events.community?.EducationModuleCompleted?.is(event)) {
               const [, , reward] = event.data;
@@ -603,10 +594,10 @@ export async function completeEducationModule(
  */
 export async function getGreenProjects(): Promise<GreenProject[]> {
   const api = await initializeApi();
-  
+
   try {
     const projects: any = await api.query.community?.greenProjects?.entries();
-    
+
     if (!projects || projects.length === 0) {
       return [];
     }
@@ -614,7 +605,7 @@ export async function getGreenProjects(): Promise<GreenProject[]> {
     return projects.map(([key, value]: [any, any]) => {
       const projectId = key.args[0].toNumber();
       const data = value.unwrap();
-      
+
       return {
         projectId,
         name: data.name.toString(),
@@ -643,7 +634,7 @@ export async function contributeToGreenProject(
   amount: string
 ): Promise<{ hash: string; newTotal: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
     // Real signature: contributeToGreenProject(projectId:u32, amount:u64).
@@ -656,7 +647,7 @@ export async function contributeToGreenProject(
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
           let newTotal = '0';
-          
+
           events.forEach(({ event }) => {
             if (api.events.community?.GreenProjectContribution?.is(event)) {
               const [, , , total] = event.data;
@@ -684,10 +675,10 @@ export async function getProjectContributors(
   projectId: number
 ): Promise<Array<{ address: string; amount: string; timestamp: number }>> {
   const api = await initializeApi();
-  
+
   try {
     const contributors: any = await api.query.community?.greenProjectContributors?.entries(projectId);
-    
+
     if (!contributors || contributors.length === 0) {
       return [];
     }
@@ -695,7 +686,7 @@ export async function getProjectContributors(
     return contributors.map(([key, value]: [any, any]) => {
       const address = key.args[1].toString();
       const data = value.unwrap();
-      
+
       return {
         address,
         amount: formatBalance(data.amount.toString()),
@@ -713,16 +704,16 @@ export async function getProjectContributors(
  */
 export async function getUserSRS(address: string): Promise<SRSInfo | null> {
   const api = await initializeApi();
-  
+
   try {
     const srsData: any = await api.query.community?.socialResponsibilityScores(address);
-    
+
     if (!srsData || srsData.isNone) {
       return null;
     }
 
     const data = srsData.unwrap();
-    
+
     return {
       score: data.score.toNumber(),
       tier: data.tier.toNumber(),
@@ -747,11 +738,11 @@ export async function calculateEffectiveFee(
   originalFee: string
 ): Promise<{ effectiveFee: string; discount: string; discountPercent: number }> {
   const api = await initializeApi();
-  
+
   try {
     const feeInPlanck = parseFloat(originalFee) * Math.pow(10, 12);
     const result: any = await api.query.community?.calculateEffectiveFee(address, feeInPlanck);
-    
+
     if (!result) {
       return {
         effectiveFee: originalFee,
@@ -763,7 +754,7 @@ export async function calculateEffectiveFee(
     const [effectiveFee, discountPercent] = result;
     const effective = formatBalance(effectiveFee.toString());
     const discountAmount = (parseFloat(originalFee) - parseFloat(effective)).toFixed(2);
-    
+
     return {
       effectiveFee: effective,
       discount: discountAmount,
