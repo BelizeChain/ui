@@ -20,21 +20,23 @@ export interface ConversionResult {
 const EXCHANGE_RATES_KEY = 'maya-exchange-rates';
 const CONVERSION_HISTORY_KEY = 'maya-conversion-history';
 
-// Default exchange rates (bBZD is strictly pegged: 1 bBZD = 1 BZD = $0.50 USD; DALLA is unpegged floating crypto)
-const DEFAULT_RATES: Record<string, number> = {
-  'bBZD/USD': 0.50, // 1 bBZD = 0.50 USD (pegged stablecoin)
-  'USD/bBZD': 2.00, // 1 USD = 2.00 bBZD
-  'bBZD/BZD': 1.00, // 1 bBZD = 1 BZD (pegged 1:1)
-  'BZD/bBZD': 1.00, // 1 BZD = 1 bBZD
-  'BZD/USD': 0.50,  // 1 BZD = 0.50 USD (statutory peg)
-  'USD/BZD': 2.00,  // 1 USD = 2.00 BZD
-  // DALLA: Unpegged floating native crypto (Initial market price discovery baseline)
-  'DALLA/USD': 1.00, // 1 DALLA = $1.00 USD (floating)
-  'USD/DALLA': 1.00, // 1 USD = 1.00 DALLA
-  'DALLA/bBZD': 2.00, // 1 DALLA ($1.00) = 2.00 bBZD ($0.50)
-  'bBZD/DALLA': 0.50, // 1 bBZD = 0.50 DALLA
-  'DALLA/BZD': 2.00,  // 1 DALLA = 2.00 BZD
-  'BZD/DALLA': 0.50,  // 1 BZD = 0.50 DALLA
+/**
+ * Statutory pegs only.
+ *
+ * The Belize Dollar is fixed by law at BZ$2.00 = US$1.00 and bBZD is pegged 1:1
+ * to it, so these pairs have a known answer without an oracle. DALLA is an
+ * unpegged floating asset — an earlier version of this file hardcoded
+ * `DALLA/USD: 1.00` as a "market price discovery baseline", which was invented.
+ * DALLA pairs are now left to the oracle and resolve to
+ * 'Oracle Rate Unavailable' when no feed exists.
+ */
+const STATUTORY_PEGS: Record<string, number> = {
+  'bBZD/USD': 0.5,
+  'USD/bBZD': 2.0,
+  'bBZD/BZD': 1.0,
+  'BZD/bBZD': 1.0,
+  'BZD/USD': 0.5,
+  'USD/BZD': 2.0,
 };
 
 // Get current exchange rates from Oracle pallet
@@ -70,17 +72,17 @@ export async function getExchangeRates(): Promise<ExchangeRate[]> {
 export function updateExchangeRate(from: string, to: string, rate: number, source: 'oracle' | 'manual' = 'oracle'): void {
   const pair = `${from}/${to}`;
   const rates = getStoredRates();
-  
+
   const newRate: ExchangeRate = {
     pair,
     rate,
     lastUpdated: Date.now(),
   };
-  
+
   // Remove old rate for this pair
   const filtered = rates.filter(r => r.pair !== pair);
   filtered.push(newRate);
-  
+
   saveExchangeRates(filtered);
   walletLogger.info('Exchange rate updated', { pair, rate });
 }
@@ -101,12 +103,12 @@ export async function convertCurrency(
       timestamp: Date.now(),
     };
   }
-  
+
   // Use Oracle service for real-time rates
   try {
     const oracleRate = await OracleService.getExchangeRate(from, to);
     const convertedAmount = amount * oracleRate.rate;
-    
+
     const result: ConversionResult = {
       fromAmount: amount.toString(),
       fromCurrency: from,
@@ -115,7 +117,7 @@ export async function convertCurrency(
       rate: oracleRate.rate,
       timestamp: oracleRate.timestamp,
     };
-    
+
     walletLogger.info('Currency converted', { from, to, amount, result: result.toAmount, source: oracleRate.source });
     return result;
   } catch (error) {
@@ -129,31 +131,22 @@ export function getSupportedCurrencies(): string[] {
   return ['DALLA', 'bBZD', 'USD', 'BZD'];
 }
 
-// Get all available exchange rates
+/**
+ * Local (wallet-stored) rates merged with the statutory pegs.
+ *
+ * A peg has no observation time, so `lastUpdated` is 0 for peg-sourced rows —
+ * stamping `Date.now()` on them made them look like freshly observed oracle
+ * rates.
+ */
 export function getAllExchangeRates(): ExchangeRate[] {
-  const rates = getStoredRates();
-  
-  // Merge with default rates
-  const pairs = new Set<string>();
-  const merged: ExchangeRate[] = [];
-  
-  // Add stored rates first
-  for (const rate of rates) {
-    pairs.add(rate.pair);
-    merged.push(rate);
+  const merged = [...getStoredRates()];
+  const known = new Set(merged.map((r) => r.pair));
+
+  for (const [pair, rate] of Object.entries(STATUTORY_PEGS)) {
+    if (known.has(pair)) continue;
+    merged.push({ pair, rate, lastUpdated: 0 });
   }
-  
-  // Add default rates that aren't stored
-  for (const [pair, rate] of Object.entries(DEFAULT_RATES)) {
-    if (!pairs.has(pair)) {
-      merged.push({
-        pair,
-        rate,
-        lastUpdated: Date.now(),
-      });
-    }
-  }
-  
+
   return merged;
 }
 
@@ -176,10 +169,10 @@ export async function calculateCrossRate(from: string, to: string, via: string):
 export function getConversionHistory(limit: number = 50): ConversionResult[] {
   try {
     if (typeof window === 'undefined') return [];
-    
+
     const stored = localStorage.getItem(CONVERSION_HISTORY_KEY);
     if (!stored) return [];
-    
+
     const history = JSON.parse(stored);
     // Timestamp is already a number (Date.now())
     return history.slice(0, limit);
@@ -204,10 +197,10 @@ function saveConversionToHistory(conversion: ConversionResult): void {
   try {
     const history = getConversionHistory();
     history.unshift(conversion); // Add to beginning
-    
+
     // Keep only last 100 conversions
     const trimmed = history.slice(0, 100);
-    
+
     localStorage.setItem(CONVERSION_HISTORY_KEY, JSON.stringify(trimmed));
   } catch (error) {
     walletLogger.error('Failed to save conversion history', error);
@@ -218,10 +211,10 @@ function saveConversionToHistory(conversion: ConversionResult): void {
 function getStoredRates(): ExchangeRate[] {
   try {
     if (typeof window === 'undefined') return [];
-    
+
     const stored = localStorage.getItem(EXCHANGE_RATES_KEY);
     if (!stored) return [];
-    
+
     // Timestamps are already numbers (Date.now())
     const rates = JSON.parse(stored);
     return rates;

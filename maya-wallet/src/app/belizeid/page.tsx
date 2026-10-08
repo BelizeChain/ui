@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -8,9 +8,14 @@ import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   getBelizeID,
   getKYCStatus,
+  getSSNRecord,
+  getPassportRecord,
   type BelizeID,
   type KYCStatus,
+  type PassportRecord,
+  type SSNRecord,
 } from '@/services/pallets/identity';
+import { getUserLandTitles, type LandTitle } from '@/services/pallets/landledger';
 import {
   ShieldCheck,
   Download,
@@ -31,9 +36,10 @@ interface VerifiableCredential {
   title: string;
   issuer: string;
   issueDate: string;
-  status: 'Active' | 'Revoked';
-  zkSupported: boolean;
+  /** Verbatim pallet status — attestations can be Active, Suspended, Expired, … */
+  status: string;
   fields: Record<string, string>;
+  /** Issuer anchor hash from the pallet. Empty when the pallet records none. */
   signature: string;
 }
 
@@ -55,26 +61,40 @@ export default function BelizeIDPage() {
   } | null>(null);
   const [isGeneratingProof] = useState(false);
 
-  const didString = `did:belize:${selectedAccount?.address || '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'}`;
+  // Real on-chain attestations backing the credential list.
+  const [ssnRecord, setSsnRecord] = useState<SSNRecord | null>(null);
+  const [passportRecord, setPassportRecord] = useState<PassportRecord | null>(null);
+  const [landTitles, setLandTitles] = useState<LandTitle[]>([]);
+
+  // Hoisted so the callback deps match the compiler-inferred dependency
+  // (react-hooks/preserve-manual-memoization).
+  const address = selectedAccount?.address;
+
+  const didString = `did:belize:${address ?? ''}`;
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
-      if (!selectedAccount?.address) {
+      if (!address) {
         setIdLoading(false);
         return;
       }
       setIdLoading(true);
       try {
-        const [id, kyc] = await Promise.all([
-          getBelizeID(selectedAccount.address),
-          getKYCStatus(selectedAccount.address),
+        const [id, kyc, ssn, passport, titles] = await Promise.all([
+          getBelizeID(address),
+          getKYCStatus(address),
+          getSSNRecord(address),
+          getPassportRecord(address),
+          getUserLandTitles(address),
         ]);
-        if (!cancelled) {
-          setBelizeID(id);
-          setKycStatus(kyc);
-          setIdError('');
-        }
+        if (cancelled) return;
+        setBelizeID(id);
+        setKycStatus(kyc);
+        setSsnRecord(ssn);
+        setPassportRecord(passport);
+        setLandTitles(titles);
+        setIdError('');
       } catch (err) {
         if (!cancelled) setIdError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -82,58 +102,114 @@ export default function BelizeIDPage() {
       }
     };
     fetchData();
-    return () => { cancelled = true; };
-  }, [selectedAccount?.address]);
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
-  const credentials: VerifiableCredential[] = [
-    {
-      id: 'cred-1',
-      title: 'Belize Digital Driver\'s License',
-      issuer: 'Department of Transport (Belmopan)',
-      issueDate: 'Jan 15, 2026',
-      status: 'Active',
-      zkSupported: true,
-      signature: '0x8f2910fa8921b349201948201928409182390148209384028309482093840923',
-      fields: {
-        'Full Name': 'Wicked Sovereign Citizen',
-        'Date of Birth': '1990-09-21 (Protected via ZK)',
-        'Class': 'A / B (Motor Vehicles & Light Trucks)',
-        'License No': 'BZ-DL-849204',
-        'Jurisdiction': 'Belize District',
-        'Organ Donor': 'Yes',
-      },
-    },
-    {
-      id: 'cred-2',
-      title: 'National Voter Registration Card',
-      issuer: 'Elections & Boundaries Commission',
-      issueDate: 'Feb 10, 2026',
-      status: 'Active',
-      zkSupported: true,
-      signature: '0x3289ab71f829c488e91024823901482093840283094820938409238409238409',
-      fields: {
-        'Constituency': 'Belize Rural South (San Pedro & Caye Caulker)',
-        'Voter ID': 'BZ-VOTE-2026-99',
-        'Polling Station': 'San Pedro High School',
-        'Electoral Status': 'Registered Citizen',
-      },
-    },
-    {
-      id: 'cred-3',
-      title: 'Belize Land Title Deed Ownership',
-      issuer: 'Ministry of Natural Resources (LandLedger)',
-      issueDate: 'Aug 24, 2026',
-      status: 'Active',
-      zkSupported: true,
-      signature: '0x45a9018492018492018492018492018492018492018492018492018492018492',
-      fields: {
-        'Parcel ID': 'San Pedro Ambergris #482A',
-        'Tenure Type': 'Freehold Absolute Title',
-        'Area': '0.75 Acres Waterfront',
-        'Deed Hash': '0x8f2d91c4a019b882391028391029381029381029',
-      },
-    },
-  ];
+  /**
+   * Verifiable credentials derived from chain state.
+   *
+   * The wallet cannot mint credentials: both `identity.identityOf` and the
+   * attestation maps are written by registered issuers. Only credentials that
+   * actually exist on chain are listed — an earlier version hardcoded a
+   * driver's licence, a voter registration card and a land deed with invented
+   * licence numbers and fabricated signature hashes.
+   */
+  const credentials: VerifiableCredential[] = useMemo(() => {
+    const list: VerifiableCredential[] = [];
+
+    if (belizeID) {
+      list.push({
+        id: `belizeid-${belizeID.id}`,
+        title: 'BelizeID Registration',
+        issuer: 'BelizeChain identity pallet',
+        issueDate: 'On chain',
+        status: 'Active',
+        signature: '',
+        fields: {
+          'Identity ID': belizeID.id,
+          'Registered Name': belizeID.name || '—',
+          'Linked Accounts': String(belizeID.accounts.length),
+          'DID Doc CID': belizeID.didDocCid || '—',
+        },
+      });
+    }
+
+    if (ssnRecord) {
+      list.push({
+        id: 'ssn-attestation',
+        title: 'SSN Attestation',
+        issuer: ssnRecord.issuer,
+        issueDate: ssnRecord.issuedAt ? new Date(ssnRecord.issuedAt * 1000).toLocaleDateString() : '—',
+        status: ssnRecord.verified ? 'Active' : ssnRecord.status,
+        signature: ssnRecord.anchor,
+        fields: {
+          'Standard Version': String(ssnRecord.standardVersion),
+          'Format OK': ssnRecord.formatOk ? 'yes' : 'no',
+          'Hash': ssnRecord.hash,
+          'Valid Until': ssnRecord.validUntil ? new Date(ssnRecord.validUntil * 1000).toLocaleDateString() : '—',
+          'Status': ssnRecord.status,
+        },
+      });
+    }
+
+    if (passportRecord) {
+      list.push({
+        id: 'passport-attestation',
+        title: 'Passport Attestation',
+        issuer: passportRecord.issuer,
+        issueDate: passportRecord.issuedAt ? new Date(passportRecord.issuedAt * 1000).toLocaleDateString() : '—',
+        status: passportRecord.verified ? 'Active' : passportRecord.status,
+        signature: passportRecord.anchor,
+        fields: {
+          'Standard Version': String(passportRecord.standardVersion),
+          'Format OK': passportRecord.formatOk ? 'yes' : 'no',
+          'Hash': passportRecord.hash,
+          'Valid Until': passportRecord.validUntil ? new Date(passportRecord.validUntil * 1000).toLocaleDateString() : '—',
+          'Status': passportRecord.status,
+        },
+      });
+    }
+
+    if (kycStatus && kycStatus.status !== 'None') {
+      list.push({
+        id: 'kyc-verification',
+        title: 'KYC Verification',
+        issuer: 'BelizeChain compliance pallet',
+        issueDate: kycStatus.verificationDate
+          ? new Date(kycStatus.verificationDate * 1000).toLocaleDateString()
+          : '—',
+        status: kycStatus.status,
+        signature: '',
+        fields: {
+          Level: kycStatus.level,
+          Status: kycStatus.status,
+          Documents: kycStatus.documents.length > 0 ? kycStatus.documents.join(', ') : '—',
+        },
+      });
+    }
+
+    for (const title of landTitles) {
+      list.push({
+        id: `land-${title.titleId}`,
+        title: `Land Title — property #${title.titleId}`,
+        issuer: 'BelizeChain landLedger pallet',
+        issueDate: title.registeredAt ? new Date(title.registeredAt * 1000).toLocaleDateString() : '—',
+        status: title.governmentVerified ? 'Active' : 'Unverified',
+        signature: '',
+        fields: {
+          'Title Number': title.titleNumber || '—',
+          'Property Type': title.propertyType,
+          'Zoning': title.zoning,
+          'Area (m²)': String(title.areaSqm),
+          'Assessed Value': `${title.assessedValue} bBZD`,
+        },
+      });
+    }
+
+    return list;
+  }, [belizeID, ssnRecord, passportRecord, kycStatus, landTitles]);
 
   // CONFIG-002: no ZK circuit runs in the browser. Instead of fabricating a
   // fake "0xZK_SNARK_GROTH16_..._VALIDATED" proof, we show honestly what a
@@ -205,13 +281,13 @@ export default function BelizeIDPage() {
                   W3C DID
                 </span>
               </h1>
-              <p className="text-xs text-slate-400">Verifiable Credentials • Zero-Knowledge Snarks • ICAO 9303 Biometric Anchor</p>
+              <p className="text-xs text-slate-400">On-chain identity • issuer attestations • selective disclosure</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-teal-500/15 text-teal-300 border border-teal-500/30 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-[0_0_15px_rgba(20,184,166,0.2)]">
               <ShieldCheck size={16} weight="bold" />
-              On-Chain Attested
+              {belizeID ? 'On-Chain Identity Found' : 'No On-Chain Identity'}
             </span>
           </div>
         </div>
@@ -227,9 +303,11 @@ export default function BelizeIDPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider">
-                  Sovereign Digital Passport
+                  BelizeID
                 </span>
-                <span className="text-xs text-slate-400 font-mono">Series BZ-2026</span>
+                {belizeID && (
+                  <span className="text-xs text-slate-400 font-mono">Identity #{belizeID.id}</span>
+                )}
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 {selectedAccount.name || 'Sovereign Citizen'}
@@ -254,11 +332,11 @@ export default function BelizeIDPage() {
                 {(selectedAccount.name || 'BZ').charAt(0).toUpperCase()}
               </div>
               <div className="text-xs space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Security Protocol</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">KYC Level</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <ShieldCheck size={14} weight="fill" /> Ed25519 & Groth16
+                  <ShieldCheck size={14} weight="fill" /> {kycStatus?.level ?? '—'}
                 </span>
-                <span className="text-slate-400 text-[11px] block">Level 4 Sovereign Anchor</span>
+                <span className="text-slate-400 text-[11px] block">Status: {kycStatus?.status ?? '—'}</span>
               </div>
             </div>
           </div>
@@ -277,25 +355,27 @@ export default function BelizeIDPage() {
           <div className="bg-slate-900/80 border border-teal-500/20 rounded-2xl p-4 space-y-1 backdrop-blur-xl">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Verifiable Credentials</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-white font-mono">3 Active</span>
+              <span className="text-lg font-bold text-white font-mono">{credentials.length}</span>
             </div>
-            <span className="text-[11px] text-teal-300 font-semibold">Government Certified</span>
+            <span className="text-[11px] text-teal-300 font-semibold">From on-chain attestations</span>
           </div>
 
           <div className="bg-slate-900/80 border border-teal-500/20 rounded-2xl p-4 space-y-1 backdrop-blur-xl">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">ZK Privacy Shield</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">SSN / Passport</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-teal-400">Groth16 Snarks</span>
+              <span className="text-lg font-bold text-teal-400 font-mono">
+                {[ssnRecord?.verified, passportRecord?.verified].filter(Boolean).length}/2
+              </span>
             </div>
-            <span className="text-[11px] text-slate-400 block">Zero Data Leakage</span>
+            <span className="text-[11px] text-slate-400 block">Active attestations</span>
           </div>
 
           <div className="bg-slate-900/80 border border-teal-500/20 rounded-2xl p-4 space-y-1 backdrop-blur-xl">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Biometric Anchor</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Land Titles Held</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-cyan-300">ICAO 9303</span>
+              <span className="text-lg font-bold text-cyan-300 font-mono">{landTitles.length}</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">NFC e-Passport Linked</span>
+            <span className="text-[11px] text-slate-400 block">landLedger register</span>
           </div>
         </div>
 
@@ -312,10 +392,10 @@ export default function BelizeIDPage() {
               }`}
             >
               {tab === 'credentials'
-                ? 'Verifiable Credentials (3)'
+                ? `Verifiable Credentials (${credentials.length})`
                 : tab === 'did'
                 ? 'W3C DID Document'
-                : 'Zero-Knowledge Studio'}
+                : 'Selective Disclosure'}
             </button>
           ))}
         </div>
@@ -328,16 +408,16 @@ export default function BelizeIDPage() {
                 On-chain identity lookup failed: {idError}
               </div>
             )}
-            {belizeID ? (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs space-y-1">
-                <span className="font-bold block">On-chain BelizeID verified</span>
-                <span className="text-slate-300 block">
-                  KYC: {kycStatus?.status ?? 'unknown'} ({kycStatus?.level ?? '—'}) • Name: {belizeID.name || '—'} • SSN {belizeID.ssnVerified ? 'verified' : 'unverified'} • Passport {belizeID.passportVerified ? 'verified' : 'unverified'}
-                </span>
-              </div>
-            ) : (
+            {!belizeID && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
-                No BelizeID registered for this address on chain. Cards below are design previews — Transport / Elections / LandLedger have not issued credentials for this account.
+                No BelizeID is registered for this address on chain. Any credentials shown below come
+                from other pallets (compliance KYC, landLedger titles); issuer attestations require a
+                registered issuer account.
+              </div>
+            )}
+            {credentials.length === 0 && (
+              <div className="p-8 bg-slate-900/70 border border-teal-500/20 rounded-3xl text-center text-slate-400 text-xs">
+                This account holds no verifiable credentials on chain.
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -397,7 +477,7 @@ export default function BelizeIDPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Verified Sovereign Attributes</span>
+                    <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">On-chain fields</span>
                     <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-teal-500/20 space-y-2 font-mono text-[11px]">
                       {Object.entries(selectedCred.fields).map(([k, v]) => (
                         <div key={k} className="flex justify-between border-b border-slate-900 pb-1.5 last:border-0 last:pb-0">
@@ -408,18 +488,20 @@ export default function BelizeIDPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Issuer Ed25519 Signature</span>
-                    <p className="bg-slate-950/90 p-2.5 rounded-xl border border-teal-500/20 font-mono text-[10px] text-cyan-300 break-all">
-                      {selectedCred.signature}
-                    </p>
-                  </div>
+                  {selectedCred.signature && (
+                    <div className="space-y-1">
+                      <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Issuer anchor</span>
+                      <p className="bg-slate-950/90 p-2.5 rounded-xl border border-teal-500/20 font-mono text-[10px] text-cyan-300 break-all">
+                        {selectedCred.signature}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3 pt-2">
-                    {selectedCred.id === 'cred-3' && (
+                    {selectedCred.id.startsWith('land-') && (
                       <Link href="/landledger" className="col-span-2">
                         <button className="w-full py-2.5 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all">
-                          <House size={15} weight="bold" /> Open Title in LandLedger Cadastre Studio
+                          <House size={15} weight="bold" /> Open property in LandLedger
                         </button>
                       </Link>
                     )}
@@ -452,9 +534,13 @@ export default function BelizeIDPage() {
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Globe size={22} className="text-cyan-400" />
-                  W3C Decentralized Identifier Document
+                  Decentralized Identifier
                 </h3>
-                <p className="text-slate-400 mt-1">Cryptographic public keys and service endpoints registered on BelizeChain.</p>
+                <p className="text-slate-400 mt-1">
+                  The identifier is derived from your SS58 address. The identity pallet stores a DID
+                  document <em>CID</em>, not the document itself, and this wallet does not synthesise
+                  a public key or a service endpoint that the chain never recorded.
+                </p>
               </div>
 
               <button
@@ -468,32 +554,26 @@ export default function BelizeIDPage() {
               </button>
             </div>
 
-            <pre className="bg-slate-950/90 p-5 rounded-2xl border border-teal-500/20 font-mono text-teal-300 text-[11px] overflow-x-auto leading-relaxed shadow-inner">
-{`{
-  "@context": [
-    "https://www.w3.org/ns/did/v1",
-    "https://w3id.org/security/suites/ed25519-2020/v1"
-  ],
-  "id": "${didString}",
-  "verificationMethod": [{
-    "id": "${didString}#keys-1",
-    "type": "Ed25519VerificationKey2020",
-    "controller": "${didString}",
-    "publicKeyMultibase": "z6MkpTHR8VNsBxYAAWHuEc2KaLfNGoMoV"
-  }],
-  "authentication": [
-    "${didString}#keys-1"
-  ],
-  "assertionMethod": [
-    "${didString}#keys-1"
-  ],
-  "service": [{
-    "id": "${didString}#belize-messaging",
-    "type": "BelizeMeshRelay",
-    "serviceEndpoint": "https://relay.belizechain.org/did/endpoint"
-  }]
-}`}
-            </pre>
+            <div className="bg-slate-950/90 p-5 rounded-2xl border border-teal-500/20 font-mono text-[11px] space-y-2 overflow-x-auto">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-400">id</span>
+                <span className="text-teal-300 break-all">{didString}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-400">verificationMethod</span>
+                <span className="text-slate-300">sr25519 (Substrate account key)</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-400">DID document CID</span>
+                <span className={belizeID?.didDocCid ? 'text-cyan-300 break-all' : 'text-amber-300'}>
+                  {belizeID?.didDocCid || 'not published on chain'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-400">Identity id</span>
+                <span className="text-slate-300">{belizeID?.id ?? '—'}</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -562,13 +642,13 @@ export default function BelizeIDPage() {
                 <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                   <span className="text-teal-300 font-bold flex items-center gap-2">
                     <Sparkle size={16} />
-                    {zkProofGenerated.type} (Groth16 Snark)
+                    {zkProofGenerated.type}
                   </span>
-                  <span className="text-emerald-400 font-bold">Cryptographically Valid</span>
+                  <span className="text-amber-300 font-bold">Design preview only</span>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-slate-400 text-[10px] uppercase font-bold">Public Disclosures (Zero Private Leakage)</span>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold">What a proof would attest</span>
                   <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-1">
                     {Object.entries(zkProofGenerated.publicInputs).map(([k, v]) => (
                       <div key={k} className="flex justify-between text-[11px]">
@@ -580,7 +660,7 @@ export default function BelizeIDPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-slate-400 text-[10px] uppercase font-bold">Snark Proof Payload Hex</span>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold">Proof payload</span>
                   <p className="text-teal-300 bg-slate-900/90 p-3 rounded-xl border border-slate-800 break-all text-[10px]">
                     {zkProofGenerated.proof}
                   </p>
