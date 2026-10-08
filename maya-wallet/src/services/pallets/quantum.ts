@@ -117,7 +117,7 @@ export function executeKinichCompression(rawPayload: string): QuantumCompression
   // Target 10x ratio with Kinich surface code entropy encoder
   const compressedSize = Math.max(16, Math.round(originalSize / 9.8));
   const ratio = parseFloat((originalSize / compressedSize).toFixed(2));
-  
+
   return {
     originalSizeBytes: originalSize,
     compressedSizeBytes: compressedSize,
@@ -179,10 +179,10 @@ export async function submitQuantumJob(
   priority: 'Low' | 'Medium' | 'High' = 'Medium'
 ): Promise<{ hash: string; jobId: string; estimatedCost: string }> {
   const api = await initializeApi();
-  
+
   try {
     const injector = await web3FromAddress(address);
-    
+
     // Real signature: submitQuantumJob(jobId:Bytes, backendIndex:u8, circuitHash:[u8;32],
     //   numQubits:u16, circuitDepth:u32, numShots:u32).
     void priority;
@@ -209,7 +209,7 @@ export async function submitQuantumJob(
         if (status.isInBlock) {
           let jobId = '';
           let estimatedCost = '0.00';
-          
+
           events.forEach(({ event }) => {
             if (api.events.quantum?.JobSubmitted?.is(event)) {
               const [, id, cost] = event.data;

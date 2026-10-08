@@ -5,6 +5,7 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '../../lib/codec';
 
 /**
  * Display name for this chain.
@@ -201,16 +202,29 @@ export const SUPPORTED_EXPANDED_CHAINS: ChainMetadata[] = [
   },
 ];
 
+/**
+ * Mirrors `interoperability.chainConfigurations: BridgeChain -> ChainConfig`.
+ *
+ * `status` is derived from `enabled` — the pallet stores a boolean, not a
+ * lifecycle state — and there is no daily/transaction limit or per-chain
+ * asset list. An earlier version of this file read a non-existent `bridges`
+ * map and, when that failed, returned a hardcoded registry that declared all
+ * 50+ chains Active with invented 10,000,000 / 500,000 limits.
+ */
 export interface Bridge {
+  /** The `BridgeChain` variant name, e.g. 'Ethereum'. */
   id: string;
   name: string;
   chain: string;
-  status: 'Active' | 'Paused' | 'Maintenance';
-  supportedAssets: string[];
-  dailyLimit: string;
-  transactionLimit: string;
-  fee: string; // Percentage
-  estimatedTime: number; // Minutes
+  status: 'Active' | 'Disabled';
+  /** Largest single transfer accepted, in DALLA. */
+  maxAmount: string;
+  minConfirmations: number;
+  /** Fee in basis points. */
+  feeRateBps: number;
+  pqSignaturesRequired: number;
+  rpcEndpoint: string;
+  contractAddress?: string;
 }
 
 export interface BridgeTransfer {
@@ -248,42 +262,39 @@ export interface CrossChainAsset {
 export async function getBridges(): Promise<Bridge[]> {
   try {
     const api = await initializeApi();
-    const bridges: any = await api.query.interoperability?.bridges?.entries?.() || [];
+    if (!api.query.interoperability?.chainConfigurations) return [];
 
-    if (bridges && bridges.length > 0) {
-      return bridges.map(([key, value]: [any, any]) => {
-        const id = key.args[0].toString();
-        const data = value.unwrap();
+    const entries = await api.query.interoperability.chainConfigurations.entries();
+    const bridges: Bridge[] = [];
 
-        return {
-          id,
-          name: data.name.toString(),
-          chain: data.chain.toString(),
-          status: data.status.toString() as any,
-          supportedAssets: data.supportedAssets.toHuman() as string[],
-          dailyLimit: formatBalance(data.dailyLimit.toString()),
-          transactionLimit: formatBalance(data.transactionLimit.toString()),
-          fee: (data.fee.toNumber() / 100).toFixed(2),
-          estimatedTime: data.estimatedTime.toNumber(),
-        };
+    for (const [key, raw] of entries as any[]) {
+      const data = raw?.toJSON?.();
+      if (!data) continue;
+      const id = String(key?.args?.[0] ?? '');
+      bridges.push({
+        id,
+        name: id,
+        chain: id,
+        status: data.enabled ? 'Active' : 'Disabled',
+        maxAmount: formatBalance(String(data.maxAmount ?? '0')),
+        minConfirmations: Number(data.minConfirmations ?? 0),
+        feeRateBps: Number(data.feeRate ?? 0),
+        pqSignaturesRequired: Number(data.pqSignaturesRequired ?? 0),
+        rpcEndpoint: bytesToString(data.rpcEndpoint),
+        contractAddress: data.contractAddress ? bytesToString(data.contractAddress) : undefined,
       });
     }
+
+    return bridges;
   } catch (error) {
-    console.warn('Failed to query on-chain bridges, using comprehensive multi-chain registry:', error);
+    console.warn('Failed to query on-chain bridge configurations:', error);
   }
 
-  // Multi-Chain Fallback Registry
-  return SUPPORTED_EXPANDED_CHAINS.map((c) => ({
-    id: c.id,
-    name: c.name,
-    chain: c.name,
-    status: 'Active',
-    supportedAssets: ['DALLA', 'bBZD', 'USDT', 'USDC', c.nativeGasToken],
-    dailyLimit: '10,000,000.00',
-    transactionLimit: '500,000.00',
-    fee: '0.10',
-    estimatedTime: Math.ceil(c.estimatedTimeMin),
-  }));
+  // No fabricated registry. A hardcoded list used to be returned here claiming
+  // every chain was 'Active' with invented limits and fees. Bridge availability
+  // is a security-relevant claim: if the chain does not say a bridge is enabled,
+  // the UI must not imply that it is.
+  return [];
 }
 
 /**
@@ -365,16 +376,27 @@ function mapBridgeTransaction(id: number, entry: any): BridgeTransfer {
   const data = entry.unwrap();
 
   let to = '';
-  let targetChain = 'Base';
-  let asset = 'DALLA';
+  // No invented defaults: a transfer whose operation we cannot decode must not
+  // be reported as targeting 'Base' with an amount of 0.
+  let targetChain = '';
+  let asset = '';
   let amount = '0';
 
-  if (data.operation?.isLockAndMint) {
-    const op = data.operation.asLockAndMint;
-    to = op.targetAddress?.toUtf8?.() || op.targetAddress?.toString() || '';
-    targetChain = op.targetChain?.toString() || 'Base';
-    asset = op.asset?.toString() || 'DALLA';
-    amount = formatBalance(op.amount?.toString() || '0');
+  const op = data.operation;
+  if (op?.isLockAndMint) {
+    const o = op.asLockAndMint;
+    to = o.targetAddress?.toUtf8?.() || o.targetAddress?.toString() || '';
+    targetChain = o.targetChain?.toString() || '';
+    asset = o.asset?.toString() || '';
+    amount = formatBalance(o.amount?.toString() || '0');
+  } else if (op?.isBurnAndUnlock) {
+    const o = op.asBurnAndUnlock;
+    to = o.recipient?.toUtf8?.() || o.recipient?.toString() || '';
+    targetChain = o.sourceChain?.toString() || '';
+    asset = o.asset?.toString() || '';
+    amount = formatBalance(o.amount?.toString() || '0');
+  } else if (op?.isMessagePassing) {
+    targetChain = op.asMessagePassing.targetChain?.toString() || '';
   }
 
   return {
@@ -387,10 +409,10 @@ function mapBridgeTransaction(id: number, entry: any): BridgeTransfer {
     amount,
     fee: formatBalance(data.fee?.toString() || '0'),
     status: toBridgeStatus(data.status?.toString()),
-    initiatedAt: data.initiatedAt?.toNumber() || Math.floor(Date.now() / 1000),
+    initiatedAt: data.initiatedAt?.toNumber() || 0,
     completedAt: data.completedAt?.isSome ? data.completedAt.unwrap().toNumber() : undefined,
     confirmations: data.collectedSignatures?.toNumber() || 0,
-    requiredConfirmations: data.requiredSignatures?.toNumber() || 3,
+    requiredConfirmations: data.requiredSignatures?.toNumber() || 0,
   };
 }
 
@@ -541,16 +563,31 @@ export async function getBridgeTransfer(transferId: string): Promise<BridgeTrans
 }
 
 /**
- * Estimate bridge transfer fee
+ * Estimate the bridge fee from the chain's configured `feeRate` (basis points).
+ *
+ * The previous implementation used an invented formula (0.1% + a flat 0.05)
+ * that had no relationship to what the pallet actually charges.
  */
 export async function estimateBridgeFee(bridgeId: string, amount: string): Promise<{ fee: string; estimatedTime: number }> {
   const amt = parseFloat(amount) || 0;
-  const fee = (amt * 0.001 + 0.05).toFixed(2);
-  const chain = SUPPORTED_EXPANDED_CHAINS.find((c) => c.id === bridgeId);
-  return {
-    fee,
-    estimatedTime: Math.ceil(chain?.estimatedTimeMin || 1),
-  };
+
+  try {
+    const api = await initializeApi();
+    if (!api.query.interoperability?.chainConfigurations) {
+      return { fee: '0.00', estimatedTime: 0 };
+    }
+    const raw: any = await api.query.interoperability.chainConfigurations(bridgeId as any);
+    if (!raw || raw.isNone) {
+      return { fee: '0.00', estimatedTime: 0 };
+    }
+    const feeRateBps = Number((raw.toJSON() as any)?.feeRate ?? 0);
+    const fee = (amt * feeRateBps) / 10_000;
+    // The pallet records no per-chain time estimate.
+    return { fee: fee.toFixed(2), estimatedTime: 0 };
+  } catch (error) {
+    console.error('Failed to estimate bridge fee:', error);
+    return { fee: '0.00', estimatedTime: 0 };
+  }
 }
 
 /**
