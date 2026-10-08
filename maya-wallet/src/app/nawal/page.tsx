@@ -11,7 +11,6 @@ import {
   getActiveRounds,
   submitLocalGradient,
   claimAiPoUwRewards,
-  FALLBACK_GENOMES,
   type NawalParticipantStats,
   type NawalSystemMetrics,
   type NawalRoundStatus,
@@ -38,11 +37,10 @@ export default function NawalPage() {
   const [stats, setStats] = useState<NawalParticipantStats | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<NawalSystemMetrics | null>(null);
   const [rounds, setRounds] = useState<NawalRoundStatus[]>([]);
-  const [genomes] = useState<ModelGenome[]>(FALLBACK_GENOMES);
+  const [genomes] = useState<ModelGenome[]>([]);
 
-  // Client training simulation state
+  // Client training state
   const [isTrainingLocal, setIsTrainingLocal] = useState(false);
-  const [trainingProgress, setTrainingProgress] = useState(0);
   const [lastCommitment, setLastCommitment] = useState<string | null>(null);
 
   // Claim rewards state
@@ -88,33 +86,22 @@ export default function NawalPage() {
   const handleStartLocalTraining = async (roundId: string) => {
     if (!selectedAccount?.address) return;
     setIsTrainingLocal(true);
-    setTrainingProgress(0);
 
-    const interval = setInterval(() => {
-      setTrainingProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        return prev + 20;
+    try {
+      const res = await submitLocalGradient(selectedAccount.address, roundId, 0, 0);
+      setLastCommitment(res.commitmentId);
+      addNotification({
+        type: 'success',
+        message: `Gradient commitment ${res.commitmentId} submitted.`,
       });
-    }, 400);
-
-    setTimeout(async () => {
-      clearInterval(interval);
-      try {
-        const res = await submitLocalGradient(selectedAccount.address, roundId, 0.038, 94.8);
-        setLastCommitment(res.commitmentId);
-        setIsTrainingLocal(false);
-        setTrainingProgress(100);
-        addNotification({
-          type: 'success',
-          message: `Local gradient training completed! Submitted cryptographic commitment ${res.commitmentId} to Nawal coordinator.`,
-        });
-      } catch {
-        setIsTrainingLocal(false);
-      }
-    }, 2400);
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Gradient submission failed.',
+      });
+    } finally {
+      setIsTrainingLocal(false);
+    }
   };
 
   const handleClaimRewards = async () => {
@@ -146,7 +133,7 @@ export default function NawalPage() {
       setBenchmarkResult(res);
       addNotification({
         type: 'success',
-        message: `Device benchmark: ${res.flopsGflops} GFLOPS (${res.webGlAccelerated ? 'WebGL' : 'CPU'}), device rated for service node floor.`,
+        message: `Device benchmark: ${res.flopsGflops} GFLOPS measured via ${res.webGlAccelerated ? 'WebGL-available' : 'CPU'} path.`,
       });
     } catch (err) {
       addNotification({ type: 'error', message: `Benchmark failed: ${err instanceof Error ? err.message : String(err)}` });
@@ -177,8 +164,8 @@ export default function NawalPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-bold flex items-center gap-1.5">
-              <Brain size={14} weight="bold" className="animate-pulse" />
-              FL Node Active
+              <Brain size={14} weight="bold" />
+              Nawal Client
             </span>
           </div>
         </div>
@@ -190,8 +177,8 @@ export default function NawalPage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Active FL Nodes</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-white">{systemMetrics?.active_participants || 30}</span>
-              <span className="text-[10px] text-slate-500">/ {systemMetrics?.total_participants || 84} Total</span>
+              <span className="text-lg font-bold text-white">{systemMetrics?.active_participants ?? '—'}</span>
+              <span className="text-[10px] text-slate-500">/ {systemMetrics?.total_participants ?? '—'} Total</span>
             </div>
             <span className="text-[11px] text-emerald-400 font-semibold">Across Belize Edge Devices</span>
           </div>
@@ -199,27 +186,27 @@ export default function NawalPage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Global Model Accuracy</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-purple-400">{systemMetrics?.globalAccuracy || 94.6}%</span>
+              <span className="text-lg font-bold text-purple-400">{systemMetrics ? `${systemMetrics.globalAccuracy}%` : '—'}</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">{systemMetrics?.total_models_trained || 14} models converged</span>
+            <span className="text-[11px] text-slate-400 block">{systemMetrics?.total_models_trained ?? '—'} models converged</span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">PoUW Rewards Unclaimed</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400">+{stats?.unclaimedRewardsDalla || '185.00'}</span>
+              <span className="text-lg font-bold text-emerald-400">+{stats?.unclaimedRewardsDalla ?? '—'}</span>
               <span className="text-[10px] text-emerald-300">Ɗ</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">Honesty Score: {stats?.honestyScore || 99.8}%</span>
+            <span className="text-[11px] text-slate-400 block">Honesty Score: {stats?.honestyScore ?? '—'}</span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">FL Training Rounds</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-cyan-300">{stats?.total_rounds || 38}</span>
+              <span className="text-lg font-bold text-cyan-300">{stats?.total_rounds ?? '—'}</span>
               <span className="text-[10px] text-slate-500">Completed</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">Avg Quality: {stats?.average_quality || 97.4}%</span>
+            <span className="text-[11px] text-slate-400 block">Avg Quality: {stats?.average_quality ?? '—'}</span>
           </div>
         </div>
 
@@ -256,12 +243,19 @@ export default function NawalPage() {
                   Active Federated Learning Rounds
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Train machine learning models on your local device without exposing raw data. Submit zero-knowledge gradients to earn PoUW rewards.
+                  Train machine learning models on your local device without exposing raw data.
+                  Submissions carry a hash commitment, not a zero-knowledge proof, and earn PoUW rewards.
                 </p>
               </div>
 
               <div className="space-y-4">
-                {rounds.map((round) => (
+                {rounds.length === 0 ? (
+                  <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
+                    No active federated-learning rounds. The Nawal coordinator is unreachable or has
+                    no open round.
+                  </div>
+                ) : (
+                  rounds.map((round) => (
                   <div
                     key={round.round_id}
                     className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3 text-xs"
@@ -284,14 +278,8 @@ export default function NawalPage() {
                     </div>
 
                     {isTrainingLocal ? (
-                      <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                        <div className="flex justify-between text-[10px] text-slate-400">
-                          <span>Computing Local Gradient Epochs...</span>
-                          <span className="text-purple-300 font-bold">{trainingProgress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
-                          <div className="bg-gradient-to-r from-purple-500 to-cyan-400 h-2 rounded-full transition-all duration-300" style={{ width: `${trainingProgress}%` }} />
-                        </div>
+                      <div className="pt-2 border-t border-slate-800/80 text-[11px] text-purple-300 font-bold">
+                        Submitting gradient commitment…
                       </div>
                     ) : (
                       <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
@@ -308,12 +296,13 @@ export default function NawalPage() {
                           className="px-4 py-2 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5"
                         >
                           <Play size={14} weight="bold" />
-                          Train Local Epochs
+                          Submit Gradient Commitment
                         </button>
                       </div>
                     )}
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -329,7 +318,8 @@ export default function NawalPage() {
                   Proof of Useful Work (PoUW) Staking Rewards
                 </h3>
                 <p className="text-slate-400 mt-1">
-                  Rewards are accrued for verified gradient quality, model compression, and honest aggregation.
+                  Rewards are computed by the staking pallet at claim time from the validator
+                  quality, timeliness, honesty and quantum scores plus a stake bonus.
                 </p>
               </div>
 
@@ -338,27 +328,27 @@ export default function NawalPage() {
                 disabled={isClaiming || stats?.unclaimedRewardsDalla === '0.00'}
                 className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md disabled:opacity-50"
               >
-                {isClaiming ? 'Claiming On-Chain...' : `Claim ${stats?.unclaimedRewardsDalla || '185.00'} Ɗ Rewards`}
+                {isClaiming ? 'Claiming On-Chain...' : `Claim ${stats?.unclaimedRewardsDalla ?? '—'} Ɗ Rewards`}
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                 <span className="text-slate-500 block text-[10px]">Total AI Mined</span>
-                <span className="text-lg font-bold text-white font-mono">{stats?.total_rewards || 840.50} Ɗ</span>
-                <span className="text-[11px] text-emerald-400">Across {stats?.successful_rounds || 36} verified rounds</span>
+                <span className="text-lg font-bold text-white font-mono">{stats?.total_rewards ?? '—'} Ɗ</span>
+                <span className="text-[11px] text-emerald-400">Across {stats?.successful_rounds ?? '—'} verified rounds</span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-500 block text-[10px]">Honesty Score Multiplier</span>
-                <span className="text-lg font-bold text-purple-400 font-mono">1.0x ({stats?.honestyScore || 99.8}%)</span>
-                <span className="text-[11px] text-slate-400">No gradient poisonings detected</span>
+                <span className="text-slate-500 block text-[10px]">Honesty Score</span>
+                <span className="text-lg font-bold text-purple-400 font-mono">{stats?.honestyScore ?? '—'}</span>
+                <span className="text-[11px] text-slate-400">Reported by the Nawal coordinator</span>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                 <span className="text-slate-500 block text-[10px]">Average Quality</span>
-                <span className="text-lg font-bold text-cyan-300 font-mono">{stats?.average_quality || 97.4}%</span>
-                <span className="text-[11px] text-slate-400">Consensus validation rank: Top 5%</span>
+                <span className="text-lg font-bold text-cyan-300 font-mono">{stats?.average_quality ?? '—'}</span>
+                <span className="text-[11px] text-slate-400">Reported by the Nawal coordinator</span>
               </div>
             </div>
           </div>
@@ -378,7 +368,13 @@ export default function NawalPage() {
             </div>
 
             <div className="space-y-3">
-              {genomes.map((g) => (
+              {genomes.length === 0 ? (
+                <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
+                  No model genomes are published yet. Converged models are listed here once the
+                  Nawal coordinator exposes them.
+                </div>
+              ) : (
+                genomes.map((g) => (
                 <div
                   key={g.genomeId}
                   className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
@@ -399,14 +395,15 @@ export default function NawalPage() {
                   </div>
 
                   <button
-                    onClick={() => addNotification({ type: 'success', message: `Downloading model weights for ${g.modelName} via Pakit IPFS gateway...` })}
+                    onClick={() => addNotification({ type: 'success', message: `Model weights for ${g.modelName} are published at ${g.ipfsCid}.` })}
                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5"
                   >
                     <Download size={14} />
                     Download Weights
                   </button>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -418,10 +415,12 @@ export default function NawalPage() {
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Lightning size={22} className="text-amber-400" />
-                  Edge-AI Hardware Diagnostics & In-Browser Benchmark
+                  In-Browser Compute Diagnostics
                 </h3>
                 <p className="text-slate-400 mt-1">
-                  Evaluates your device's WebGL, WebGPU, and Wasm acceleration performance for participating in local federated epochs.
+                  Measures your device with a real matrix-multiply pass in JavaScript. WebGL
+                  availability is reported, but the throughput figure is always measured JavaScript
+                  work, never a GPU estimate.
                 </p>
               </div>
 
@@ -430,33 +429,35 @@ export default function NawalPage() {
                 disabled={isBenchmarking}
                 className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md disabled:opacity-50"
               >
-                {isBenchmarking ? 'Running Tensor Benchmark...' : 'Run Diagnostics'}
+                {isBenchmarking ? 'Measuring…' : 'Run Diagnostics'}
               </button>
             </div>
 
             {benchmarkResult ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                  <span className="text-slate-500 block text-[10px]">Inference Speed</span>
+                  <span className="text-slate-500 block text-[10px]">Estimated Inference Speed</span>
                   <span className="text-lg font-bold text-amber-400 font-mono">{benchmarkResult.tokensPerSec} tok/s</span>
-                  <span className="text-[11px] text-emerald-400">Suitable for 7B Q4 models</span>
+                  <span className="text-[11px] text-slate-400">Derived from measured FLOPs with a 2-param/token model</span>
                 </div>
 
                 <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                  <span className="text-slate-500 block text-[10px]">Compute Throughput</span>
+                  <span className="text-slate-500 block text-[10px]">Measured Throughput</span>
                   <span className="text-lg font-bold text-purple-400 font-mono">{benchmarkResult.flopsGflops} GFLOPs</span>
-                  <span className="text-[11px] text-slate-400">Parallel tensor cores enabled</span>
+                  <span className="text-[11px] text-slate-400">From the JavaScript matmul pass</span>
                 </div>
 
                 <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                  <span className="text-slate-500 block text-[10px]">Hardware Acceleration</span>
-                  <span className="text-lg font-bold text-teal-300 font-mono">WebGL 2.0 Active</span>
-                  <span className="text-[11px] text-emerald-400">Zero CPU bottleneck</span>
+                  <span className="text-slate-500 block text-[10px]">WebGL Availability</span>
+                  <span className="text-lg font-bold text-teal-300 font-mono">
+                    {benchmarkResult.webGlAccelerated ? 'Available' : 'Not available'}
+                  </span>
+                  <span className="text-[11px] text-slate-400">Detected, not used for the measurement</span>
                 </div>
               </div>
             ) : (
               <div className="bg-slate-950/60 p-8 rounded-2xl border border-slate-800 text-center text-slate-500">
-                Click "Run Diagnostics" to test your browser's tensor core throughput.
+                Click Run Diagnostics to measure this device compute throughput.
               </div>
             )}
           </div>

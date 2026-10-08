@@ -75,10 +75,9 @@ export {
   getSystemMetrics,
   getRoundStatus,
   getActiveRounds,
+  getRecentRounds,
   submitLocalGradient,
   claimAiPoUwRewards,
-  FALLBACK_GENOMES,
-  FALLBACK_ACTIVE_ROUNDS,
 } from './nawal';
 export type { ModelGenome } from './nawal';
 
