@@ -114,7 +114,7 @@ export function useProposal(id: number) {
         setError(null);
 
         const fetchedProposal = await getProposalById(id);
-        
+
         if (!cancelled) {
           setProposal(fetchedProposal);
           setIsLoading(false);

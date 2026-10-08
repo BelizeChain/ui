@@ -9,6 +9,7 @@
 import type { ApiPromise, WsProvider } from '@polkadot/api';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import { getRuntimeConfig } from '@belizechain/shared';
+import { bytesToString } from '@/lib/utils';
 
 // ============================================================================
 // Dynamic Module Loader (SSR-safe)
@@ -56,10 +57,13 @@ export interface BlockchainMetrics {
 
 export interface ValidatorInfo {
   address: string;
+  /** Always 0 — the PoUW staking pallet has no commission concept. */
   commission: number;
   totalStake: bigint;
   ownStake: bigint;
+  /** Always 0 — the PoUW staking pallet has no nominators. */
   nominatorCount: number;
+  /** Always 0 — the pallet does not track authored blocks. */
   blocksProduced: number;
   isActive: boolean;
   sessionKeys: string;
@@ -75,8 +79,10 @@ export interface ProposalInfo {
   approvals: string[];
   requiredApprovals: number;
   status: 'pending' | 'approved' | 'rejected' | 'executed';
-  createdAt: Date;
-  executedAt?: Date;
+  /** Block the proposal was created at. */
+  createdAtBlock: number;
+  /** Block the proposal expires at. */
+  expiresAtBlock: number;
 }
 
 export interface BlockchainEvent {
@@ -461,47 +467,25 @@ class BlockchainService {
     }
 
     const validatorInfos: ValidatorInfo[] = await Promise.all(
-      validators.map(async ([key, prefs]) => {
+      validators.map(async ([key, record]) => {
         const address = key.args[0].toString();
-        const commission = (prefs as any).commission?.toNumber() || 0;
+        const info: any = (record as any)?.unwrap ? (record as any).unwrap() : record;
 
-        // Get staking info
-        const stakingLedger = await api.query.staking?.ledger?.(address);
-        const ownStake = stakingLedger ? (stakingLedger as any).total?.toBigInt() || 0n : 0n;
-
-        // Get nominators
-        const nominators = await api.query.staking?.nominators?.entries() || [];
-        const nominatorsForValidator = nominators.filter(([, targets]) => {
-          const targetsList = (targets as any).targets || [];
-          return targetsList.some((t: any) => t.toString() === address);
-        });
-
-        // Get total stake (own + nominated)
-        let totalStake = ownStake;
-        for (const [nominatorKey] of nominatorsForValidator) {
-          const nominatorAddress = nominatorKey.args[0].toString();
-          const nominatorLedger = await api.query.staking?.ledger?.(nominatorAddress);
-          if (nominatorLedger) {
-            totalStake += (nominatorLedger as any).total?.toBigInt() || 0n;
-          }
-        }
-
-        // Get session keys
+        // This is the custom PoUW staking pallet, not Substrate's
+        // `pallet_staking`: one bonded stake per validator, no nominators, no
+        // commission and no era ledger.
+        const stake = BigInt(info?.stake?.toString() ?? 0);
         const sessionKeys = await api.query.session?.nextKeys?.(address);
-        const sessionKeysHex = sessionKeys?.toHex() || '';
-
-        // Get blocks produced (from staking.erasValidatorReward if available)
-        const blocksProduced = 0; // Will be calculated from eras
 
         return {
           address,
-          commission: commission / 10000000, // Convert from per-billion to percentage
-          totalStake,
-          ownStake,
-          nominatorCount: nominatorsForValidator.length,
-          blocksProduced,
+          commission: 0,
+          totalStake: stake,
+          ownStake: stake,
+          nominatorCount: 0,
+          blocksProduced: 0,
           isActive: true,
-          sessionKeys: sessionKeysHex,
+          sessionKeys: sessionKeys?.toHex() || '',
         };
       })
     );
@@ -520,7 +504,7 @@ class BlockchainService {
   async getTreasuryProposals(): Promise<ProposalInfo[]> {
     const api = await this.getApi();
 
-    const proposalsRaw = await api.query.economy?.treasuryProposals?.entries() || [];
+    const proposalsRaw = await api.query.governance?.treasurySpendProposals?.entries() || [];
 
     if (!proposalsRaw.length) {
       return [];
@@ -533,15 +517,17 @@ class BlockchainService {
       return {
         id: proposalId,
         proposer: proposalData.proposer,
-        beneficiary: proposalData.beneficiary,
+        // On-chain field is `recipient`; the UI exposes it as `beneficiary`.
+        beneficiary: proposalData.recipient,
         amount: BigInt(proposalData.amount || 0),
-        currency: proposalData.currency || 'DALLA',
-        description: proposalData.description || '',
+        // The pallet's `Balance` is the native DALLA balance.
+        currency: 'DALLA',
+        description: bytesToString((value as any).unwrap().description),
         approvals: proposalData.approvals || [],
-        requiredApprovals: 4, // 4-of-7 multi-sig
-        status: proposalData.status?.toLowerCase() || 'pending',
-        createdAt: new Date(proposalData.createdAt || Date.now()),
-        executedAt: proposalData.executedAt ? new Date(proposalData.executedAt) : undefined,
+        requiredApprovals: Number(proposalData.threshold ?? 0),
+        status: proposalData.executed ? 'executed' : 'pending',
+        createdAtBlock: Number(proposalData.createdAt ?? 0),
+        expiresAtBlock: Number(proposalData.expiresAt ?? 0),
       };
     });
 

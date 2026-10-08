@@ -29,7 +29,7 @@ export type { AssetSymbol, TradingPair, SwapQuote, SwapResult, TradeHistory } fr
 export { getActiveProposals, getProposalById, submitProposal, voteOnProposal, getActiveReferenda, getDistrictCouncil, getVotingHistory, secondProposal } from './governance';
 
 // Staking & Rewards
-export { getStakingInfo, stakeDalla, unstakeDalla, claimStakingRewards, getPoUWContributions, getActiveValidators, reportTrainingContribution, calculatePoUWReward } from './staking';
+export { getStakingInfo, stakeDalla, unstakeDalla, claimStakingRewards, getModelSubmission, getActiveValidators, reportTrainingContribution } from './staking';
 
 // Land Registry & Documents
 export { getLandTitle, getUserLandTitles, getPropertyDocuments, registerDocument, initiatePropertyTransfer, getPropertyTransferHistory, searchLandByLocation, getDocumentDownloadUrl } from './landledger';
@@ -90,7 +90,7 @@ export type { ModelGenome } from './nawal';
 export type { BelizeID, SSNRecord, PassportRecord, KYCStatus } from './identity';
 // belizeX types are exported above alongside the runtime helpers.
 export type { Proposal, Referendum, DistrictCouncil, Motion, Vote } from './governance';
-export type { StakingInfo, PoUWContribution, Validator } from './staking';
+export type { StakingInfo, ModelSubmission, Validator } from './staking';
 export type { LandTitle, Encumbrance, PropertyDocument, PropertyTransfer } from './landledger';
 export type { VerifiedMerchant, TourismReward, TourismStats } from './oracle';
 export type { Domain, DomainListing, HostedWebsite } from './bns';

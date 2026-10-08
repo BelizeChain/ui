@@ -175,11 +175,9 @@ class AnalyticsService {
       totalExpenses += p.amount;
     });
 
-    // Group expenses by month
-    const expensesByMonth = this.groupByMonth(executedProposals.map(p => ({
-      date: p.executedAt || p.createdAt,
-      amount: p.amount,
-    })));
+    // The governance pallet records proposal blocks, not timestamps, so no
+    // monthly expense series can be derived from chain data.
+    const expensesByMonth: TimeSeriesDataPoint[] = [];
 
     // Real department balances from the governance pallet.
     const departmentSpending = await this.getDepartmentSpending();

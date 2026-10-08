@@ -22,29 +22,22 @@ function formatPlanck(raw: string): string {
 import { initializeApi } from '@/services/blockchain';
 
 /**
- * Subscribe to staking reward events for a given address.
- * Listens for `staking.Rewarded` and `belizeStaking.PoUWRewardPaid` events.
+ * Subscribe to PoUW staking reward payouts for a given address.
+ * Listens for `staking.PouWRewardsClaimedWithBonus`, the pallet's only payout
+ * event.
  */
 const subscribeToStakingRewards = async (
   address: string,
-  callback: (reward: { amount: string; era: number; type: 'Staking' | 'PoUW' }) => void,
+  callback: (reward: { amount: string; type: 'PoUW' }) => void,
 ): Promise<() => void> => {
   try {
     const api = await initializeApi();
     const unsub = await api.query.system.events((events: any[]) => {
       events.forEach(({ event }) => {
-        // Standard staking rewards
-        if (api.events.staking?.Rewarded?.is(event)) {
-          const [stash, amount] = event.data;
-          if (stash.toString() === address) {
-            callback({ amount: amount.toString(), era: 0, type: 'Staking' });
-          }
-        }
-        // PoUW rewards (custom BelizeChain pallet)
-        if (api.events.belizeStaking?.PoUWRewardPaid?.is(event)) {
-          const [account, reward] = event.data;
-          if (account.toString() === address) {
-            callback({ amount: reward.toString(), era: 0, type: 'PoUW' });
+        if (api.events.staking?.PouWRewardsClaimedWithBonus?.is(event)) {
+          const [operator, , , totalReward] = event.data;
+          if (operator.toString() === address) {
+            callback({ amount: totalReward.toString(), type: 'PoUW' });
           }
         }
       });
@@ -301,7 +294,7 @@ export function useBalanceSubscription(address: string | null) {
 }
 
 export function useStakingRewardsSubscription(address: string | null) {
-  const [rewards, setRewards] = useState<Array<{amount: string; era: number; type: 'Staking' | 'PoUW'; timestamp: number;}>>([]);
+  const [rewards, setRewards] = useState<Array<{amount: string; type: 'PoUW'; timestamp: number;}>>([]);
   useEffect(() => {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;

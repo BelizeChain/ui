@@ -7,10 +7,10 @@ import { useWallet } from '@/contexts/WalletContext';
 import { MayaShellReadinessPanel } from '@/components/MayaShellReadinessPanel';
 import {
   getStakingInfo,
-  getPoUWContributions,
+  getModelSubmission,
   getTourismRewards,
   type StakingInfo,
-  type PoUWContribution,
+  type ModelSubmission,
   type TourismReward,
 } from '@/services/pallets';
 import { getExchangeRate } from '@/services/oracle';
@@ -70,7 +70,7 @@ export default function HomeNew() {
 
   // Real on-chain data
   const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
-  const [pouwContributions, setPouwContributions] = useState<PoUWContribution[]>([]);
+  const [modelSubmission, setModelSubmission] = useState<ModelSubmission | null>(null);
   const [tourismRewards, setTourismRewards] = useState<TourismReward[]>([]);
   const [rates, setRates] = useState<{ dalla: number; bbzd: number }>({ dalla: 0, bbzd: 0 });
   const [currencyPref, setCurrencyPref] = useState<'DALLA' | 'BZD' | 'USD'>('DALLA');
@@ -101,23 +101,23 @@ export default function HomeNew() {
       // (react-hooks/set-state-in-effect).
       Promise.resolve().then(() => {
         setStakingInfo(null);
-        setPouwContributions([]);
+        setModelSubmission(null);
         setTourismRewards([]);
       });
       return;
     }
     let cancelled = false;
     void (async () => {
-      const [staking, pouw, tourism, dallaRate, bbzdRate] = await Promise.all([
+      const [staking, submission, tourism, dallaRate, bbzdRate] = await Promise.all([
         getStakingInfo(address).catch(() => null),
-        getPoUWContributions(address).catch(() => [] as PoUWContribution[]),
+        getModelSubmission(address).catch(() => null),
         getTourismRewards(address).catch(() => [] as TourismReward[]),
         getExchangeRate('DALLA', 'USD').then((r) => r.rate).catch(() => 0),
         getExchangeRate('bBZD', 'USD').then((r) => r.rate).catch(() => 0),
       ]);
       if (cancelled) return;
       setStakingInfo(staking);
-      setPouwContributions(pouw);
+      setModelSubmission(submission);
       setTourismRewards(tourism);
       setRates({ dalla: dallaRate, bbzd: bbzdRate });
     })();
@@ -259,33 +259,33 @@ export default function HomeNew() {
       });
     }
 
-    if (pouwContributions.length > 0) {
-      const rewardTotal = pouwContributions.reduce((s, c) => s + parseFloat(c.reward || '0'), 0);
-      const avg = (key: 'qualityScore' | 'timelinessScore' | 'honestyScore') =>
-        Math.round(pouwContributions.reduce((s, c) => s + c[key], 0) / pouwContributions.length);
+    if (stakingInfo?.scores) {
+      const { quality, timeliness, honesty, totalContributions } = stakingInfo.scores;
       list.push({
         id: 'pouw',
-        title: 'PoUW Rewards',
+        title: 'PoUW Contribution',
         subtitle: 'Federated Learning',
-        value: `+${rewardTotal.toFixed(2)}`,
-        monthlyValue: `+${rewardTotal.toFixed(2)} DALLA`,
-        totalValue: `${rewardTotal.toFixed(2)} DALLA`,
+        value: `${totalContributions}`,
+        monthlyValue: `${totalContributions} contributions`,
+        totalValue: modelSubmission
+          ? `Delta submitted at block ${modelSubmission.submittedAt}`
+          : 'No delta submitted this epoch',
         icon: Brain,
         color: 'from-cyan-500 to-blue-500',
-        chartData: buildSparkline(pouwContributions.map((c) => c.totalScore)),
+        chartData: buildSparkline([quality, timeliness, honesty]),
         stats: {
-          contributions: pouwContributions.length,
-          quality: avg('qualityScore'),
-          timeliness: avg('timelinessScore'),
-          honesty: avg('honestyScore'),
+          contributions: totalContributions,
+          quality,
+          timeliness,
+          honesty,
         },
       });
     }
 
     return list;
-  }, [tourismRewards, pouwContributions]);
+  }, [tourismRewards, stakingInfo, modelSubmission]);
 
-  // Real staking position (single position from the staking ledger)
+  // Real staking position (the PoUW validator record, not a staking ledger)
   const stakingPositions = useMemo(() => {
     if (!stakingInfo || stakedBal <= 0) return [];
     return [
@@ -294,26 +294,17 @@ export default function HomeNew() {
         amount: stakedBal.toFixed(0),
         active: stakingInfo.activeStake,
         unbonding: stakingInfo.unbonding,
-        rewards: stakingInfo.rewardsEarned,
-        era: stakingInfo.era,
+        // The pallet stores no per-account accrual; rewards are computed at
+        // claim time from the validator's scores.
+        rewards: 'Claim on demand',
+        epoch: stakingInfo.epoch,
       },
     ];
   }, [stakingInfo, stakedBal]);
 
-  // Real activity feed merged from on-chain reward events
+  // Real activity feed from on-chain reward events
   const activities = useMemo(() => {
     const items = [
-      ...pouwContributions.map((c) => ({
-        id: `pouw-${c.contributionId}`,
-        type: 'pouw',
-        title: 'PoUW Rewards',
-        subtitle: 'Federated Learning',
-        amount: `+${c.reward} DALLA`,
-        time: timeAgo(c.timestamp),
-        ts: c.timestamp,
-        icon: Brain,
-        color: 'text-cyan-400',
-      })),
       ...tourismRewards.map((r) => ({
         id: `tourism-${r.rewardId}`,
         type: 'tourism',
@@ -327,7 +318,7 @@ export default function HomeNew() {
       })),
     ];
     return items.sort((a, b) => b.ts - a.ts);
-  }, [pouwContributions, tourismRewards]);
+  }, [tourismRewards]);
 
   if (!isConnected) {
     return (
@@ -776,7 +767,7 @@ export default function HomeNew() {
                     </div>
                     <div>
                       <p className="text-white font-bold text-sm">Staking Delegation</p>
-                      <p className="text-slate-400 text-xs font-mono">Era {stake.era}</p>
+                      <p className="text-slate-400 text-xs font-mono">Epoch {stake.epoch}</p>
                     </div>
                   </div>
                   <div className="text-right">

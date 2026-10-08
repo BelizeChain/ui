@@ -342,7 +342,7 @@ export async function subscribeToBalance(
     // Query bBZD balance from economy pallet
     let bBZD = '0.00';
     try {
-      const bBZDBalance = await apiInstance.query.economy?.bBzdBalances(address);
+      const bBZDBalance = await apiInstance.query.economy?.bbzdBalances(address);
       if (bBZDBalance && !bBZDBalance.isEmpty) {
         bBZD = formatBalance(bBZDBalance.toString());
       }

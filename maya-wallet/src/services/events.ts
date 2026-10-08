@@ -90,7 +90,6 @@ export async function subscribeToStakingRewards(
   address: string,
   callback: EventCallback<{
     amount: string;
-    era: number;
     type: 'Staking' | 'PoUW';
   }>
 ): Promise<EventSubscription> {
@@ -100,27 +99,15 @@ export async function subscribeToStakingRewards(
     events.forEach((record: any) => {
       const { event } = record;
 
-      // Standard staking rewards
-      if (api.events.staking?.Reward?.is(event)) {
-        const [rewardAddress, amount, era] = event.data;
+      // The PoUW staking pallet's only payout event is
+      // `PouWRewardsClaimedWithBonus { operator, base_reward, domain_bonus,
+      // total_reward }`. There is no `Reward` or `PoUWRewarded`.
+      if (api.events.staking?.PouWRewardsClaimedWithBonus?.is(event)) {
+        const [operator, , , totalReward] = event.data;
 
-        if (rewardAddress.toString() === address) {
+        if (operator.toString() === address) {
           callback({
-            amount: formatBalance(amount.toString()),
-            era: era ? Number((era as any).toString()) : 0,
-            type: 'Staking',
-          });
-        }
-      }
-
-      // PoUW rewards
-      if (api.events.staking?.PoUWRewarded?.is(event)) {
-        const [rewardAddress, amount] = event.data;
-
-        if (rewardAddress.toString() === address) {
-          callback({
-            amount: formatBalance(amount.toString()),
-            era: 0,
+            amount: formatBalance(totalReward.toString()),
             type: 'PoUW',
           });
         }

@@ -134,7 +134,7 @@ export default function BudgetPage() {
     vaultDetail =
       stakingInfo.totalStaked === '0.00'
         ? 'No staked position on chain'
-        : `Era ${stakingInfo.era} · Rewards ${stakingInfo.rewardsEarned} Ɗ`;
+        : `Epoch ${stakingInfo.epoch} · Rewards claimable on demand`;
   }
 
   const handleAddCategory = (e: React.FormEvent) => {

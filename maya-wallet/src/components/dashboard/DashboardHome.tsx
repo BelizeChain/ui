@@ -9,7 +9,7 @@ import {
   getActiveProposals,
   getVotingHistory,
   getKYCStatus,
-  getPoUWContributions,
+  getStakingInfo,
 } from '@/services/pallets';
 import { useAccountStore } from '@/store/account';
 import {
@@ -97,7 +97,10 @@ export function DashboardHome() {
     compliance: { status: 'none', level: 0 },
     activeProposals: 0,
     communityVotes: 0,
-    pouwRewards: 0,
+    /** Federated-learning contributions recorded on the validator record. */
+    pouwContributions: 0,
+    /** Validator quality score (0-100), or `null` when not a validator. */
+    pouwQuality: null as number | null,
     monthlySpending: 0,
     budgetLimit: 0,
   });
@@ -112,7 +115,8 @@ export function DashboardHome() {
           compliance: { status: 'none', level: 0 },
           activeProposals: 0,
           communityVotes: 0,
-          pouwRewards: 0,
+          pouwContributions: 0,
+          pouwQuality: null,
           monthlySpending: 0,
           budgetLimit: 0,
         });
@@ -127,12 +131,12 @@ export function DashboardHome() {
       try {
         const api = await initializeApi();
         const indexer = new TransactionIndexer(api);
-        const [history, proposals, votes, kyc, pouw] = await Promise.all([
+        const [history, proposals, votes, kyc, staking] = await Promise.all([
           indexer.getAccountHistory(address, { type: 'all', limit: 100 }),
           getActiveProposals(),
           getVotingHistory(address),
           getKYCStatus(address),
-          getPoUWContributions(address),
+          getStakingInfo(address),
         ]);
         if (cancelled) return;
 
@@ -153,10 +157,6 @@ export function DashboardHome() {
           )
           .reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
 
-        const pouwRewards = pouw
-          .filter((c) => c.timestamp >= monthStart)
-          .reduce((sum, c) => sum + (parseFloat(c.reward) || 0), 0);
-
         setStats({
           compliance: {
             status: kyc.status.toLowerCase(),
@@ -164,7 +164,10 @@ export function DashboardHome() {
           },
           activeProposals: proposals.length,
           communityVotes: votes.length,
-          pouwRewards,
+          // The pallet computes rewards at claim time and stores no accrual, so
+          // only the contribution count and quality score are reportable.
+          pouwContributions: staking.scores?.totalContributions ?? 0,
+          pouwQuality: staking.scores?.quality ?? null,
           monthlySpending,
           // No transfer limits are recorded on chain, so there is no enforced cap.
           budgetLimit: parseFloat(kyc.limits?.monthlyTransfer ?? '') || 0,
@@ -358,7 +361,11 @@ export function DashboardHome() {
                 <Gift size={40} weight="duotone" className="text-bluehole-900" />
                 <div>
                   <h3 className="text-lg font-bold text-bluehole-900">PoUW Rewards</h3>
-                  <p className="text-sm text-bluehole-700">You've earned Ɗ{stats.pouwRewards.toFixed(2)} this month</p>
+                  <p className="text-sm text-bluehole-700">
+                    {stats.pouwQuality === null
+                      ? 'Register as a PoUW validator to earn federated-learning rewards'
+                      : `${stats.pouwContributions} contribution${stats.pouwContributions === 1 ? '' : 's'} · quality score ${stats.pouwQuality}/100`}
+                  </p>
                 </div>
               </div>
               <CaretRight size={24} weight="bold" className="text-bluehole-900" />

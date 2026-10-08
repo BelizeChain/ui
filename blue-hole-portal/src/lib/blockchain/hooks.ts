@@ -344,7 +344,7 @@ export function useBalance(address: string | null) {
   });
   // bBZD lives in the economy pallet (economy.bBzdBalances). Skip gracefully if
   // the runtime doesn't expose it so DALLA still renders.
-  const { data: bBzdData, loading: bBzdLoading } = useStorage('economy', 'bBzdBalances', [address], {
+  const { data: bBzdData, loading: bBzdLoading } = useStorage('economy', 'bbzdBalances', [address], {
     skip: !address,
   });
 

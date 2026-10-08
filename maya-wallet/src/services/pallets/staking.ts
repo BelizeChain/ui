@@ -5,29 +5,56 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '../../lib/codec';
 
 export interface StakingInfo {
+  /** Total bonded stake, formatted DALLA. */
   totalStaked: string;
-  stakedBalance?: string; // Alias for totalStaked (UI compatibility)
+  /** Bonded stake actively backing PoUW work. */
   activeStake: string;
+  /** Stake scheduled for release, formatted DALLA. */
   unbonding: string;
-  rewardsEarned: string;
-  pendingRewards?: string; // Alias for rewardsEarned (UI compatibility)
-  validatorStatus: 'None' | 'Waiting' | 'Active' | 'Inactive';
-  nominatorStatus: 'None' | 'Active';
-  era: number;
+  /**
+   * Claimable reward, or `null` when it cannot be determined.
+   *
+   * The pallet computes the payout at claim time from the validator's
+   * quality/timeliness/honesty/quantum scores plus a stake bonus, and stores no
+   * per-account accrual. `staking.epochRewards` is the global per-epoch pool, so
+   * no claimable figure can be read from storage.
+   */
+  rewardsEarned: string | null;
+  /**
+   * `Active` while registered in `staking.validators`, `Inactive` while an
+   * unbond is pending, otherwise `None`.
+   */
+  validatorStatus: 'None' | 'Active' | 'Inactive';
+  /** Current PoUW epoch (`staking.currentEpoch`). This pallet has no eras. */
+  epoch: number;
+  /** PoUW score breakdown from `staking.validators`, or `null` when not registered. */
+  scores: {
+    quality: number;
+    timeliness: number;
+    honesty: number;
+    compliance: number;
+    totalContributions: number;
+  } | null;
 }
 
-export interface PoUWContribution {
-  contributionId: string;
-  modelHash: string;
-  qualityScore: number; // 0-100
-  timelinessScore: number; // 0-100
-  honestyScore: number; // 0-100
-  totalScore: number; // 0-100 (weighted average)
-  reward: string; // DALLA amount
-  timestamp: number;
-  status: 'Submitted' | 'Verified' | 'Rewarded' | 'Rejected';
+/**
+ * The caller's current-epoch federated-learning submission, from
+ * `staking.modelSubmissions`. Only one submission is stored per validator per
+ * epoch, and the pallet keeps no history.
+ */
+export interface ModelSubmission {
+  address: string;
+  /** `blake2_256(model_weights || nonce || task_id)`, hex. */
+  computationCommitment: string;
+  /** `blake2_256(timestamped_execution_log)`, hex. */
+  computationLog: string;
+  /** Size of the encrypted delta payload, in bytes. */
+  encryptedDeltaBytes: number;
+  /** Block number the delta was submitted at. */
+  submittedAt: number;
 }
 
 export interface Validator {
@@ -42,50 +69,66 @@ export interface Validator {
 }
 
 /**
- * Get staking information for an address
+ * Unwrap an `Option<T>` codec, returning `null` for `None` or an empty value.
+ */
+function unwrapOption<T = any>(value: any): T | null {
+  if (value == null) return null;
+  if (typeof value.isNone === 'boolean') return value.isNone ? null : value.unwrap();
+  if (value.isEmpty) return null;
+  return value as T;
+}
+
+/**
+ * Get staking information for an address.
+ *
+ * Reads the PoUW staking pallet's real storage — `validators`,
+ * `currentEpoch` and `pendingUnbonds`. It is not the classic Substrate staking
+ * pallet: there are no eras, no nominators, no commission and no per-account
+ * reward ledger.
  */
 export async function getStakingInfo(address: string): Promise<StakingInfo> {
   const api = await initializeApi();
 
   try {
-    const [stakingLedger, currentEra]: any = await Promise.all([
-      api.query.staking?.ledger?.(address),
-      api.query.staking?.currentEra?.(),
+    const [validatorOpt, epochCodec, pendingOpt]: any[] = await Promise.all([
+      api.query.staking?.validators?.(address),
+      api.query.staking?.currentEpoch?.(),
+      api.query.staking?.pendingUnbonds?.(address),
     ]);
 
-    if (!stakingLedger || stakingLedger.isNone) {
+    const epoch = Number(epochCodec?.toString() ?? 0);
+    const pending = unwrapOption<any>(pendingOpt);
+    const pendingStake = pending ? (pending.toArray?.()[0] ?? pending[0]) : null;
+    const unbonding = pendingStake ? formatBalance(pendingStake.toString()) : '0.00';
+
+    const validator = unwrapOption<any>(validatorOpt);
+    if (!validator) {
       return {
         totalStaked: '0.00',
         activeStake: '0.00',
-        unbonding: '0.00',
-        rewardsEarned: '0.00',
-        validatorStatus: 'None',
-        nominatorStatus: 'None',
-        era: currentEra?.toNumber() || 0,
+        unbonding,
+        rewardsEarned: null,
+        validatorStatus: pending ? 'Inactive' : 'None',
+        epoch,
+        scores: null,
       };
     }
 
-    const ledger = stakingLedger.unwrap();
-    const validatorPrefs: any = await api.query.staking?.validators?.(address);
-    const nominatorPrefs: any = await api.query.staking?.nominators?.(address);
-
-    // Calculate unbonding amount
-    const unbonding = ledger.unlocking?.reduce((sum: number, chunk: any) => {
-      return sum + parseFloat(chunk.value.toString());
-    }, 0) || 0;
-
-    // Get rewards
-    const rewardsRecord: any = await api.query.staking?.rewards?.(address);
-    const rewards = rewardsRecord?.toString() || '0';
-
+    const stake = formatBalance(validator.stake?.toString() ?? '0');
     return {
-      totalStaked: formatBalance(ledger.total.toString()),
-      activeStake: formatBalance(ledger.active.toString()),
-      unbonding: formatBalance(unbonding.toString()),
-      rewardsEarned: formatBalance(rewards),
-      validatorStatus: validatorPrefs && !validatorPrefs.isNone ? 'Active' : 'None',
-      nominatorStatus: nominatorPrefs && !nominatorPrefs.isNone ? 'Active' : 'None',
-      era: currentEra?.toNumber() || 0,
+      totalStaked: stake,
+      activeStake: stake,
+      unbonding,
+      rewardsEarned: null,
+      validatorStatus: 'Active',
+      epoch,
+      scores: {
+        quality: Number(validator.qualityScore?.toString() ?? 0),
+        timeliness: Number(validator.timelinessScore?.toString() ?? 0),
+        honesty: Number(validator.honestyScore?.toString() ?? 0),
+        compliance: Number(validator.complianceScore?.toString() ?? 0),
+        totalContributions: Number(validator.totalContributions?.toString() ?? 0),
+      },
     };
   } catch (error) {
     console.error('Failed to fetch staking info:', error);
@@ -93,10 +136,10 @@ export async function getStakingInfo(address: string): Promise<StakingInfo> {
       totalStaked: '0.00',
       activeStake: '0.00',
       unbonding: '0.00',
-      rewardsEarned: '0.00',
+      rewardsEarned: null,
       validatorStatus: 'None',
-      nominatorStatus: 'None',
-      era: 0,
+      epoch: 0,
+      scores: null,
     };
   }
 }
@@ -185,11 +228,12 @@ export async function claimStakingRewards(address: string): Promise<{ hash: stri
         if (status.isInBlock) {
           let rewardAmount = '0.00';
 
-          // Extract reward amount from events
+          // Extract the payout from the pallet's `PouWRewardsClaimedWithBonus
+          // { operator, base_reward, domain_bonus, total_reward }` event.
           events.forEach(({ event }) => {
-            if (api.events.staking.Reward?.is(event)) {
-              const [, amount] = event.data;
-              rewardAmount = formatBalance(amount.toString());
+            if (api.events.staking.PouWRewardsClaimedWithBonus?.is(event)) {
+              const [, , , totalReward] = event.data;
+              rewardAmount = formatBalance(totalReward.toString());
             }
           });
 
@@ -207,37 +251,29 @@ export async function claimStakingRewards(address: string): Promise<{ hash: stri
 }
 
 /**
- * Get PoUW contribution history
+ * Read the caller's current-epoch federated-learning submission.
+ *
+ * `staking.modelSubmissions` holds at most one delta per validator per epoch and
+ * the pallet keeps no history, so this returns a single record or `null`.
  */
-export async function getPoUWContributions(address: string, limit: number = 20): Promise<PoUWContribution[]> {
+export async function getModelSubmission(address: string): Promise<ModelSubmission | null> {
   const api = await initializeApi();
 
   try {
-    const contributions: any = await api.query.staking?.pouwContributions?.entries?.(address);
+    const opt: any = await api.query.staking?.modelSubmissions?.(address);
+    const delta = unwrapOption<any>(opt);
+    if (!delta) return null;
 
-    if (!contributions || contributions.length === 0) {
-      return [];
-    }
-
-    return contributions
-      .map(([key, value]: [any, any]) => {
-        const data = value.unwrap();
-        return {
-          contributionId: key.args[1].toString(),
-          modelHash: data.modelHash.toString(),
-          qualityScore: data.qualityScore.toNumber(),
-          timelinessScore: data.timelinessScore.toNumber(),
-          honestyScore: data.honestyScore.toNumber(),
-          totalScore: data.totalScore.toNumber(),
-          reward: formatBalance(data.reward.toString()),
-          timestamp: data.timestamp.toNumber(),
-          status: data.status.toString() as any,
-        };
-      })
-      .slice(0, limit);
+    return {
+      address,
+      computationCommitment: delta.computationCommitment?.toHex?.() ?? '0x',
+      computationLog: delta.computationLog?.toHex?.() ?? '0x',
+      encryptedDeltaBytes: delta.encryptedDelta?.length ?? 0,
+      submittedAt: Number(delta.submittedAt?.toString() ?? 0),
+    };
   } catch (error) {
-    console.error('Failed to fetch PoUW contributions:', error);
-    return [];
+    console.error('Failed to fetch model submission:', error);
+    return null;
   }
 }
 
@@ -268,7 +304,7 @@ export async function getActiveValidators(): Promise<Validator[]> {
         nominatorCount: 0,
         isActive: true,
         rewardPoints: Number(data?.totalContributions?.toString() ?? 0),
-        name: data?.location?.toString() || undefined,
+        name: bytesToString(data?.location) || undefined,
       };
     });
 
@@ -317,20 +353,6 @@ export async function reportTrainingContribution(
     console.error('Report training failed:', error);
     throw error;
   }
-}
-
-/**
- * Calculate estimated PoUW rewards
- */
-export function calculatePoUWReward(
-  qualityScore: number,
-  timelinessScore: number,
-  honestyScore: number,
-  baseReward: number = 100
-): number {
-  // Weighted calculation: Quality 40%, Timeliness 30%, Honesty 30%
-  const totalScore = (qualityScore * 0.4) + (timelinessScore * 0.3) + (honestyScore * 0.3);
-  return (baseReward * totalScore) / 100;
 }
 
 /**

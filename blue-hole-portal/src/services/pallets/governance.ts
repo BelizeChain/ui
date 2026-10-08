@@ -12,6 +12,7 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 import { connectionManager } from '@/lib/blockchain/connection';
+import { bytesToString } from '@/lib/utils';
 
 export interface Proposal {
   index: number;
@@ -47,37 +48,6 @@ function formatBalance(planck: string): string {
     return dalla.toFixed(2);
   } catch {
     return '0';
-  }
-}
-
-/**
- * Decode a `BoundedVec<u8, _>` (Substrate Bytes) into a UTF-8 string. Falls
- * back to a `0x...` hex representation if the bytes contain unprintable
- * control characters.
- */
-function bytesToString(raw: unknown): string {
-  if (raw == null) return '';
-  const codec = raw as { toU8a?: () => Uint8Array; toString?: () => string };
-  let bytes: Uint8Array | null = null;
-  try {
-    if (typeof codec.toU8a === 'function') {
-      bytes = codec.toU8a();
-    }
-  } catch {
-    bytes = null;
-  }
-  if (!bytes || bytes.length === 0) {
-    return typeof codec.toString === 'function' ? codec.toString() : '';
-  }
-  try {
-    const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    // eslint-disable-next-line no-control-regex
-    if (/[\u0000-\u0008\u000B-\u000C\u000E-\u001F]/.test(decoded)) {
-      return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-    }
-    return decoded;
-  } catch {
-    return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   }
 }
 
