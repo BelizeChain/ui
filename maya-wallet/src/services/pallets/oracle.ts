@@ -1,32 +1,34 @@
 /**
  * BelizeChain Oracle & Tourism Pallet Integration
  * Handles merchant verification and tourism cashback rewards
- * 
+ *
  * NOTE: Oracle pallet provides merchant verification ONLY.
  * bBZD peg is 1:1 with BZD (fixed by Central Bank, no price feed needed).
  */
 
 import { initializeApi } from '../blockchain';
+import { bytesToString } from '../../lib/codec';
 
+/**
+ * Mirrors `oracle.merchantCategories: AccountId -> MerchantCategory`.
+ *
+ * The pallet records no business name, no cashback rate and no district —
+ * `location` is an optional raw (latitude, longitude) pair, and `license` /
+ * `certification` are byte strings. An earlier version of this file read a
+ * non-existent `verifiedMerchants` map and invented every one of those fields.
+ */
 export interface VerifiedMerchant {
+  /** The merchant's account — this is the storage key. */
   merchantId: string;
-  businessName: string;
   owner: string;
-  category: 'Hotel' | 'Restaurant' | 'Tour' | 'Retail' | 'Transportation' | 'Other';
-  location: {
-    district: string;
-    address: string;
-    coordinates?: {
-      latitude: number;
-      longitude: number;
-    };
-  };
-  cashbackRate: number; // 5.0 - 8.0 (percentage)
+  category: string;
+  certification: string;
+  license: string;
+  coordinates?: { latitude: number; longitude: number };
+  verifiedAt: number;
+  expiresAt: number;
+  /** Derived locally: `expiresAt` has not yet passed. */
   verified: boolean;
-  verificationDate?: number;
-  verifier?: string; // Tourism Board address
-  licenseNumber?: string;
-  status: 'Active' | 'Suspended' | 'Revoked';
 }
 
 export interface TourismReward {
@@ -42,6 +44,33 @@ export interface TourismReward {
   status: 'Pending' | 'Approved' | 'Redeemed' | 'Rejected';
   redeemedAt?: number;
   bBZDRedeemed?: string; // Amount redeemed for bBZD
+}
+
+/** Current chain block number, used to derive merchant expiry. */
+async function currentBlock(api: Awaited<ReturnType<typeof initializeApi>>): Promise<number> {
+  try {
+    const header = await api.rpc.chain.getHeader();
+    return header.number.toNumber();
+  } catch {
+    return 0;
+  }
+}
+
+function toMerchant(address: string, raw: any, block: number): VerifiedMerchant | null {
+  const data = raw?.toJSON?.();
+  if (!data) return null;
+  const loc = Array.isArray(data.location) ? data.location : null;
+  return {
+    merchantId: address,
+    owner: String(data.merchant ?? address),
+    category: String(data.category),
+    certification: bytesToString(data.certification),
+    license: bytesToString(data.license),
+    coordinates: loc ? { latitude: Number(loc[0]), longitude: Number(loc[1]) } : undefined,
+    verifiedAt: Number(data.verifiedAt ?? 0),
+    expiresAt: Number(data.expiresAt ?? 0),
+    verified: Number(data.expiresAt ?? 0) > block,
+  };
 }
 
 export interface TourismStats {
@@ -62,33 +91,12 @@ export interface TourismStats {
  */
 export async function getVerifiedMerchant(merchantId: string): Promise<VerifiedMerchant | null> {
   const api = await initializeApi();
-  
-  try {
-    const merchantData: any = await api.query.oracle?.verifiedMerchants?.(merchantId);
-    
-    if (!merchantData || merchantData.isNone) {
-      return null;
-    }
 
-    const data = merchantData.unwrap();
-    
-    return {
-      merchantId,
-      businessName: data.businessName.toString(),
-      owner: data.owner.toString(),
-      category: data.category.toString() as any,
-      location: {
-        district: data.district.toString(),
-        address: data.address.toString(),
-        coordinates: data.coordinates?.toHuman() as any,
-      },
-      cashbackRate: data.cashbackRate.toNumber() / 100, // Convert from basis points
-      verified: data.verified.toHuman(),
-      verificationDate: data.verificationDate?.toNumber(),
-      verifier: data.verifier?.toString(),
-      licenseNumber: data.licenseNumber?.toString(),
-      status: data.status.toString() as any,
-    };
+  try {
+    if (!api.query.oracle?.merchantCategories) return null;
+    const raw: any = await api.query.oracle.merchantCategories(merchantId as any);
+    if (!raw || raw.isNone) return null;
+    return toMerchant(merchantId, raw, await currentBlock(api));
   } catch (error) {
     console.error('Failed to fetch merchant:', error);
     return null;
@@ -98,49 +106,34 @@ export async function getVerifiedMerchant(merchantId: string): Promise<VerifiedM
 /**
  * Get all verified merchants in a category
  */
+/**
+ * All verified merchants, optionally filtered by category.
+ *
+ * The `district` argument is retained for call-site compatibility but is not
+ * applied: `merchantCategories` stores a raw coordinate pair, not a district,
+ * so district filtering cannot be answered from chain state.
+ */
 export async function getVerifiedMerchants(
   category?: string,
   district?: string
 ): Promise<VerifiedMerchant[]> {
+  void district;
   const api = await initializeApi();
-  
-  try {
-    const merchants: any = await api.query.oracle?.verifiedMerchants?.entries?.() || [];
-    
-    if (!merchants || merchants.length === 0) {
-      return [];
-    }
 
-    return merchants
-      .filter(([, value]: [any, any]) => {
-        const data = value.unwrap();
-        const categoryMatch = !category || data.category.toString() === category;
-        const districtMatch = !district || data.district.toString() === district;
-        const isActive = data.status.toString() === 'Active';
-        return categoryMatch && districtMatch && isActive;
-      })
-      .map(([key, value]: [any, any]) => {
-        const merchantId = key.args[0].toString();
-        const data = value.unwrap();
-        
-        return {
-          merchantId,
-          businessName: data.businessName.toString(),
-          owner: data.owner.toString(),
-          category: data.category.toString() as any,
-          location: {
-            district: data.district.toString(),
-            address: data.address.toString(),
-            coordinates: data.coordinates?.toHuman() as any,
-          },
-          cashbackRate: data.cashbackRate.toNumber() / 100,
-          verified: data.verified.toHuman(),
-          verificationDate: data.verificationDate?.toNumber(),
-          verifier: data.verifier?.toString(),
-          licenseNumber: data.licenseNumber?.toString(),
-          status: data.status.toString() as any,
-        };
-      });
+  try {
+    if (!api.query.oracle?.merchantCategories) return [];
+    const entries = await api.query.oracle.merchantCategories.entries();
+    const block = await currentBlock(api);
+
+    const merchants: VerifiedMerchant[] = [];
+    for (const [key, raw] of entries as any[]) {
+      const address = key?.args?.[0]?.toString() ?? '';
+      const merchant = toMerchant(address, raw, block);
+      if (!merchant) continue;
+      if (category && merchant.category !== category) continue;
+      merchants.push(merchant);
+    }
+    return merchants;
   } catch (error) {
     console.error('Failed to fetch merchants:', error);
     return [];
@@ -152,18 +145,13 @@ export async function getVerifiedMerchants(
  */
 export async function isMerchantVerified(address: string): Promise<boolean> {
   const api = await initializeApi();
-  
-  try {
-    const merchantRecord: any = await api.query.oracle?.merchantsByAddress?.(address);
-    
-    if (!merchantRecord || merchantRecord.isNone) {
-      return false;
-    }
 
-    const merchantId = merchantRecord.unwrap().toString();
-    const merchant = await getVerifiedMerchant(merchantId);
-    
-    return Boolean(merchant?.verified) && merchant?.status === 'Active';
+  try {
+    if (!api.query.oracle?.merchantCategories) return false;
+    const raw: any = await api.query.oracle.merchantCategories(address as any);
+    if (!raw || raw.isNone) return false;
+    const merchant = toMerchant(address, raw, await currentBlock(api));
+    return merchant?.verified ?? false;
   } catch (error) {
     console.error('Failed to check merchant verification:', error);
     return false;
@@ -173,41 +161,18 @@ export async function isMerchantVerified(address: string): Promise<boolean> {
 /**
  * Get tourism rewards for a user
  */
+/**
+ * Tourism cashback rewards.
+ *
+ * There is no tourism-reward storage on chain — the oracle pallet tracks
+ * merchant verification, price feeds, land registry, IoT devices and KYC, and
+ * exposes `claimOracleRewards` for operator rewards only. The `tourismRewards`
+ * map this function used to read has never existed, so the previous
+ * implementation always threw and silently returned [].
+ */
 export async function getTourismRewards(address: string, limit: number = 50): Promise<TourismReward[]> {
-  const api = await initializeApi();
-  
-  try {
-    const rewards: any = await api.query.oracle?.tourismRewards?.entries?.(address) || [];
-    
-    if (!rewards || rewards.length === 0) {
-      return [];
-    }
-
-    return rewards
-      .map(([key, value]: [any, any]) => {
-        const rewardId = key.args[1].toString();
-        const data = value.unwrap();
-        
-        return {
-          rewardId,
-          user: address,
-          merchant: data.merchant.toString(),
-          merchantName: data.merchantName.toString(),
-          transactionHash: data.transactionHash.toString(),
-          amountSpent: formatBalance(data.amountSpent.toString()),
-          cashbackRate: data.cashbackRate.toNumber() / 100,
-          cashbackAmount: formatBalance(data.cashbackAmount.toString()),
-          timestamp: data.timestamp.toNumber(),
-          status: data.status.toString() as any,
-          redeemedAt: data.redeemedAt?.toNumber(),
-          bBZDRedeemed: data.bBZDRedeemed ? formatBalance(data.bBZDRedeemed.toString()) : undefined,
-        };
-      })
-      .slice(0, limit);
-  } catch (error) {
-    console.error('Failed to fetch tourism rewards:', error);
-    return [];
-  }
+  void address; void limit;
+  return [];
 }
 
 /**
@@ -215,7 +180,7 @@ export async function getTourismRewards(address: string, limit: number = 50): Pr
  */
 export async function getTourismStats(address: string): Promise<TourismStats> {
   const rewards = await getTourismRewards(address, 1000);
-  
+
   if (rewards.length === 0) {
     return {
       totalSpent: '0.00',
@@ -303,23 +268,17 @@ export async function getMerchantMapMarkers(district?: string): Promise<Array<{
   cashbackRate: number;
 }>> {
   const merchants = await getVerifiedMerchants(undefined, district);
-  
+
   return merchants
-    .filter(m => m.location.coordinates)
+    .filter(m => m.coordinates)
     .map(m => ({
       merchantId: m.merchantId,
-      name: m.businessName,
+      // The pallet stores no business name; the merchant account is the only label.
+      name: m.merchantId,
       category: m.category,
-      latitude: m.location.coordinates!.latitude,
-      longitude: m.location.coordinates!.longitude,
-      cashbackRate: m.cashbackRate,
+      latitude: m.coordinates!.latitude,
+      longitude: m.coordinates!.longitude,
+      // No cashback rate exists on chain.
+      cashbackRate: 0,
     }));
-}
-
-/**
- * Format balance helper
- */
-function formatBalance(planck: string): string {
-  const value = parseFloat(planck) / Math.pow(10, 12);
-  return value.toFixed(2);
 }

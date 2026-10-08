@@ -5,6 +5,18 @@
 
 import { initializeApi } from '../blockchain';
 import { web3FromAddress } from '@polkadot/extension-dapp';
+import { bytesToString } from '../../lib/codec';
+import { BELIZE_DISTRICTS } from '../../lib/districts';
+
+/** DALLA has 12 decimals. */
+const DALLA_DECIMALS = 12n;
+
+function formatDalla(planck: bigint): string {
+  const base = 10n ** DALLA_DECIMALS;
+  const whole = planck / base;
+  const frac = (planck % base).toString().padStart(Number(DALLA_DECIMALS), '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : whole.toString();
+}
 
 export interface MeshRadioHardware {
   id: string;
@@ -24,40 +36,124 @@ export interface RelayMiningStats {
   packetsRelayed: number;
   transactionsRelayed: number;
   reputationScore: number; // 0 - 10000
-  uptimePercent: number;
+  /** The pallet records no uptime metric, so this is genuinely unknown. */
+  uptimePercent: number | null;
   unclaimedRewardsDalla: string;
-  totalMinedDalla: string;
+  /** The pallet records no lifetime-total metric, only the claimable balance. */
+  totalMinedDalla: string | null;
   isGateway: boolean;
 }
 
 export interface EmergencyAlert {
   id: string;
-  title: string;
   message: string;
-  severity: 'Advisory' | 'Watch' | 'Warning' | 'Emergency' | 'Catastrophic';
-  issuer: 'NEMO Belize' | 'National Meteorological Service' | 'Belize Coast Guard';
-  targetDistricts: string[];
-  issuedAt: number;
-  expiresAt: number;
-  verifiedOnMesh: boolean;
-}
-
-export interface DistrictCoverage {
+  severity: string;
+  alertType: string;
+  /** AccountId of the issuing authority — the pallet stores an account, not an agency name. */
+  issuer: string;
+  /** The pallet stores one district per alert, not a list of targets. */
   district: string;
-  activeRepeaters: number;
-  signalStrength: 'Excellent' | 'Good' | 'Fair' | 'Sparse';
-  gatewayOnline: boolean;
-  waterCoverageKm: number;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  createdAt: number;
+  expiresAt: number;
+  resolved: boolean;
+  relayCount: number;
+  confirmations: number;
 }
 
-export const BELIZE_DISTRICT_COVERAGE: DistrictCoverage[] = [
-  { district: 'Ambergris Caye & Cayes', activeRepeaters: 14, signalStrength: 'Excellent', gatewayOnline: true, waterCoverageKm: 25 },
-  { district: 'Belize District', activeRepeaters: 18, signalStrength: 'Excellent', gatewayOnline: true, waterCoverageKm: 15 },
-  { district: 'Cayo District (Western)', activeRepeaters: 11, signalStrength: 'Good', gatewayOnline: true, waterCoverageKm: 5 },
-  { district: 'Stann Creek (Placencia)', activeRepeaters: 9, signalStrength: 'Good', gatewayOnline: true, waterCoverageKm: 20 },
-  { district: 'Toledo District (Southern)', activeRepeaters: 6, signalStrength: 'Fair', gatewayOnline: true, waterCoverageKm: 10 },
-  { district: 'Corozal & Orange Walk', activeRepeaters: 8, signalStrength: 'Good', gatewayOnline: true, waterCoverageKm: 12 },
-];
+/**
+ * On-chain mesh aggregates derived from `mesh.meshNodes`.
+ *
+ * There is deliberately no per-district repeater breakdown: a node's `region`
+ * field is a LoRa *frequency band* (US915 / EU868 / CN433 …), not a geographic
+ * district, so the chain cannot say how many repeaters sit in Cayo vs Toledo.
+ * An earlier version of this file invented those per-district numbers, plus a
+ * "signal strength" and "water coverage km" that no pallet measures.
+ */
+export interface MeshNetworkCoverage {
+  totalNodes: number;
+  activeNodes: number;
+  gatewayNodes: number;
+  messagesRelayed: number;
+  transactionsRelayed: number;
+  emergencyAlertsSent: number;
+  /** Highest `lastSeen` block across nodes, or null when no node reports one. */
+  lastSeenBlock: number | null;
+}
+
+/** Real per-district alert load, from `mesh.activeAlertCountPerDistrict`. */
+export interface DistrictAlertLoad {
+  district: string;
+  activeAlerts: number;
+}
+
+/**
+ * Read whole-network aggregates from `mesh.meshNodes`.
+ * Returns null when the pallet is unavailable so callers can show an honest
+ * empty state rather than a plausible-looking number.
+ */
+export async function getMeshNetworkCoverage(): Promise<MeshNetworkCoverage | null> {
+  try {
+    const api = await initializeApi();
+    if (!api.query.mesh?.meshNodes) return null;
+
+    const entries = await api.query.mesh.meshNodes.entries();
+    const coverage: MeshNetworkCoverage = {
+      totalNodes: 0,
+      activeNodes: 0,
+      gatewayNodes: 0,
+      messagesRelayed: 0,
+      transactionsRelayed: 0,
+      emergencyAlertsSent: 0,
+      lastSeenBlock: null,
+    };
+
+    for (const [, raw] of entries as any[]) {
+      const node: any = raw?.toJSON?.();
+      if (!node) continue;
+      coverage.totalNodes += 1;
+      if (node.active) coverage.activeNodes += 1;
+      if (node.active && node.isGateway) coverage.gatewayNodes += 1;
+      coverage.messagesRelayed += Number(node.messagesRelayed ?? 0);
+      coverage.transactionsRelayed += Number(node.transactionsRelayed ?? 0);
+      coverage.emergencyAlertsSent += Number(node.emergencyAlertsSent ?? 0);
+      const seen = Number(node.lastSeen ?? 0);
+      if (coverage.lastSeenBlock === null || seen > coverage.lastSeenBlock) {
+        coverage.lastSeenBlock = seen;
+      }
+    }
+
+    return coverage;
+  } catch (err) {
+    console.error('Failed to read mesh network coverage:', err);
+    return null;
+  }
+}
+
+/**
+ * Active alert count for each of the six national districts.
+ * `BELIZE_DISTRICTS` order matches the chain's `BelizeDistrict` enum once
+ * whitespace is stripped ("Orange Walk" -> OrangeWalk, "Stann Creek" -> StannCreek).
+ */
+export async function getDistrictAlertLoads(): Promise<DistrictAlertLoad[]> {
+  try {
+    const api = await initializeApi();
+    if (!api.query.mesh?.activeAlertCountPerDistrict) return [];
+
+    return await Promise.all(
+      BELIZE_DISTRICTS.map(async (district) => {
+        const enumKey = district.replace(/\s+/g, '') as any;
+        const count: any = await api.query.mesh.activeAlertCountPerDistrict(enumKey);
+        return { district, activeAlerts: Number(count?.toString?.() ?? 0) };
+      })
+    );
+  } catch (err) {
+    console.error('Failed to read district alert loads:', err);
+    return [];
+  }
+}
 
 /**
  * Get active emergency alerts received via LoRa mesh
@@ -65,24 +161,34 @@ export const BELIZE_DISTRICT_COVERAGE: DistrictCoverage[] = [
 export async function getEmergencyAlerts(): Promise<EmergencyAlert[]> {
   try {
     const api = await initializeApi();
-    const alerts: any = await api.query.mesh?.activeAlerts?.entries?.() || [];
-    if (alerts && alerts.length > 0) {
-      return alerts.map(([key, val]: [any, any]) => {
-        const id = key.args[0].toString();
-        const data = val.unwrap();
-        return {
-          id,
-          title: data.title.toString(),
-          message: data.message.toString(),
-          severity: data.severity.toString() as any,
-          issuer: data.issuer.toString() as any,
-          targetDistricts: data.targetDistricts.toHuman() as string[],
-          issuedAt: data.issuedAt.toNumber(),
-          expiresAt: data.expiresAt.toNumber(),
-          verifiedOnMesh: true,
-        };
+    // Storage item is `emergencyAlerts`, not `activeAlerts`.
+    if (!api.query.mesh?.emergencyAlerts) return [];
+
+    const entries = await api.query.mesh.emergencyAlerts.entries();
+    const alerts: EmergencyAlert[] = [];
+
+    for (const [key, raw] of entries as any[]) {
+      const data: any = raw?.toJSON?.();
+      if (!data) continue;
+      alerts.push({
+        id: String(data.alertId ?? key?.args?.[0]?.toString() ?? ''),
+        message: bytesToString(data.message),
+        severity: String(data.severity),
+        alertType: String(data.alertType),
+        issuer: String(data.issuer),
+        district: String(data.district),
+        latitude: Number(data.latitude ?? 0),
+        longitude: Number(data.longitude ?? 0),
+        radiusMeters: Number(data.radiusMeters ?? 0),
+        createdAt: Number(data.createdAt ?? 0),
+        expiresAt: Number(data.expiresAt ?? 0),
+        resolved: Boolean(data.resolved),
+        relayCount: Number(data.relayCount ?? 0),
+        confirmations: Number(data.confirmations ?? 0),
       });
     }
+
+    return alerts;
   } catch (err) {
     console.error('Failed to query emergency alerts:', err);
   }
@@ -96,37 +202,52 @@ export async function getEmergencyAlerts(): Promise<EmergencyAlert[]> {
 /**
  * Get Relay Mining stats for the connected account
  */
-export async function getRelayMiningStats(address: string): Promise<RelayMiningStats> {
+export async function getRelayMiningStats(address: string): Promise<RelayMiningStats | null> {
   try {
     const api = await initializeApi();
-    const stats: any = await api.query.mesh?.nodes?.(address);
-    if (stats && !stats.isNone) {
-      const data = stats.unwrap();
-      return {
-        nodeId: `!${address.slice(0, 8)}`,
-        packetsRelayed: data.messages_relayed.toNumber(),
-        transactionsRelayed: data.transactions_relayed.toNumber(),
-        reputationScore: data.reputation.toNumber(),
-        uptimePercent: 99.8,
-        unclaimedRewardsDalla: '240.50',
-        totalMinedDalla: '1,450.00',
-        isGateway: data.is_gateway.toHuman(),
-      };
-    }
-  } catch (err) {
-    console.warn('Fallback relay mining stats:', err);
-  }
+    // `mesh.nodes` does not exist. Nodes are keyed by [u8;4] node id, so we go
+    // through the owner index to find the ids this account actually owns.
+    if (!api.query.mesh?.nodesByOwner) return null;
 
-  return {
-    nodeId: `!${address.slice(2, 10).toLowerCase()}`,
-    packetsRelayed: 428,
-    transactionsRelayed: 34,
-    reputationScore: 9850,
-    uptimePercent: 99.7,
-    unclaimedRewardsDalla: '240.50',
-    totalMinedDalla: '1,450.00',
-    isGateway: true,
-  };
+    const owned: any = await api.query.mesh.nodesByOwner(address as any);
+    const nodeIds: string[] = (owned?.toJSON?.() as string[] | null) ?? [];
+    if (nodeIds.length === 0) return null;
+
+    let packetsRelayed = 0;
+    let transactionsRelayed = 0;
+    let reputationScore = 0;
+    let isGateway = false;
+
+    for (const nodeId of nodeIds) {
+      const raw: any = await api.query.mesh.meshNodes(nodeId as any);
+      // polkadot-js decodes struct fields to camelCase.
+      const node: any = raw?.toJSON?.();
+      if (!node) continue;
+      packetsRelayed += Number(node.messagesRelayed ?? 0);
+      transactionsRelayed += Number(node.transactionsRelayed ?? 0);
+      reputationScore = Math.max(reputationScore, Number(node.reputation ?? 0));
+      if (node.isGateway && node.active) isGateway = true;
+    }
+
+    const rewardRaw: any = api.query.mesh.relayRewards
+      ? await api.query.mesh.relayRewards(address as any)
+      : null;
+    const unclaimed = rewardRaw ? BigInt(String(rewardRaw.toString())) : 0n;
+
+    return {
+      nodeId: nodeIds[0],
+      packetsRelayed,
+      transactionsRelayed,
+      reputationScore,
+      uptimePercent: null,
+      unclaimedRewardsDalla: formatDalla(unclaimed),
+      totalMinedDalla: null,
+      isGateway,
+    };
+  } catch (err) {
+    console.error('Failed to read relay mining stats:', err);
+    return null;
+  }
 }
 
 /**
@@ -136,19 +257,31 @@ export async function claimRelayRewards(address: string): Promise<{ hash: string
   try {
     const api = await initializeApi();
     const injector = await web3FromAddress(address);
+
+    // Read the claimable balance first so we can report what was actually
+    // claimed instead of a hardcoded amount.
+    const rewardRaw: any = api.query.mesh.relayRewards
+      ? await api.query.mesh.relayRewards(address as any)
+      : null;
+    const claimable = rewardRaw ? BigInt(String(rewardRaw.toString())) : 0n;
+
     const tx = api.tx.mesh.claimRelayRewards();
     return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, dispatchError }) => {
+        if (dispatchError) {
+          reject(new Error(dispatchError.toString()));
+          return;
+        }
         if (status.isInBlock) {
-          resolve({ hash: txHash.toString(), amountClaimed: '240.50' });
+          resolve({ hash: txHash.toString(), amountClaimed: formatDalla(claimable) });
         }
       }).catch(reject);
     });
   } catch (err) {
-    return {
-      hash: `0x4a9e${Date.now().toString(16)}...`,
-      amountClaimed: '240.50',
-    };
+    // A failed claim must surface as a failure. It previously returned a
+    // synthetic 0x4a9e... hash and a fabricated "240.50" payout, so a failed
+    // claim looked identical to a successful one.
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 

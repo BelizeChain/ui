@@ -15,7 +15,10 @@ import {
   getRelayMiningStats,
   claimRelayRewards,
   encodeCompressedLoRaPacket,
-  BELIZE_DISTRICT_COVERAGE,
+  getMeshNetworkCoverage,
+  getDistrictAlertLoads,
+  type MeshNetworkCoverage,
+  type DistrictAlertLoad,
 } from '@/services/pallets/mesh';
 import type { MeshMessage } from '@/types/mesh';
 import {
@@ -39,22 +42,6 @@ import {
 interface PendingProof extends PakitUploadResponse {
   messages: MeshMessage[];
 }
-
-interface NearbyPeer {
-  id: string;
-  name: string;
-  distance: string;
-  rssi: number;
-  lastSeen: string;
-  verified: boolean;
-}
-
-const NEARBY_PEERS_SIMULATION: NearbyPeer[] = [
-  { id: 'peer-caye-1', name: 'San Pedro Water Taxi Terminal POS', distance: '12m', rssi: -58, lastSeen: 'Just now', verified: true },
-  { id: 'peer-caye-2', name: 'Ambergris Dive & Snorkel Hub', distance: '24m', rssi: -69, lastSeen: '3s ago', verified: true },
-  { id: 'peer-caye-3', name: 'Placencia Solar Microgrid Gateway', distance: '38m', rssi: -78, lastSeen: '12s ago', verified: true },
-  { id: 'peer-caye-4', name: 'Cayo Rainforest Eco-Lodge', distance: '45m', rssi: -82, lastSeen: '25s ago', verified: true },
-];
 
 export default function MeshPage() {
   const { selectedAccount, isConnected } = useWallet();
@@ -93,6 +80,8 @@ export default function MeshPage() {
   // Relay Mining & Alerts State
   const [miningStats, setMiningStats] = useState<RelayMiningStats | null>(null);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
+  const [coverage, setCoverage] = useState<MeshNetworkCoverage | null>(null);
+  const [districtLoads, setDistrictLoads] = useState<DistrictAlertLoad[]>([]);
   const [isClaimingMining, setIsClaimingMining] = useState(false);
 
   // BLE Nearby Peers State
@@ -101,12 +90,16 @@ export default function MeshPage() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [proofs, alertsData] = await Promise.all([
+        const [proofs, alertsData, coverageData, loads] = await Promise.all([
           pakitBridgeService.getPendingProofs().catch(() => []),
           getEmergencyAlerts().catch(() => []),
+          getMeshNetworkCoverage().catch(() => null),
+          getDistrictAlertLoads().catch(() => []),
         ]);
         setPending(proofs as any);
         setAlerts(alertsData);
+        setCoverage(coverageData);
+        setDistrictLoads(loads);
 
         if (selectedAccount?.address) {
           const stats = await getRelayMiningStats(selectedAccount.address);
@@ -287,19 +280,27 @@ export default function MeshPage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Relay Mining Mined</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400">+{miningStats?.unclaimedRewardsDalla || '240.50'}</span>
+              <span className="text-lg font-bold text-emerald-400">
+                {miningStats ? `+${miningStats.unclaimedRewardsDalla}` : '—'}
+              </span>
               <span className="text-[10px] text-emerald-300">Ɗ</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">{miningStats?.packetsRelayed || 428} packets relayed</span>
+            <span className="text-[11px] text-slate-400 block">
+              {miningStats ? `${miningStats.packetsRelayed} packets relayed` : 'No relay node registered'}
+            </span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">NEMO Emergency</span>
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
-              <span className="font-bold text-amber-300 text-sm">1 Active Advisory</span>
+              <span className={`h-2 w-2 rounded-full ${alerts.length > 0 ? 'bg-amber-400' : 'bg-slate-600'}`} />
+              <span className="font-bold text-amber-300 text-sm">
+                {alerts.length === 1 ? '1 Active Advisory' : `${alerts.length} Active Advisories`}
+              </span>
             </div>
-            <span className="text-[11px] text-slate-400 block">Nationwide mesh repeaters</span>
+            <span className="text-[11px] text-slate-400 block">
+              {coverage ? `${coverage.activeNodes} active mesh nodes` : 'Nationwide mesh repeaters'}
+            </span>
           </div>
         </div>
 
@@ -592,29 +593,40 @@ export default function MeshPage() {
 
               <button
                 onClick={handleClaimMiningRewards}
-                disabled={isClaimingMining || miningStats?.unclaimedRewardsDalla === '0.00'}
+                disabled={isClaimingMining || !miningStats || miningStats.unclaimedRewardsDalla === '0.00'}
                 className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md disabled:opacity-50"
               >
-                {isClaimingMining ? 'Claiming On-Chain...' : `Claim ${miningStats?.unclaimedRewardsDalla || '240.50'} Ɗ Rewards`}
+                {isClaimingMining
+                  ? 'Claiming On-Chain...'
+                  : `Claim ${miningStats?.unclaimedRewardsDalla ?? '0.00'} Ɗ Rewards`}
               </button>
             </div>
+
+            {!miningStats && (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-400">
+                This account owns no registered mesh node, so there is nothing to mine or claim.
+                Register a LoRa gateway node first.
+              </div>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
                 <span className="text-slate-500 block text-[10px]">Packets Relayed</span>
-                <span className="font-bold text-white text-base font-mono">{miningStats?.packetsRelayed || 428}</span>
+                <span className="font-bold text-white text-base font-mono">{miningStats?.packetsRelayed ?? '—'}</span>
               </div>
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
                 <span className="text-slate-500 block text-[10px]">Transactions Bridged</span>
-                <span className="font-bold text-emerald-400 text-base font-mono">{miningStats?.transactionsRelayed || 34}</span>
+                <span className="font-bold text-emerald-400 text-base font-mono">{miningStats?.transactionsRelayed ?? '—'}</span>
               </div>
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
                 <span className="text-slate-500 block text-[10px]">Reputation Score</span>
-                <span className="font-bold text-purple-400 text-base font-mono">{miningStats?.reputationScore || 9850} / 10000</span>
+                <span className="font-bold text-purple-400 text-base font-mono">
+                  {miningStats ? `${miningStats.reputationScore} / 10000` : '—'}
+                </span>
               </div>
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
                 <span className="text-slate-500 block text-[10px]">Node Uptime</span>
-                <span className="font-bold text-teal-300 text-base font-mono">{miningStats?.uptimePercent || 99.7}%</span>
+                <span className="text-slate-400 text-xs">Not tracked on-chain</span>
               </div>
             </div>
           </div>
@@ -633,6 +645,13 @@ export default function MeshPage() {
               </p>
             </div>
 
+            {alerts.length === 0 && (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-xs text-slate-400">
+                No emergency broadcast has been issued on-chain. Alerts appear here only when an
+                authorised issuer submits one — this feed never fabricates a bulletin.
+              </div>
+            )}
+
             <div className="space-y-4">
               {alerts.map((alert) => (
                 <div
@@ -644,7 +663,7 @@ export default function MeshPage() {
                       <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] font-bold rounded-full border border-amber-500/40">
                         {alert.severity}
                       </span>
-                      <span className="font-bold text-white text-sm">{alert.title}</span>
+                      <span className="font-bold text-white text-sm">{alert.alertType}</span>
                     </div>
                     <span className="text-[10px] text-slate-400 font-mono">LoRa Authenticated</span>
                   </div>
@@ -652,8 +671,8 @@ export default function MeshPage() {
                   <p className="text-xs text-slate-300 leading-relaxed">{alert.message}</p>
 
                   <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 gap-2">
-                    <span>Issuer: <b className="text-slate-300">{alert.issuer}</b></span>
-                    <span>Target: <b className="text-amber-400">{alert.targetDistricts.join(', ')}</b></span>
+                    <span>Issuer: <b className="text-slate-300 font-mono">{alert.issuer}</b></span>
+                    <span>District: <b className="text-amber-400">{alert.district}</b></span>
                   </div>
                 </div>
               ))}
@@ -667,32 +686,68 @@ export default function MeshPage() {
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <GlobeHemisphereWest size={22} className="text-emerald-400" />
-                Belize LoRa Mesh Coverage Topology
+                Belize LoRa Mesh Coverage
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Coverage mapping across all 6 national districts with marine LoRa links over water.
+                Live aggregates read from <span className="font-mono">mesh.meshNodes</span>. A node&apos;s
+                region field is a LoRa frequency band, not a district, so per-district repeater counts
+                are not derivable from chain state.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {BELIZE_DISTRICT_COVERAGE.map((cov, i) => (
-                <div key={i} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">{cov.district}</span>
-                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold text-[10px] rounded-full">
-                      {cov.signalStrength}
+            {coverage === null ? (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-xs text-slate-400">
+                Mesh node registry unavailable on this runtime.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                {[
+                  { label: 'Registered Nodes', value: coverage.totalNodes },
+                  { label: 'Active Nodes', value: coverage.activeNodes },
+                  { label: 'Gateways Online', value: coverage.gatewayNodes },
+                  { label: 'Packets Relayed', value: coverage.messagesRelayed },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">{stat.label}</span>
+                    <span className="font-bold text-white text-base font-mono">
+                      {stat.value.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex justify-between text-slate-400 text-[11px]">
-                    <span>Active Repeaters: <b className="text-slate-200">{cov.activeRepeaters} Nodes</b></span>
-                    <span>Water Link: <b className="text-teal-400">{cov.waterCoverageKm} km</b></span>
-                  </div>
-                  <div className="pt-1 flex items-center gap-2 text-[10px] text-slate-500">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>Internet Gateway: {cov.gatewayOnline ? 'Online' : 'Mesh Standalone'}</span>
-                  </div>
+                ))}
+              </div>
+            )}
+
+            {coverage?.totalNodes === 0 && (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-400">
+                No mesh nodes are registered on-chain yet.
+              </div>
+            )}
+
+            <div>
+              <h4 className="text-sm font-bold text-white mb-2">Active Emergency Alerts by District</h4>
+              {districtLoads.length === 0 ? (
+                <div className="text-xs text-slate-400">District alert counters unavailable.</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {districtLoads.map((load) => (
+                    <div
+                      key={load.district}
+                      className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-white">{load.district}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          load.activeAlerts > 0
+                            ? 'bg-amber-500/20 text-amber-300'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {load.activeAlerts} Active
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
