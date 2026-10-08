@@ -116,16 +116,10 @@ export function useOptimisticVoting() {
     }
 
     try {
-      // Create vote extrinsic
-      const voteExtrinsic = (api.tx as any).belizeGovernance.vote(
-        proposalId,
-        {
-          Standard: {
-            vote: voteType === 'Aye' ? { aye: true } : voteType === 'Nay' ? { nay: true } : { abstain: true },
-            balance: amount.toString(),
-          },
-        }
-      );
+      // Real extrinsic: `governance.castVote(proposalId, voteChoiceIndex, conviction)`.
+      // `VoteChoice` is Aye = 0, Nay = 1, Abstain = 2; conviction 0 = none.
+      const voteChoiceIndex = voteType === 'Aye' ? 0 : voteType === 'Nay' ? 1 : 2;
+      const voteExtrinsic = api.tx.governance.castVote(Number(proposalId), voteChoiceIndex, 0);
 
       // Sign and send transaction
       return new Promise((resolve) => {

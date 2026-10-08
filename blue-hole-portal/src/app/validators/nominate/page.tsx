@@ -36,7 +36,8 @@ const NOMINATION_DISABLED_REASON =
 
 const MIN_NOMINATION = 100;
 const MAX_NOMINATION = 1_000_000;
-const BOND_PERIOD = 28;
+/** `staking::UnbondingPeriod` = 14_400 blocks, i.e. ~24 hours at 6s blocks. */
+const UNBONDING_PERIOD_BLOCKS = 14_400;
 
 export default function NominatePage() {
   const router = useRouter();
@@ -57,30 +58,26 @@ export default function NominatePage() {
       try {
         await blockchainService.initialize();
         const api = await blockchainService.getApi();
-        const activeEra = await api.query.staking?.activeEra();
-        const currentEra = (activeEra as { unwrap?: () => { index: { toNumber(): number } } })
-          ?.unwrap?.()?.index?.toNumber() ?? 0;
         const entries = (await api.query.staking?.validators?.entries?.()) ?? [];
         const sessionValidators = await api.query.session?.validators();
         const activeSet = new Set(
           (sessionValidators as unknown as { toString(): string }[] | undefined)?.map((v) => v.toString()) ?? [],
         );
         const out: Validator[] = [];
-        for (const [key, prefs] of entries) {
+        for (const [key, record] of entries) {
           const address = (key as { args: { toString(): string }[] }).args[0].toString();
-          const commission =
-            (prefs as unknown as { commission: { toNumber(): number } }).commission.toNumber() / 1e7;
-          const exposure = (await api.query.staking?.erasStakers(currentEra, address)) as
-            | { total?: { toString(): string }; own?: { toString(): string } }
-            | undefined;
-          const totalDalla = Number(BigInt(exposure?.total?.toString() ?? '0') / 1_000_000_000_000n);
-          const ownDalla = Number(BigInt(exposure?.own?.toString() ?? '0') / 1_000_000_000_000n);
+          const info = record as unknown as { unwrap?: () => unknown; stake?: { toString(): string } };
+          const recordValue = (typeof info.unwrap === 'function' ? info.unwrap() : info) as {
+            stake?: { toString(): string };
+          };
+          const stakeDalla = Number(BigInt(recordValue?.stake?.toString() ?? '0') / 1_000_000_000_000n);
           out.push({
             address,
             name: `${address.slice(0, 8)}…${address.slice(-6)}`,
-            commission,
-            totalStake: totalDalla,
-            ownStake: ownDalla,
+            // The PoUW staking pallet charges no commission.
+            commission: 0,
+            totalStake: stakeDalla,
+            ownStake: stakeDalla,
             status: activeSet.has(address) ? 'Active' : 'Waiting',
           });
         }
@@ -109,8 +106,8 @@ export default function NominatePage() {
 
   const parsedAmount = parseFloat(nominationAmount) || 0;
 
-  const isValidAmount = parsedAmount >= MIN_NOMINATION && 
-                        parsedAmount <= MAX_NOMINATION && 
+  const isValidAmount = parsedAmount >= MIN_NOMINATION &&
+                        parsedAmount <= MAX_NOMINATION &&
                         parsedAmount <= availableBalance;
 
   // Nomination is unsupported by the on-chain pallet (see
@@ -126,8 +123,8 @@ export default function NominatePage() {
       <div className="sticky top-0 bg-gray-900/80 backdrop-blur-xl px-6 py-4 z-10 border-b border-gray-700/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => router.back()} 
+            <button
+              onClick={() => router.back()}
               className="p-2 hover:bg-gray-800 rounded-full transition-colors"
             >
               <ArrowLeft size={24} className="text-gray-300" weight="bold" />
@@ -164,7 +161,7 @@ export default function NominatePage() {
           <div className="space-y-6">
             <GlassCard variant="dark-medium" blur="lg" className="p-6">
               <h2 className="text-lg font-bold text-white mb-4">Select Validator</h2>
-              
+
               {/* Search */}
               <div className="relative mb-4">
                 <MagnifyingGlass size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -198,7 +195,7 @@ export default function NominatePage() {
                         <CheckCircle size={20} className="text-blue-400" weight="fill" />
                       )}
                     </div>
-                    
+
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div>
                         <p className="text-gray-500">Commission</p>
@@ -260,7 +257,7 @@ export default function NominatePage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Commission</p>
-                      <p className="text-sm font-semibold text-white">{selectedValidator.commission}%</p>
+                      <p className="text-sm font-semibold text-white">—</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Status</p>
@@ -272,7 +269,7 @@ export default function NominatePage() {
                 {/* Nomination Amount */}
                 <GlassCard variant="dark-medium" blur="lg" className="p-6">
                   <h3 className="text-lg font-bold text-white mb-4">Nomination Amount</h3>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -341,7 +338,7 @@ export default function NominatePage() {
                   <ul className="space-y-2 text-xs text-gray-400">
                     <li className="flex gap-2">
                       <span className="text-amber-400">•</span>
-                      <span>Unbonding period: <strong className="text-white">{BOND_PERIOD} days</strong></span>
+                      <span>Unbonding period: <strong className="text-white">{UNBONDING_PERIOD_BLOCKS.toLocaleString()} blocks (≈ 24 hours)</strong></span>
                     </li>
                     <li className="flex gap-2">
                       <span className="text-amber-400">•</span>
@@ -387,7 +384,7 @@ export default function NominatePage() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <GlassCard variant="dark-medium" blur="lg" className="max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-white mb-4">Confirm Nomination</h3>
-            
+
             <div className="space-y-3 mb-6">
               <div className="p-3 bg-gray-800/50 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Validator</p>
@@ -401,7 +398,7 @@ export default function NominatePage() {
 
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg mb-6">
               <p className="text-xs text-amber-300">
-                <strong>Note:</strong> Your DALLA will be locked for {BOND_PERIOD} days. Unbonding requires waiting period before funds can be withdrawn.
+                <strong>Note:</strong> Your DALLA will be locked for {UNBONDING_PERIOD_BLOCKS.toLocaleString()} blocks (≈ 24 hours). Unbonding requires a waiting period before funds can be withdrawn.
               </p>
             </div>
 

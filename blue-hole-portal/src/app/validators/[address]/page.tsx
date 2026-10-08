@@ -2,11 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Cube, TrendUp, Coins, Users, CheckCircle, Warning } from 'phosphor-react';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { GlassCard } from '@/components/ui/glass-card';
 import { useStaking } from '@/hooks/useStaking';
 import { useSystem } from '@/hooks/useSystem';
-import { useState, useMemo, use } from 'react';
+import { useMemo, use } from 'react';
 
 interface ValidatorDetailPageProps {
   params: Promise<{ address: string }>;
@@ -17,37 +16,12 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
   const router = useRouter();
   const { validators, isLoading } = useStaking();
   const { systemInfo } = useSystem();
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
 
   // Find validator by address
-  const validator = useMemo(() => 
+  const validator = useMemo(() =>
     validators.find(v => v.address === address),
     [validators, address]
   );
-
-  // Placeholder historical chart data. BelizeChain does not expose per-day
-  // block production / uptime / PoUW history on a single storage map; this
-  // requires an indexer. The series below is deterministic (no Math.random /
-  // Date.now during render) so React purity is preserved, but the numbers
-  // are illustrative until the indexer ships.
-  const performanceData = useMemo(() => {
-    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
-    return Array.from({ length: days }, (_, i) => ({
-      date: `Day ${i + 1}`,
-      blocks: 0,
-      uptime: 0,
-      pouwScore: 0,
-      pqwScore: 0,
-    }));
-  }, [timeRange]);
-
-  const commissionHistory = useMemo(() => {
-    const base = validator ? validator.commission : 0;
-    return Array.from({ length: 12 }, (_, i) => ({
-      month: `M${i + 1}`,
-      commission: base,
-    }));
-  }, [validator]);
 
   if (isLoading) {
     return (
@@ -135,10 +109,10 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
             <div className="p-4 bg-gray-800/50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Users size={20} className="text-emerald-400" weight="duotone" />
-                <p className="text-xs text-gray-400">Nominators</p>
+                <p className="text-xs text-gray-400">Slashes</p>
               </div>
-              <p className="text-2xl font-bold text-white">{validator.nominatorsCount}</p>
-              <p className="text-xs text-gray-400 mt-1">Active</p>
+              <p className="text-2xl font-bold text-white">{validator.slashes ?? 0}</p>
+              <p className="text-xs text-gray-400 mt-1">staking.slashingSpans</p>
             </div>
             <div className="p-4 bg-gray-800/50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
@@ -146,7 +120,7 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
                 <p className="text-xs text-gray-400">Estimated APY</p>
               </div>
               <p className="text-2xl font-bold text-white">{validator.estimatedApy !== null ? `${validator.estimatedApy.toFixed(2)}%` : '—'}</p>
-              <p className="text-xs text-gray-400 mt-1">Annual Return</p>
+              <p className="text-xs text-gray-400 mt-1">Not published on chain</p>
             </div>
             <div className="p-4 bg-gray-800/50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
@@ -154,35 +128,36 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
                 <p className="text-xs text-gray-400">Blocks Produced</p>
               </div>
               <p className="text-2xl font-bold text-white">{validator.blocksProduced !== null ? validator.blocksProduced.toLocaleString() : '—'}</p>
-              <p className="text-xs text-gray-400 mt-1">This Era</p>
+              <p className="text-xs text-gray-400 mt-1">Not tracked on chain</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div className="p-4 bg-gray-800/50 rounded-lg">
               <p className="text-xs text-gray-400 mb-1">Commission</p>
-              <p className="text-xl font-bold text-white">{validator.commission.toFixed(2)}%</p>
+              <p className="text-xl font-bold text-white">—</p>
+              <p className="text-xs text-gray-400 mt-1">Not charged by this pallet</p>
             </div>
             <div className="p-4 bg-gray-800/50 rounded-lg">
-              <p className="text-xs text-gray-400 mb-1">PoUW Score</p>
+              <p className="text-xs text-gray-400 mb-1">PoUW Quality Score</p>
               <div className="flex items-center gap-2">
-                <p className="text-xl font-bold text-white">{validator.pouwScore}</p>
+                <p className="text-xl font-bold text-white">{validator.pouwScore ?? '—'}</p>
                 <div className="flex-1 bg-gray-700 rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full"
-                    style={{ width: `${validator.pouwScore}%` }}
+                    style={{ width: `${validator.pouwScore ?? 0}%` }}
                   />
                 </div>
               </div>
             </div>
             <div className="p-4 bg-gray-800/50 rounded-lg">
-              <p className="text-xs text-gray-400 mb-1">PQW Score</p>
+              <p className="text-xs text-gray-400 mb-1">Quantum Score</p>
               <div className="flex items-center gap-2">
-                <p className="text-xl font-bold text-white">{validator.pqwScore}</p>
+                <p className="text-xl font-bold text-white">{validator.pqwScore ?? '—'}</p>
                 <div className="flex-1 bg-gray-700 rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full"
-                    style={{ width: `${validator.pqwScore}%` }}
+                    style={{ width: `${validator.pqwScore ?? 0}%` }}
                   />
                 </div>
               </div>
@@ -190,88 +165,14 @@ export default function ValidatorDetailPage({ params }: ValidatorDetailPageProps
           </div>
         </GlassCard>
 
-        {/* Performance Charts */}
+        {/* Performance history */}
         <GlassCard variant="dark-medium" blur="lg" className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Performance History</h2>
-            <div className="flex gap-2">
-              {(['7d', '30d', '90d'] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    timeRange === range
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-gray-800/50 text-gray-400 hover:bg-gray-800'
-                  }`}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {/* Blocks Produced */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-300 mb-3">Blocks Produced</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={performanceData}>
-                  <defs>
-                    <linearGradient id="blocksGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="date" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#9ca3af' }}
-                  />
-                  <Area type="monotone" dataKey="blocks" stroke="#3b82f6" fillOpacity={1} fill="url(#blocksGradient)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Uptime & Scores */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-300 mb-3">Uptime & Contribution Scores</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="date" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#9ca3af' }}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="uptime" stroke="#10b981" strokeWidth={2} name="Uptime %" />
-                  <Line type="monotone" dataKey="pouwScore" stroke="#3b82f6" strokeWidth={2} name="PoUW Score" />
-                  <Line type="monotone" dataKey="pqwScore" stroke="#a855f7" strokeWidth={2} name="PQW Score" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Commission History */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-300 mb-3">Commission History</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={commissionHistory}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="month" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="#9ca3af" style={{ fontSize: '12px' }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#9ca3af' }}
-                  />
-                  <Bar dataKey="commission" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <h2 className="text-lg font-bold text-white mb-2">Performance History</h2>
+          <p className="text-sm text-gray-400">
+            Historical per-validator series (blocks authored, uptime, PoUW score over time) are
+            not stored on chain — the pallet keeps only the current validator record. This section
+            will populate once a history indexer ships.
+          </p>
         </GlassCard>
 
         {/* Validator Information */}

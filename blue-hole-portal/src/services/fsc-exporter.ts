@@ -8,6 +8,7 @@
 import { ApiPromise } from '@polkadot/api';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { bytesToString } from '@/lib/utils';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -119,27 +120,40 @@ export class FSCExporter {
     const records: KYCRecord[] = [];
 
     try {
-      // Query all identity registrations
-      const identities = await this.api.query.identity?.identityOf?.entries?.() || [];
+      // `identity.identityOf` maps an account to an identity id; the profile
+      // itself lives in `identity.identities`.
+      const entries = (await this.api.query.identity?.identityOf?.entries?.()) ?? [];
 
-      for (const [key, value] of identities || []) {
+      for (const [key, idCodec] of entries as any[]) {
         const accountId = key.args[0].toString();
-        const identity: any = (value as any).unwrap();
+        const identityId = idCodec?.toString?.() ?? '';
+        const profile: any = await this.api.query.identity?.identities?.(identityId);
+        const status: any = await this.api.query.compliance?.complianceStatusOf?.(accountId);
 
-        // Extract KYC data from identity pallet
-        const kycStatus = await this.api.query.compliance?.kycStatus?.(accountId);
-        const kycData: any = await this.api.query.compliance?.kycRecords?.(accountId);
+        const verificationLevel = status?.verificationLevel?.toString?.() ?? 'None';
+        const riskLevel = status?.riskLevel?.toString?.() ?? 'Low';
+        const lastVerification = Number(status?.lastVerification?.toString?.() ?? 0);
 
         records.push({
           accountId,
-          citizenId: identity.info?.additional?.[0]?.[1]?.asRaw?.toString() || 'N/A',
-          fullName: this.decodeIdentityField(identity.info?.display) || 'Unknown',
-          dateOfBirth: 'N/A', // Extract from additional fields if available
-          address: this.decodeIdentityField(identity.info?.legal) || 'N/A',
-          kycStatus: kycStatus?.toString() as any || 'Pending',
-          kycDate: new Date(), // Extract from KYC data
-          verifiedBy: kycData?.verifier?.toString() || 'System',
-          riskLevel: await this.calculateRiskLevel(accountId),
+          citizenId: identityId || 'N/A',
+          fullName: bytesToString(profile?.name) || 'Unnamed identity',
+          // Date of birth and postal address are not recorded by the identity
+          // pallet — it stores attestation hashes, not personal fields.
+          dateOfBirth: 'N/A',
+          address: 'N/A',
+          kycStatus: status?.restricted
+            ? 'Rejected'
+            : verificationLevel === 'None'
+              ? 'Pending'
+              : 'Verified',
+          // `last_verification` is Unix seconds; 0 means never verified.
+          kycDate: new Date(lastVerification * 1000),
+          // No verifier account is recorded on the compliance status.
+          verifiedBy: '—',
+          // On-chain risk level. `Prohibited` folds into `High` because the
+          // report type has no separate bucket.
+          riskLevel: riskLevel === 'Low' ? 'Low' : riskLevel === 'Medium' ? 'Medium' : 'High',
         });
       }
     } catch (error) {
@@ -218,25 +232,26 @@ export class FSCExporter {
       const sessionValidators = await this.api.query.session?.validators();
       const activeValidators = (sessionValidators as any)?.length || 0;
 
-      const activeEra = await this.api.query.staking?.activeEra();
-      const currentEra = (activeEra as any)?.unwrap()?.index?.toNumber() || 0;
-
       let totalStaked = BigInt(0);
       const allValidators = await this.api.query.staking?.validators?.entries?.() || [];
 
-      for (const [key] of allValidators || []) {
-        const accountId = key.args[0].toString();
-        const exposure: any = await this.api.query.staking?.erasStakers(currentEra, accountId);
-        totalStaked += BigInt(exposure?.total?.toString() || '0');
+      for (const [, record] of allValidators as any[]) {
+        const info: any = record?.unwrap ? record.unwrap() : record;
+        totalStaked += BigInt(info?.stake?.toString() || '0');
       }
 
-      // Get slashing events
+      // `slashingSpans` is keyed by account and holds the number of times that
+      // validator was slashed, so the values sum to the total slash count.
       const slashingSpans = await this.api.query.staking?.slashingSpans?.entries?.() || [];
+      const slashingEvents = (slashingSpans as any[]).reduce(
+        (sum, [, value]) => sum + Number(value?.toString?.() ?? 0),
+        0,
+      );
 
       return {
         activeValidators,
         totalStaked: this.formatBalance(totalStaked.toString()),
-        slashingEvents: slashingSpans?.length || 0,
+        slashingEvents,
       };
     } catch (error) {
       console.error('Error getting validator activity:', error);
@@ -472,48 +487,6 @@ export class FSCExporter {
     doc.text(`Unverified Accounts: ${risk.unverifiedAccounts}`, 100, yPos);
 
     return doc;
-  }
-
-  /**
-   * Helper: Decode identity field
-   */
-  private decodeIdentityField(field: any): string | null {
-    if (!field) return null;
-    if (field.isRaw) return field.asRaw.toUtf8();
-    if (field.isData) return field.asData.toString();
-    return field.toString();
-  }
-
-  /**
-   * Helper: Calculate risk level based on account holdings and history.
-   *
-   * Heuristic combining balance exposure with slashing history:
-   *  - High:   >= 1M DALLA total, or any recorded slashing span
-   *  - Medium: >= 100k DALLA total
-   *  - Low:    otherwise
-   */
-  private async calculateRiskLevel(accountId: string): Promise<'Low' | 'Medium' | 'High'> {
-    try {
-      const DALLA = BigInt(10 ** 12);
-      const HIGH_BALANCE = DALLA * BigInt(1000000); // 1M DALLA
-      const MEDIUM_BALANCE = DALLA * BigInt(100000); // 100k DALLA
-
-      const account: any = await this.api.query.system.account(accountId);
-      const free = BigInt(account?.data?.free?.toString() || '0');
-      const reserved = BigInt(account?.data?.reserved?.toString() || '0');
-      const total = free + reserved;
-
-      // Slashing history is a strong negative signal for staked accounts.
-      const slashingSpans: any = await this.api.query.staking?.slashingSpans?.(accountId);
-      const hasSlashing = !!slashingSpans && !slashingSpans.isNone && !slashingSpans.isEmpty;
-
-      if (hasSlashing || total >= HIGH_BALANCE) return 'High';
-      if (total >= MEDIUM_BALANCE) return 'Medium';
-      return 'Low';
-    } catch (error) {
-      console.error('Error calculating risk level:', error);
-      return 'Low';
-    }
   }
 
   /**

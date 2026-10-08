@@ -99,14 +99,28 @@ export function useOptimisticApprovals() {
     }
 
     try {
-      // Create approval extrinsic based on type
+      // Create approval extrinsic based on type. There is no generic
+      // `approveProposal` on this runtime: treasury spends are approved via
+      // `governance.approveTreasurySpend` and governance proposals via an Aye
+      // `governance.castVote`.
+      const numericId = Number(proposalId);
       let approvalExtrinsic;
       if (proposalType === 'treasury') {
-        approvalExtrinsic = (api.tx as any).belizeEconomy.approveProposal(proposalId);
-      } else if (proposalType === 'kyc') {
-        approvalExtrinsic = (api.tx as any).belizeCompliance.approveApplication(proposalId);
+        approvalExtrinsic = api.tx.governance.approveTreasurySpend(numericId);
+      } else if (proposalType === 'governance') {
+        approvalExtrinsic = api.tx.governance.castVote(numericId, 0, 0);
       } else {
-        approvalExtrinsic = (api.tx as any).belizeGovernance.approveProposal(proposalId);
+        updateApprovalStatus(
+          approvalKey,
+          'failed',
+          undefined,
+          'KYC decisions are not on-chain proposals.',
+        );
+        setIsApproving(false);
+        return {
+          success: false,
+          error: 'KYC decisions are not on-chain proposals — use compliance.verifyAccount.',
+        };
       }
 
       // Sign and send transaction
@@ -170,15 +184,22 @@ export function useOptimisticApprovals() {
     setIsApproving(true);
 
     try {
-      // Create rejection extrinsic based on type
-      let rejectionExtrinsic;
-      if (proposalType === 'treasury') {
-        rejectionExtrinsic = (api.tx as any).belizeEconomy.rejectProposal(proposalId);
-      } else if (proposalType === 'kyc') {
-        rejectionExtrinsic = (api.tx as any).belizeCompliance.rejectApplication(proposalId, reason || '');
-      } else {
-        rejectionExtrinsic = (api.tx as any).belizeGovernance.rejectProposal(proposalId);
+      // There is no `rejectTreasurySpend` or KYC-rejection extrinsic: treasury
+      // proposals lapse at `expiresAt`, and KYC restrictions go through
+      // `compliance.restrictAccount`. Governance proposals are rejected with a
+      // Nay `governance.castVote`.
+      void reason;
+      if (proposalType !== 'governance') {
+        setIsApproving(false);
+        return {
+          success: false,
+          error:
+            proposalType === 'treasury'
+              ? 'Treasury spend proposals cannot be rejected on chain; they expire.'
+              : 'KYC decisions are not on-chain proposals — use compliance.restrictAccount.',
+        };
       }
+      const rejectionExtrinsic = api.tx.governance.castVote(Number(proposalId), 1, 0);
 
       // Sign and send transaction
       return new Promise((resolve) => {

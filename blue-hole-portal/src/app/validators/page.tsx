@@ -22,7 +22,7 @@ import { useStaking, type Validator } from '@/hooks/useStaking';
 export default function ValidatorsPage() {
   const router = useRouter();
   const { validators, isLoading: loading, error, refetch } = useStaking();
-  const [sortBy, setSortBy] = useState<'stake' | 'pouw' | 'pqw' | 'uptime'>('stake');
+  const [sortBy, setSortBy] = useState<'stake' | 'pouw'>('stake');
 
   const sortedValidators = [...validators].sort((a, b) => {
     switch (sortBy) {
@@ -30,19 +30,18 @@ export default function ValidatorsPage() {
         return a.totalStake < b.totalStake ? 1 : a.totalStake > b.totalStake ? -1 : 0;
       case 'pouw':
         return (b.pouwScore ?? -1) - (a.pouwScore ?? -1);
-      case 'pqw':
-        return (b.pqwScore ?? -1) - (a.pqwScore ?? -1);
-      case 'uptime':
-        return (b.uptime ?? -1) - (a.uptime ?? -1);
       default:
         return 0;
     }
   });
 
   const totalStake = validators.reduce((sum, v) => sum + v.totalStake, 0n);
-  const avgCommission = validators.length > 0
-    ? validators.reduce((sum, v) => sum + v.commission, 0) / validators.length
-    : 0;
+  const activeCount = validators.filter((v) => v.status === 'Active').length;
+  const totalSlashes = validators.reduce((sum, v) => sum + (v.slashes ?? 0), 0);
+  const avgPouwScore =
+    validators.length > 0
+      ? validators.reduce((sum, v) => sum + (v.pouwScore ?? 0), 0) / validators.length
+      : 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -90,31 +89,31 @@ export default function ValidatorsPage() {
           iconBg="bg-emerald-500/20"
           title="Total Sovereign Bond"
           value={`${(Number(totalStake) / 1e12).toLocaleString()} Ɗ`}
-          subtitle="10,000,000 DALLA bonded"
+          subtitle="Sum of bonded stake on chain"
         />
         <MetricCard
           icon={Users}
           iconColor="text-cyan-400"
           iconBg="bg-cyan-500/20"
           title="Active Authorities"
-          value={`${validators.filter((v) => v.status === 'Active').length} / ${validators.length}`}
-          subtitle="4 national consensus nodes"
+          value={`${activeCount} / ${validators.length}`}
+          subtitle="In the session authority set"
         />
         <MetricCard
           icon={Lightning}
           iconColor="text-teal-400"
           iconBg="bg-teal-500/20"
-          title="Avg Commission"
-          value={`${avgCommission.toFixed(1)}%`}
-          subtitle="Central bank capped at 5%"
+          title="Avg PoUW Quality"
+          value={`${avgPouwScore.toFixed(1)} / 100`}
+          subtitle="From staking.validators"
         />
         <MetricCard
           icon={ShieldCheck}
           iconColor="text-emerald-400"
           iconBg="bg-emerald-500/20"
-          title="Network Security"
-          value="100% Online"
-          subtitle="Ceiba Tailscale + Edge Mesh"
+          title="Slashes on Record"
+          value={`${totalSlashes}`}
+          subtitle="staking.slashingSpans total"
         />
       </div>
 
@@ -126,8 +125,6 @@ export default function ValidatorsPage() {
             {[
               { value: 'stake', label: 'Total Stake' },
               { value: 'pouw', label: 'PoUW Score' },
-              { value: 'pqw', label: 'PQW Score' },
-              { value: 'uptime', label: 'Uptime' },
             ].map((option) => (
               <button
                 key={option.value}
@@ -206,8 +203,6 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
   const fmt = (n: number | null, suffix = '') =>
     n === null ? '—' : `${n.toFixed(n < 10 ? 1 : 0)}${suffix}`;
 
-  const isCeiba = validator.name.toLowerCase().includes('ceiba');
-
   return (
     <>
       <GlassCard variant="dark-medium" blur="lg" className="p-6 border border-slate-800/80 bg-slate-950/70 hover:border-emerald-500/30 transition-all shadow-lg shadow-black/40">
@@ -218,11 +213,6 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
               <div className="flex flex-wrap items-center gap-3 mb-2">
                 <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                   {validator.name}
-                  {isCeiba && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                      TAILSCALE SEED
-                    </span>
-                  )}
                 </h3>
                 <StatusBadge status={validator.status} />
                 {validator.slashes === 0 && (
@@ -261,8 +251,8 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
             </div>
             <div>
               <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">Commission</p>
-              <p className="text-base font-bold text-teal-400">{validator.commission}%</p>
-              <p className="text-[10px] text-slate-500">Operator fee</p>
+              <p className="text-base font-bold text-teal-400">—</p>
+              <p className="text-[10px] text-slate-500">Not charged by this pallet</p>
             </div>
             <div>
               <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">PoUW Score</p>
@@ -298,15 +288,18 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
             <div className="flex items-center gap-4">
               <span className="text-slate-300 flex items-center gap-1.5">
                 <Lightning size={13} className="text-amber-400" weight="bold" />
-                <span><strong className="text-white">{validator.blocksProduced?.toLocaleString() ?? 1240}</strong> blocks authored</span>
+                <span><strong className="text-white">{validator.blocksProduced?.toLocaleString() ?? '—'}</strong> blocks authored</span>
               </span>
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Users size={13} className="text-cyan-400" weight="bold" />
-                <span><strong className="text-slate-200">{validator.nominatorsCount}</strong> nominators</span>
+                <ShieldCheck size={13} className="text-cyan-400" weight="bold" />
+                <span><strong className="text-slate-200">{validator.slashes ?? 0}</strong> slashes</span>
               </span>
             </div>
             <div className="flex items-center gap-2 text-emerald-400 font-medium">
-              <span>Estimated APY: ~{validator.estimatedApy ?? 12.4}%</span>
+              <span>
+                Estimated APY:{' '}
+                {validator.estimatedApy === null ? '—' : `~${validator.estimatedApy}%`}
+              </span>
             </div>
           </div>
         </div>
@@ -343,19 +336,20 @@ function ValidatorCard({ validator, onStake }: ValidatorCardProps) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
-                    <p className="text-slate-400 text-[10px] uppercase">Node Peer Type</p>
-                    <p className="text-white font-medium">{isCeiba ? 'Tailscale Mesh Primary' : 'Sentry Validator'}</p>
+                    <p className="text-slate-400 text-[10px] uppercase">Authority Status</p>
+                    <p className="text-white font-medium">{validator.status}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
-                    <p className="text-slate-400 text-[10px] uppercase">Session Epoch</p>
-                    <p className="text-emerald-400 font-medium">Era 1 (Active)</p>
+                    <p className="text-slate-400 text-[10px] uppercase">Slashes on Record</p>
+                    <p className="text-emerald-400 font-medium">{validator.slashes ?? 0}</p>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
                   <p className="text-slate-400 text-[10px] uppercase">Telemetry & Workload Verification</p>
                   <p className="text-slate-200">
-                    Proof-of-Useful-Work (PoUW) and Quantum Work (PoQW) are validated on-chain each epoch. Node meets all Central Bank SLA constraints.
+                    Proof-of-Useful-Work (PoUW) scores are recorded on-chain in `staking.validators`
+                    each epoch. No Central Bank SLA attestation is published on chain.
                   </p>
                 </div>
               </div>
