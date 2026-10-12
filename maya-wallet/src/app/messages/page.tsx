@@ -314,7 +314,7 @@ export default function MessagesPage() {
               </div>
             </div>
 
-            {selectedAccount && <EmergencyBroadcastPanel address={selectedAccount.address} />}
+            <EmergencyBroadcastPanel address={selectedAccount.address} />
 
             {isLoadingChain && <div className="text-center py-8 text-slate-400 text-xs">Loading alerts…</div>}
             {!isLoadingChain && alerts.length === 0 && (
