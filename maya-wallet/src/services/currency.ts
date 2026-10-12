@@ -192,21 +192,6 @@ export function clearConversionHistory(): void {
   }
 }
 
-// Save conversion to history
-function saveConversionToHistory(conversion: ConversionResult): void {
-  try {
-    const history = getConversionHistory();
-    history.unshift(conversion); // Add to beginning
-
-    // Keep only last 100 conversions
-    const trimmed = history.slice(0, 100);
-
-    localStorage.setItem(CONVERSION_HISTORY_KEY, JSON.stringify(trimmed));
-  } catch (error) {
-    walletLogger.error('Failed to save conversion history', error);
-  }
-}
-
 // Get stored exchange rates
 function getStoredRates(): ExchangeRate[] {
   try {

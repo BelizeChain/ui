@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAdminStore } from '@/store/admin';
 import { Button, Card, Badge, LanguageSwitcherCompact } from '@belizechain/shared';
 import {

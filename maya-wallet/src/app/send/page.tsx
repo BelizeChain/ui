@@ -9,7 +9,6 @@ import { getContacts, type Contact } from '@/services/contacts';
 import {
   ArrowLeft,
   ArrowRight,
-  User,
   Users,
   Check,
   ClipboardText,

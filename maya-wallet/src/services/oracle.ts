@@ -312,19 +312,6 @@ export function disconnectOracle(): void {
 
 // Helper Functions
 
-function parseOracleRate(oracleData: any): number {
-  try {
-    // Oracle stores rates as fixed-point with 18 decimals
-    const rawRate = oracleData.unwrap?.() || oracleData;
-    const rateString = rawRate.toString();
-    const rate = parseInt(rateString, 10) / 1e18;
-    return rate;
-  } catch (error) {
-    walletLogger.error('Failed to parse oracle rate', error);
-    return 1.0;
-  }
-}
-
 function getFallbackRate(fromCurrency: string, toCurrency: string): number | null {
   // Fallback rates (bBZD is strictly pegged: 1 bBZD = 1 BZD = $0.50 USD; DALLA is unpegged floating crypto)
   const rates: Record<string, number> = {

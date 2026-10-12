@@ -19,7 +19,6 @@ import {
   X,
   Download,
   GlobeHemisphereWest,
-  Bank,
   Receipt,
   Scales,
 } from 'phosphor-react';

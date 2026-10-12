@@ -30,7 +30,6 @@ import {
   PencilSimple,
   ChartBar,
   Medal,
-  User,
   ShieldCheck,
   ChartLineUp,
   Trophy,
@@ -42,10 +41,8 @@ import {
   ArrowRight,
   MapPin,
   TreeEvergreen,
-  Shield,
   Clock,
   GraduationCap,
-  Coins,
 } from 'phosphor-react';
 
 /** Round a `Hash`/bytes value down to a short, displayable identifier. */

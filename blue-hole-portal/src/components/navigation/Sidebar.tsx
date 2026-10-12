@@ -44,7 +44,10 @@ export function Sidebar({ className }: SidebarProps) {
 
   // Real-time data
   const { proposals } = useGovernance();
-  const { stats: complianceStats } = useCompliance();
+  // Called for its subscription side effect. `stats` is deliberately not
+  // destructured: the compliance badge below still reads a hard-coded 0, so
+  // wiring it up is an unfinished behaviour change, not a cleanup.
+  useCompliance();
 
   // Calculate badge counts
   const badgeCounts = {

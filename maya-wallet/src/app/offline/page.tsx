@@ -20,7 +20,6 @@ import {
   ArrowsClockwise,
   Radio,
   Key,
-  Scan,
   Cpu,
 } from 'phosphor-react';
 

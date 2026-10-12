@@ -11,7 +11,6 @@ import {
   CheckCircle,
   ShieldCheck,
   IdentificationCard,
-  Phone,
   Buildings,
   Clock,
 } from 'phosphor-react';

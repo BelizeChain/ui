@@ -9,7 +9,6 @@ import {
   Copy,
   CheckCircle,
   IdentificationCard,
-  Phone,
   Check,
   ShieldCheck,
 } from 'phosphor-react';

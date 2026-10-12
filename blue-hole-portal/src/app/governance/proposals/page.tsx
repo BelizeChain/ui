@@ -22,7 +22,6 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui';
 import { useWalletStore } from '@/store/wallet';
 import {
-  getActiveProposals,
   voteOnProposal,
   type Proposal as ChainProposal,
 } from '@/services/pallets/governance';

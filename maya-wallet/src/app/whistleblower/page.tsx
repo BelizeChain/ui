@@ -6,7 +6,6 @@ import {
   ShieldCheck,
   DownloadSimple,
   UploadSimple,
-  Key,
   CheckCircle,
   XCircle,
   Coins,

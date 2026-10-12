@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useUIStore } from '@/store/ui';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useI18n } from '@belizechain/shared';
 import { WalletProvider } from '@/contexts/WalletContext';
