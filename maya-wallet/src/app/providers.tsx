@@ -67,7 +67,7 @@ function ThemeHydration({ children }: { children: React.ReactNode }) {
       const root = document.documentElement;
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const effectiveDark = theme === 'dark' || (theme === 'auto' && prefersDark);
-      
+
       root.classList.toggle('dark', effectiveDark);
       root.dataset.mayaAccent = accent;
       root.classList.toggle('maya-no-glass', !glass);
@@ -79,7 +79,7 @@ function ThemeHydration({ children }: { children: React.ReactNode }) {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => applyTheme();
     mediaQuery.addEventListener('change', handleChange);
-    
+
     // Also listen to local storage changes from appearance page
     window.addEventListener('storage', (e) => {
       if (e.key === 'maya-appearance-settings') applyTheme();

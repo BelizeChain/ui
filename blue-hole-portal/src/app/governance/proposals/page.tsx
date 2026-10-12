@@ -129,7 +129,7 @@ export default function GovernanceProposalsPage() {
   const { selectedAccount } = useWalletStore();
   const { proposals: chainProposals, isLoading: loading, refetch } = useGovernance();
   const proposals = chainProposals.map(chainToUiProposal);
-  
+
   const [voteError, setVoteError] = useState<string | null>(null);
   const [submittingVoteFor, setSubmittingVoteFor] = useState<number | null>(null);
   const [pendingVote, setPendingVote] = useState<{ proposalId: number; vote: VoteType } | null>(null);
