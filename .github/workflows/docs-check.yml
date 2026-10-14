@@ -1,0 +1,45 @@
+# ──────────────────────────────────────────────────────────
+# Docs Claims Check — do the repo's docs and configs agree with reality?
+#
+# Runs the canonical checker from the public belizechain repo, which verifies
+# that markdown links resolve, that compose ${VAR:?} requirements are supplied
+# by the CI job that validates them, that Node versions align, and that image
+# pins are documented.
+#
+# WHY IT FETCHES THE CHECKER INSTEAD OF SHIPPING A COPY
+#   A copy per repo drifts, and a drifting checker is the exact failure this
+#   check exists to catch. One copy in a public repo means every repo runs the
+#   same rules with no token and no drift. Public is what makes the fetch work
+#   from a sibling without a PAT.
+#
+# Only this repo is checked out, so cross-repo checks (extrinsic names vs the
+# belizechain pallets) skip. Run it from a full workspace checkout for those.
+# ──────────────────────────────────────────────────────────
+name: Docs Claims Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-claims:
+    name: 📄 Docs claims vs reality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the canonical checker
+        uses: actions/checkout@v7
+        with:
+          repository: BelizeChain/belizechain
+          ref: belizechain
+          path: .doc-claims-src
+
+      - name: Run doc-claims checker
+        run: ./.doc-claims-src/scripts/doc-claims/check-doc-claims.sh .

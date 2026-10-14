@@ -52,3 +52,8 @@ yarn-error.log*
 **/test-results/
 **/playwright-report/
 **/.playwright/
+
+# The docs-check workflow checks out the canonical checker here — a nested clone
+# of BelizeChain/belizechain. Ephemeral in CI, but a local run of the workflow
+# command would otherwise create a second clone inside the repo.
+.doc-claims-src/
