@@ -3,7 +3,7 @@ const { ApiPromise, WsProvider } = require('@polkadot/api');
 async function main() {
   const wsUrl = process.env.WS_URL || 'wss://testnet.belizechain.org/ws';
   console.log(`Connecting to Ceiba Testnet at ${wsUrl}...`);
-  
+
   try {
     const provider = new WsProvider(wsUrl);
     const api = await ApiPromise.create({ provider });

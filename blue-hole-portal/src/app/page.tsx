@@ -53,7 +53,7 @@ export default function NationalDashboard() {
   const router = useRouter();
   const { error, reconnect } = useBlockchain();
   const { selectedAccount, connectWallet } = useWalletStore();
-  
+
   // Blockchain data hooks
   const { treasuryBalance, isLoading: economyLoading } = useEconomy();
   const { stats: stakingStats, isLoading: stakingLoading } = useStaking();
@@ -115,7 +115,7 @@ export default function NationalDashboard() {
               <p className="text-sm font-bold text-rose-300">Testnet Endpoint Disconnected</p>
               <p className="text-xs text-slate-400">{error}</p>
             </div>
-            <Button 
+            <Button
               onClick={reconnect}
               className="ml-auto px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold"
             >
@@ -217,7 +217,7 @@ export default function NationalDashboard() {
               </div>
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-slate-400 font-sans">Consensus Role:</span>
-                <span className="text-teal-300">Aura / Grandpa Block Producer</span>
+                <span className="text-teal-300">BABE Block Producer / GRANDPA Finality</span>
               </div>
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-slate-400 font-sans">Block Finality:</span>
@@ -255,7 +255,7 @@ export default function NationalDashboard() {
                 <span className="text-cyan-400 font-bold">1.2ms (Zero Drift)</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-slate-400 font-sans">Grandpa Votes:</span>
+                <span className="text-slate-400 font-sans">GRANDPA Votes:</span>
                 <span className="text-slate-300">Attesting 100% of rounds</span>
               </div>
             </div>
@@ -429,9 +429,9 @@ function MetricCard({ icon: Icon, iconColor, iconBg, title, value, subtext, tren
           </span>
         )}
       </div>
-      
+
       <p className="text-2xl font-black text-white tracking-tight mb-1 font-sans">{value}</p>
-      
+
       {subtext && (
         <p className="text-[11px] text-slate-400 font-medium">{subtext}</p>
       )}
