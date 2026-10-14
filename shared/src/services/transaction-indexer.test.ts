@@ -2,7 +2,7 @@
  * Unit tests for the direct-RPC transaction indexer.
  *
  * The mocked tests are deterministic and run everywhere; the live test only
- * runs when BELIZECHAIN_LIVE_RPC is set (e.g. ws://100.81.45.25:9944).
+ * runs when BELIZECHAIN_LIVE_RPC is set (e.g. wss://testnet.belizechain.org/ws).
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -213,7 +213,7 @@ export default function NationalDashboard() {
             <div className="space-y-2 text-xs font-mono">
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-slate-400 font-sans">Node Address:</span>
-                <span className="text-slate-200">100.81.45.25:30333 (Tailscale)</span>
+                <span className="text-slate-200">100.119.97.38:30333 (Tailscale)</span>
               </div>
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-slate-400 font-sans">Consensus Role:</span>
@@ -244,7 +244,7 @@ export default function NationalDashboard() {
             <div className="space-y-2 text-xs font-mono">
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-slate-400 font-sans">Node Address:</span>
-                <span className="text-slate-200">100.81.45.25:30334 (Tailscale)</span>
+                <span className="text-slate-200">100.119.97.38:30334 (Tailscale)</span>
               </div>
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-slate-400 font-sans">Consensus Role:</span>

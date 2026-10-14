@@ -7,6 +7,25 @@
 - **Framework**: Next.js 14 (App Router), React 18+, Turborepo
 - **Branch**: `main` (default)
 
+## ⚠️ Live state — read this first
+
+**This file holds conventions, not live values.** No host IPs, spec versions, or image
+tags — those drift, and a restated value is a second copy that cannot be verified. This
+file named `100.81.45.25`, retired on 2026-10-07, until 2026-10-14.
+
+→ **Read [`../belizechain/docs/ECOSYSTEM_STATE.md`](../belizechain/docs/ECOSYSTEM_STATE.md)
+before any claim about live state and before starting work here.** It carries the current
+chain / host / endpoint facts (each with the date verified), the authority order for when
+documents disagree, and the open workstreams.
+**If this file and that one disagree about a live value, that one wins.**
+
+### How to work here
+
+- **Verify, don't infer.** Read the source or query the live system. Say "not verified"
+rather than asserting — an unsourced factual claim is a defect, not a shortcut.
+- **When a doc contradicts the code, the code wins**, and the doc is a bug to fix.
+- **Put volatile facts in `ECOSYSTEM_STATE.md`, not here.** Conventions stay here.
+
 ## Applications
 - **Maya Wallet**: Citizen/business wallet — DALLA/bBZD management, governance voting, staking
 - **Blue Hole Portal**: Government dashboard — treasury, compliance, analytics
@@ -14,7 +33,7 @@
 
 ## Deployment Target: Ceiba Self-Hosted
 - **Active ops source of truth**: `../belizechain/docs/operations/CEIBA_OPERATIONS_RUNBOOK.md`, `../belizechain/docs/deployment/PHASE2_CEIBA_SERVICES_PLAN.md`, and `../infra/docker-compose.ceiba.yml`
-- **Current host**: Ceiba (`ssh wicked@100.81.45.25` over Tailscale)
+- **Current host**: `ceiba` — `ssh wicked@ceiba` (Tailscale `100.119.97.38`, LAN `10.0.0.19`). `100.81.45.25` is the **retired** host and runs no containers.
 - **Current frontend routing contract**: HTTPS via the Oracle edge → Ceiba nginx, which routes `/` **by hostname** through the `$root_backend` map in `../infra/nginx/nginx.conf`. Every name also serves `/rpc`, `/ws`, `/api/nawal`, `/api/kinich`, `/api/pakit`, `/ipfs`.
 - **Current infra note**: apex and `www` serve the `org` site; `testnet.*` and `portal.*` serve Blue Hole Portal (`ui`); `wallet.*` serves Maya Wallet (`maya`) **at the root**; `explorer.*` serves the explorer. Both UI images are built **without** absolute URLs, so they derive `/rpc`, `/ws` and `/api/*` from `window.location.origin` — that is why every name must serve those paths. The old `/wallet/` path 301s to `wallet.belizechain.org`. Rollout/rollback contract: `../infra/deploy/CEIBA_UI_ROLLOUT.md` (current); `../infra/docs/B1_MAYA_EXPOSURE_2026-06-13.md` is the historical first cut.
 

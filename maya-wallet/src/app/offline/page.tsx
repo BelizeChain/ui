@@ -521,7 +521,7 @@ let genesis = FALLBACK_GENESIS;
                   <span className="text-slate-500 text-[10px] uppercase font-bold">Target RPC Gateway</span>
                   <span className="text-emerald-400 text-[10px] font-bold">Connected</span>
                 </div>
-                <p className="text-slate-300">ws://100.81.45.25:9944 (Ceiba Validator Node)</p>
+                <p className="text-slate-300">wss://testnet.belizechain.org/ws (BelizeChain testnet node)</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

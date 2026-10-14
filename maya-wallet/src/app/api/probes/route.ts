@@ -11,8 +11,8 @@ const TARGETS: ProbeTarget[] = [
     urls: [
       'http://127.0.0.1:8001/health',
       'http://localhost:8001/health',
-      'https://100.81.45.25/api/pakit/health',
-      'http://100.81.45.25:8001/health',
+      'https://belizechain.org/api/pakit/health',
+      'http://pakit:8001/health',
     ],
   },
   {
@@ -20,8 +20,8 @@ const TARGETS: ProbeTarget[] = [
     urls: [
       'http://127.0.0.1:8080/health',
       'http://localhost:8080/health',
-      'https://100.81.45.25/api/nawal/health',
-      'http://100.81.45.25:8080/health',
+      'https://belizechain.org/api/nawal/health',
+      'http://nawal:8080/health',
     ],
   },
   {
@@ -30,8 +30,8 @@ const TARGETS: ProbeTarget[] = [
       'http://127.0.0.1:8888/readyz',
       'http://127.0.0.1:8888/health',
       'http://localhost:8888/health',
-      'https://100.81.45.25/api/kinich/health',
-      'http://100.81.45.25:8888/health',
+      'https://belizechain.org/api/kinich/health',
+      'http://kinich:8888/health',
     ],
   },
 ];

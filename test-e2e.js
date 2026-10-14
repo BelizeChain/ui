@@ -1,7 +1,7 @@
 const { ApiPromise, WsProvider } = require('@polkadot/api');
 
 async function main() {
-  const wsUrl = process.env.WS_URL || 'ws://100.81.45.25:9944';
+  const wsUrl = process.env.WS_URL || 'wss://testnet.belizechain.org/ws';
   console.log(`Connecting to Ceiba Testnet at ${wsUrl}...`);
   
   try {
