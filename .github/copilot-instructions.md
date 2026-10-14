@@ -13,7 +13,7 @@
 tags — those drift, and a restated value is a second copy that cannot be verified. This
 file named `100.81.45.25`, retired on 2026-10-07, until 2026-10-14.
 
-→ **Read [`../belizechain/docs/ECOSYSTEM_STATE.md`](../belizechain/docs/ECOSYSTEM_STATE.md)
+→ **Read [`../../belizechain/docs/ECOSYSTEM_STATE.md`](../../belizechain/docs/ECOSYSTEM_STATE.md)
 before any claim about live state and before starting work here.** It carries the current
 chain / host / endpoint facts (each with the date verified), the authority order for when
 documents disagree, and the open workstreams.
