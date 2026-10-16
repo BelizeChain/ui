@@ -17,6 +17,7 @@ import {
   removeTextRecord,
   updateHostingContent,
   supportsPrimaryDomain,
+  isDomainAvailable,
   type Domain,
   type DomainListing,
 } from '@/services/pallets/bns';
@@ -257,11 +258,36 @@ export default function BNSPage() {
     addNotification({ type: 'success', message: `Copied to clipboard: ${text.slice(0, 16)}...` });
   };
 
-  // Domain search availability simulation
-  const searchAvailability = useMemo(() => {
-    if (!searchName.trim()) return null;
+  // Registry availability for the searched name. `bns.domainRegistry` is the only
+  // authority on whether a name is free: checking only the user's own domains and
+  // the loaded marketplace listings reported every other registered name as available.
+  const [registryAnswer, setRegistryAnswer] = useState<{ domain: string; free: boolean } | null>(null);
+
+  useEffect(() => {
     const clean = searchName.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    const isTaken = myDomains.some((d) => d.name === clean && d.tld === selectedTld);
+    if (!clean) return;
+    const full = `${clean}${selectedTld}`;
+    let cancelled = false;
+    isDomainAvailable(full)
+      .then((free) => {
+        if (!cancelled) setRegistryAnswer({ domain: full, free });
+      })
+      .catch(() => {
+        // An unanswerable query is not "taken": drop the answer so the guard
+        // below treats the name as unknown and claims nothing about it.
+        if (!cancelled) setRegistryAnswer(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [searchName, selectedTld]);
+
+  const searchAvailability = useMemo(() => {
+    const clean = searchName.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!clean) return null;
+    // Never claim availability for a name the registry has not answered for yet.
+    if (registryAnswer?.domain !== `${clean}${selectedTld}`) return null;
+
     const isMarket = marketListings.some((m) => m.name === clean && m.tld === selectedTld);
     const isReserved = ['government', 'police', 'centralbank', 'customs', 'defense'].includes(clean);
 
@@ -272,12 +298,12 @@ export default function BNSPage() {
     return {
       name: clean,
       tld: selectedTld,
-      available: !isTaken && !isMarket && !isReserved,
+      available: registryAnswer.free && !isMarket && !isReserved,
       isReserved,
       pricePerYearDalla,
       category: clean.length <= 3 ? 'Super Premium' : clean.length <= 5 ? 'Premium' : 'Standard',
     };
-  }, [searchName, selectedTld, myDomains, marketListings]);
+  }, [searchName, selectedTld, marketListings, registryAnswer]);
 
   // Handle Domain Registration
   const handleRegister = async (e: React.FormEvent) => {

@@ -280,7 +280,7 @@ export async function clearPrimaryDomain(address: string): Promise<{ hash: strin
   try {
     if (!api.tx.bns?.clearPrimaryDomain) {
       throw new Error(
-        'Clearing a primary domain requires runtime spec 110, which is not deployed on this chain yet.',
+        'The connected chain does not expose bns.clearPrimaryDomain, so a primary domain cannot be cleared here.',
       );
     }
 
