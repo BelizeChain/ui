@@ -92,10 +92,13 @@ labels the single-file `ui.tsx` as **"PRIMARY"**, and `ui.tsx` shadows the direc
 `index.ts` in module resolution. All 12 were duplicated in **both** apps' own
 `components/ui/`, so nothing was lost.
 
-### 2.3 Orphaned dependencies (identified; `package.json` not yet changed)
+### 2.3 Orphaned dependencies — ✅ RESOLVED (see `AUDIT-UI-02-DEPENDENCIES.md`)
 
 These had **zero** importers once the removed files were excluded — verified against
-`src`, tests, configs and scripts:
+`src`, tests, configs and scripts.
+**All of them were removed in the follow-up dependency pass**, which removed **44**
+unused entries in total (these 8 plus **36** further ones) and corrected **5** undeclared
+*phantom* dependencies. Details and verification: `AUDIT-UI-02-DEPENDENCIES.md`.
 
 | Dependency | Declared in | Sole user (now removed) |
 |---|---|---|
@@ -108,9 +111,8 @@ These had **zero** importers once the removed files were excluded — verified a
 | `@radix-ui/react-slot` | `shared` | `components/ui/button.tsx` |
 | `class-variance-authority` | `shared` | `components/ui/*` |
 
-**Not yet removed** — a dependency change requires a lockfile update and a rebuild, and
-was deliberately left out of this pass so the deletion stays independently verifiable.
-`clsx` was checked and **is** still used (`components/ui.tsx`, `styles/index.ts`).
+`clsx` was checked and **is** still used (`components/ui.tsx`, `styles/index.ts`) — it
+was kept.
 
 ---
 

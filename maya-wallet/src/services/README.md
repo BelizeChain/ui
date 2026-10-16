@@ -472,10 +472,22 @@ All services use prefixed localStorage keys to avoid conflicts:
 - **Web Share API**: Mobile only (Chrome 89+, Safari 12.2+)
 - **Clipboard API**: HTTPS required (Chrome 63+, Firefox 53+, Safari 13.1+)
 
-### Lint Errors
-Current compile errors for missing `@belizechain/shared/utils/logging` are expected. Will resolve after:
+### Importing from `@belizechain/shared`
+The package exposes a **single entry point**. Import everything from the package root:
+
+```ts
+import { logger, estimateFee } from '@belizechain/shared';
+```
+
+Subpath imports (`@belizechain/shared/utils/logging`) are not published and will not
+resolve. Replace any you find with a root import — this package type-checks clean
+(`tsc --noEmit` reports **0 errors**), so an unresolved shared import is a real
+defect, not an expected state.
+
+After changing anything under `shared/`, rebuild it before rebuilding this package:
+
 ```bash
-cd ui/shared && npm install
+npm run build --workspace=shared
 ```
 
 ### Data Migration

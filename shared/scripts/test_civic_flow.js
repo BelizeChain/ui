@@ -213,7 +213,11 @@ async function main() {
   console.log('Waiting 8 seconds for SubSquid processor block mapping...');
   await new Promise((r) => setTimeout(r, 8000));
 
-  const fetch = globalThis.fetch || require('node-fetch');
+  // Node >=24 (see engines) always provides global fetch, so the previous
+  // `|| require('node-fetch')` fallback was unreachable — and would have
+  // thrown anyway, since node-fetch v3 is ESM-only. That fallback was also
+  // an undeclared dependency reaching the tree only via @polkadot/x-fetch.
+  const fetch = globalThis.fetch;
   const gqlRes = await fetch('http://localhost:4350/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
