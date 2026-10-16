@@ -62,7 +62,7 @@ export default function DomainsPage() {
       const domainDetails = await Promise.all(
         domainList.map(async (domainName: string) => {
           const record = await api.query.bns.domainRegistry(domainName);
-          const hostingInfo = await api.query.bns.hostingConfigs(domainName);
+          const hostingInfo = await api.query.bns.hostedWebsites(domainName);
 
           const recordData = record.toJSON() as any;
           const hostingData = hostingInfo.toJSON() as any;

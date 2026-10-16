@@ -40,7 +40,7 @@ console.log('Balance:', free.toHuman());`,
     {
       title: 'Submit Extrinsic',
       language: 'TypeScript',
-      code: `const transfer = api.tx.balances.transfer(dest, 1000000000000);
+      code: `const transfer = api.tx.balances.transferAllowDeath(dest, 1000000000000);
 const hash = await transfer.signAndSend(sender);
 
 console.log('Transaction hash:', hash.toHex());`,

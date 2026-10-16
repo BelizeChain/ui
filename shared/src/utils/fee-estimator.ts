@@ -50,13 +50,13 @@ function planckToDALLA(planck: bigint, decimals: number = DALLA_DECIMALS): strin
  * Estimate the fee for a built (but unsigned) extrinsic.
  *
  * @param api     - Connected ApiPromise instance
- * @param tx      - The extrinsic to estimate (e.g. `api.tx.balances.transfer(dest, amount)`)
+ * @param tx      - The extrinsic to estimate (e.g. `api.tx.balances.transferAllowDeath(dest, amount)`)
  * @param sender  - The sender's address (used for weight calculation)
  * @returns       - Fee estimate or error
  *
  * @example
  * ```ts
- * const tx = api.tx.balances.transfer(dest, amount);
+ * const tx = api.tx.balances.transferAllowDeath(dest, amount);
  * const fee = await estimateFee(api, tx, selectedAccount.address);
  * if (fee.ok) {
  *   console.log(`Estimated fee: ${fee.totalDALLA} DALLA`);
