@@ -1,5 +1,11 @@
 # 🇧🇿 BelizeChain UI Suite - Production Environment
 
+> ### ⚠️ CORRECTED 2026-10-15
+>
+> The structure listing below references `maya-wallet/src/services/currency.ts`, which was
+> **unreachable and has been removed** (import-graph scan; 40 files total). See
+> `docs/audits/AUDIT-UI-00-BASELINE.md` §2 for the list and the verification method.
+
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/BelizeChain/belizechain)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](#-license)
 [![Built with Next.js](https://img.shields.io/badge/Built%20with-Next.js%2014-000000?logo=next.js)](https://nextjs.org/)

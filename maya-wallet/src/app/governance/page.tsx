@@ -10,6 +10,7 @@ import {
   voteOnProposal,
   type Referendum as ChainReferendum,
 } from '@/services/pallets/governance';
+import { getTreasuryBalance, type TreasuryBalance } from '@/services/pallets/treasury';
 import {
   Users,
   Plus,
@@ -18,20 +19,6 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'phosphor-react';
-
-interface Referendum {
-  id: number;
-  title: string;
-  category: 'National Policy' | 'Treasury Grant' | 'District Infrastructure' | 'Runtime Upgrade';
-  proposer: string;
-  description: string;
-  requestedAmount?: string;
-  ayes: number;
-  nays: number;
-  endBlock: number;
-  status: 'Active' | 'Passed' | 'Executed';
-  myVote?: 'Aye' | 'Nay';
-}
 
 export default function GovernancePage() {
   const { selectedAccount, isConnected } = useWallet();
@@ -44,6 +31,8 @@ export default function GovernancePage() {
   // CONFIG-002: real referenda from governance.referendumInfoOf.
   const [referendums, setReferendums] = useState<ChainReferendum[]>([]);
   const [, setGovError] = useState('');
+  // Real balance of the treasury account, from `system.account`.
+  const [treasury, setTreasury] = useState<TreasuryBalance | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +45,12 @@ export default function GovernancePage() {
         }
       } catch (err) {
         if (!cancelled) setGovError(err instanceof Error ? err.message : String(err));
+      }
+      try {
+        const balance = await getTreasuryBalance();
+        if (!cancelled) setTreasury(balance);
+      } catch {
+        if (!cancelled) setTreasury(null);
       }
     };
     fetchData();
@@ -113,18 +108,22 @@ export default function GovernancePage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Treasury Reserve Balance</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-emerald-400 font-mono">1,850,000</span>
+              <span className="text-lg font-bold text-emerald-400 font-mono">
+                {treasury ? treasury.freeDalla : '—'}
+              </span>
               <span className="text-[10px] text-emerald-300">Ɗ</span>
             </div>
-            <span className="text-[11px] text-slate-400 block">+ BZ$ 450,000 bBZD</span>
+            <span className="text-[11px] text-slate-400 block">
+              {treasury ? `${treasury.reservedDalla} Ɗ reserved` : 'Treasury read unavailable'}
+            </span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Citizen Voter Turnout</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Referenda On Record</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-cyan-300 font-mono">72.4%</span>
+              <span className="text-lg font-bold text-cyan-300 font-mono">{referendums.length}</span>
             </div>
-            <span className="text-[11px] text-emerald-400 font-semibold">Super-Majority Attained</span>
+            <span className="text-[11px] text-slate-400 block">From governance.referendumInfoOf</span>
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">

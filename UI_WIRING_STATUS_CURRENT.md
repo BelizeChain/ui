@@ -1,9 +1,49 @@
 # UI Wiring Status — AUTHORITATIVE (supersedes prior status docs)
 
-**Last verified:** 2026-10-08 (live source-code scan; runtime spec 110; GEM suite redeployed)
+**Last verified:** 2026-10-15 (every claim re-read against source; supersedes the 2026-10-08 pass)
 **Scope:** `maya-wallet` + `blue-hole-portal`
-**Honest completion:** ~95% of UI scope done — every remaining gap is a
-*missing backend*, never a fabricated surface.
+**Honest completion:** the 2026-10-08 verdict — "every remaining gap is a *missing
+backend*, never a fabricated surface" — **did not hold.** See the re-verification below.
+
+---
+
+> ### ⚠️ RE-VERIFIED 2026-10-15 — one live fabrication, three corrections
+>
+> Every claim in this document was re-read against the source. Most hold. These do not:
+>
+> **1. The portal's root page was fabricating its validator fleet.**
+> `blue-hole-portal/src/app/page.tsx` (the live route `/`) rendered a hardcoded
+> "National Validator Performance Matrix" with no loading state and no unreachable
+> branch: a second validator (`Edge-Validator-2`) that **does not exist** (the live
+> authority set is 1), `0 Slashing events · 100% Uptime`, a block number falling back
+> to a hardcoded `18,340`, `Attesting 100% of rounds`, and **two internal Tailscale IPs**
+> (`100.119.97.38:30333` and `:30334`). The page's own copy claimed "Real-time status".
+> **Fixed** — the panel now reads real `staking.validators` records and shows honest
+> empty / unavailable states.
+>
+> **2. The fix credited below went into a file that was never rendered.**
+> `blue-hole-portal/src/components/Dashboard.tsx` had **zero importers** — 2,491 lines
+> nothing could reach. Its correct `'Node unreachable'` / `'Awaiting Activation'`
+> handling never reached a user, while the live page kept the fabrications. The dead
+> file has been deleted.
+>
+> **3. Item 7's services-page finding was two-thirds stale.**
+> The page **does** carry a disclosure (amber `role="note"`, added in `a93df38`) and it
+> **was** linked from `HomeScreen.tsx`. The catalogue is **10** services, not nine. The
+> one part that stands is that no backend exists — which the disclosure itself states.
+>
+> **4. Three pages rendered hardcoded values as chain data.** `governance`
+> (`1,850,000 Ɗ` treasury balance, `72.4%` voter turnout, "Super-Majority Attained"),
+> `profile` (`87.50 Ɗ` rewards, `142` extrinsics, `8 Referenda`, plus fake prefilled
+> personal data: `citizen@belizechain.org`, `+501 822-2222`, `Belmopan`) and `land`
+> (`100% Cleared & Compliant`). All three now read real data or state plainly that the
+> figure is not tracked.
+>
+> **5. 40 unreachable source files were removed** (import-graph scan, per-package `@/`
+> resolution, then confirmed by deleting them and passing `tsc --noEmit` and
+> `next build` for both apps). Details in `docs/audits/`.
+
+---
 
 > This document is the single source of truth for UI wiring status.
 > It supersedes the conflicting claims previously made in `ui-docs-archive/`:
@@ -25,7 +65,7 @@
 ### Maya Wallet (as of 2026-09-17, after CONFIG-002 passes 1–4)
 - **Service layer:** ✅ 100% — all pallet services exist and are production TypeScript APIs (`src/services/pallets/*`); added `treasury.ts` and `performance.ts` this session.
 - **Page wiring:** 🟢 **mostly honest** — high-priority pages are either chain-wired with real extrinsics or carry an explicit amber banner ("not yet live") while their backend is missing. **Correction (verified 2026-10-08):** the earlier claim that `maya-wallet/src/app/trade/page.tsx` was a "full simulation" is **wrong**. The page reads real `belizeX` AMM data (`getTradingPairs`, `getSwapQuote`, `addLiquidity`, `removeLiquidity`, `executeSwap`) and derives price from on-chain reserves. There is **no order book** anywhere in the wallet — trading is AMM-only.
-- ⚠️ **New finding (2026-10-08):** `maya-wallet/src/app/services/page.tsx` presents nine government services as `status: 'available'` with invented fees (e.g. "50 DALLA", "150 DALLA") and processing times. It imports no service module, is **not linked from anywhere**, and carries no disclosure. See item 7 below.
+- ⚠️ **Finding (2026-10-08, corrected 2026-10-15):** `maya-wallet/src/app/services/page.tsx` presents **ten** government services with illustrative fees (e.g. "50 DALLA", "150 DALLA") and processing times. **Correction:** it *does* carry an honest amber disclosure stating that no backend exists and that the fees are placeholders, and it *was* linked — from `HomeScreen.tsx`, which has since been deleted as an orphan. What stands is the missing backend, and the page says so itself. See item 7 below.
 
 ### Fixed this session (was mock — now real or honestly gated)
 | Location | Status |
@@ -34,7 +74,7 @@
 | `maya-wallet/src/app/offline/page.tsx` | ✅ Real `signRaw` / explicit unsigned envelope; no invented hash on failure |
 | `maya-wallet/src/services/bluetooth-mesh.service.ts` | ✅ Was already real signRaw + 0x00 marker (doc was stale) |
 | `maya-wallet/src/services/oracle.ts` | ✅ DALLA fabrication removed; pegged statutory rates correctly labeled |
-| `blue-hole-portal/src/components/Dashboard.tsx` | ✅ "Node unreachable" instead of placeholder block/hash; PoUW/CONS-010 claim replaced with "Awaiting Activation" |
+| `blue-hole-portal/src/components/Dashboard.tsx` | ⚠️ **DELETED 2026-10-15 — it was never rendered.** Zero importers, 2,491 lines. The honest `unreachable` / `Awaiting Activation` handling recorded here never reached a user, because nothing rendered the file. The live root page kept the fabrications until they were fixed — see the re-verification block. |
 
 ### Also wired or gated in passes 2–4 (full detail in section below)
 payroll, belizeid, treasury, governance, community, staking, bns, landledger,
@@ -43,7 +83,11 @@ education, scanner, messages.
 
 ### Blue Hole Portal
 - **Explorer pages:** ✅ chain-wired (real hooks).
-- **Dashboard widgets:** ✅ no placeholders; honest unreachable states.
+- **Dashboard widgets:** ❌ **was fabricated — corrected 2026-10-15.** The root page
+  rendered a hardcoded validator panel (fictional second validator, `100% Uptime`,
+  hardcoded block fallback, internal IPs). It now reads `staking.validators` and shows
+  honest empty / unavailable states. The `components/Dashboard.tsx` this document
+  credited with the fix has been deleted — it was never rendered.
 
 ### Intentional stubs (by design, not bugs)
 - `/wallet/exchange` redirects to `/trade`.
@@ -60,7 +104,11 @@ education, scanner, messages.
 4. Nawal FL server live on Ceiba → unlock FL pages and real PoUW activity.
 5. Bridge relayer infra → replace "Awaiting" states with real completion events.
 6. Off-chain backends still absent: compliance KYC intake, analytics/vote-history indexer, reports PDF export.
-7. `maya-wallet/src/app/services/page.tsx` — the government-services catalogue is un-disclosed and has no backend; gate it, wire it, or remove it.
+7. ~~`maya-wallet/src/app/services/page.tsx` — un-disclosed and unlinked.~~ **Re-verified
+   2026-10-15:** this was wrong on both counts. The page carries an honest disclosure
+   and was linked from `HomeScreen.tsx` (now deleted as an orphan). What remains true is
+   the missing backend — and the page states that itself. No action needed unless the
+   catalogue is actually wired.
 
 ---
 

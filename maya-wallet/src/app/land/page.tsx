@@ -177,13 +177,20 @@ export default function LandPage() {
           </div>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Municipal Tax Status</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Recorded Encumbrances</span>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-teal-400">100%</span>
-              <span className="text-xs text-slate-400">Cleared & Compliant</span>
+              <span className="text-2xl font-bold text-teal-400">
+                {loading
+                  ? '…'
+                  : properties.reduce((n, p) => n + (p.encumbrances?.length ?? 0), 0)}
+              </span>
+              <span className="text-xs text-slate-400">
+                across {loading ? '…' : properties.length} registered parcel{properties.length === 1 ? '' : 's'}
+              </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-2">
-              Zero outstanding municipal liens
+              From <code>landLedger.encumbrances</code> on your titles. Municipal tax standing is
+              not published by the pallet, so it is not claimed here.
             </p>
           </div>
         </div>

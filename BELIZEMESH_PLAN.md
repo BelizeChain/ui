@@ -1,5 +1,13 @@
 # BelizeMesh — Off-Grid Messaging Protocol
 
+> ### ⚠️ CORRECTED 2026-10-15
+>
+> This plan references `maya-wallet/src/services/pallets/mesh-gateway-onboarding.ts`, which
+> was **unreachable and has been removed** (import-graph scan; see
+> `docs/audits/AUDIT-UI-00-BASELINE.md` §2). The mesh work that *is* live goes through
+> `services/pallets/mesh.ts`, which remains in place. Read references to the onboarding
+> module below as design intent, not as existing code.
+
 **Status:** v1 plan — Phase 1 (XMTP removal + emergency path fix) landed 2026-09-17
 **Protocol name:** BelizeMesh (user-selected)
 **Replaces:** the dormant XMTP integration (deprecated `@xmtp/xmtp-js` line; removed with commit d3a2316 and the 2026-09-17 Phase 1 strip)

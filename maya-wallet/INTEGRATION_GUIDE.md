@@ -1,5 +1,20 @@
 # Maya Wallet - BelizeChain Integration Guide
 
+> ### ⚠️ CORRECTED 2026-10-15 — this guide referenced modules that no longer exist
+>
+> An import-graph scan removed 21 unreachable files from `maya-wallet`, including several
+> this guide describes as integration points:
+>
+> `services/events.ts`, `services/currency.ts`, `services/messaging.ts`,
+> `services/notes.ts`, `services/qrcode.ts`, `services/recurring.ts`, `services/theme.tsx`,
+> `services/pallets/mesh-gateway-onboarding.ts`, `components/HomeScreen.tsx`,
+> `components/TransactionConfirmation.tsx`, `components/dashboard/DashboardHome.tsx`,
+> `components/trade/TradingChartCanvas.tsx`, `components/QRScanner.tsx`.
+>
+> **None of these could be imported by anything** — they were dead code, not deferred
+> work. Code samples below that `import` from them will not compile.
+> See `docs/audits/AUDIT-UI-00-BASELINE.md` §2.
+
 ## 🎯 Overview
 
 Maya Wallet now has **comprehensive integration with all 15 BelizeChain pallets**, providing full access to:

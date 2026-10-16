@@ -1,5 +1,21 @@
 # Maya Wallet Enhancement Services
 
+> ### ⚠️ CORRECTED 2026-10-15 — 6 of the 9 modules documented here were unreachable and have been removed
+>
+> An import-graph scan found these modules had **no importers at all** in either app. They
+> were dead code, not deferred features, and have been deleted:
+>
+> - `recurring.ts` (section 3) — `currency.ts` (5) — `messaging.ts` (6)
+> - `theme.tsx` (7) — `qrcode.ts` (8) — `notes.ts` (9)
+>
+> **Nothing in the wallet or portal can import them today.** The sections below are kept as
+> the record of their intended APIs; treat them as design notes, not as available modules.
+> Sections 1, 2 and 4 (`contacts.ts`, `notifications.ts`, `budgeting.ts`) **do** still
+> exist and are accurate.
+>
+> Also removed from this directory: `events.ts` and `pallets/mesh-gateway-onboarding.ts`.
+> See `docs/audits/AUDIT-UI-00-BASELINE.md` §2.
+
 This directory contains 9 new service modules that enhance the Maya Wallet with advanced UX features.
 
 ## 📁 Service Files

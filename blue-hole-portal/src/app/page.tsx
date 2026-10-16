@@ -49,6 +49,14 @@ function formatBBZD(amount: bigint): string {
   return value.toFixed(2);
 }
 
+/** Shorten an SS58 account for display: `r1Wm6WgK…4RGRur`. */
+function truncateAccount(address: string): string {
+  if (address.length <= 14) {
+    return address;
+  }
+  return `${address.slice(0, 8)}…${address.slice(-6)}`;
+}
+
 export default function NationalDashboard() {
   const router = useRouter();
   const { error, reconnect } = useBlockchain();
@@ -56,7 +64,7 @@ export default function NationalDashboard() {
 
   // Blockchain data hooks
   const { treasuryBalance, isLoading: economyLoading } = useEconomy();
-  const { stats: stakingStats, isLoading: stakingLoading } = useStaking();
+  const { validators, stats: stakingStats, isLoading: stakingLoading } = useStaking();
   const { proposals: governanceProposals, isLoading: governanceLoading } = useGovernance();
   const { systemInfo, isLoading: systemLoading } = useSystem();
 
@@ -158,10 +166,8 @@ export default function NationalDashboard() {
           iconColor="text-teal-300"
           iconBg="bg-teal-500/15"
           title="Consensus Validators"
-          value={isLoadingData ? '...' : `${stakingStats?.activeValidators || 2} Active`}
-          subtext="Ceiba-01 & Edge-02 in sync"
-          trend="100% Uptime"
-          trendLabel="BFT finality"
+          value={stakingLoading ? '...' : `${stakingStats?.activeValidators ?? 0} Active`}
+          subtext="Session authority set"
           onClick={() => router.push('/validators')}
         />
 
@@ -186,8 +192,14 @@ export default function NationalDashboard() {
               <Cpu size={24} weight="duotone" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">National Validator Performance Matrix</h3>
-              <p className="text-xs text-slate-400">Real-time status of sovereign consensus authoring nodes</p>
+              <h3 className="text-lg font-bold text-white">National Validator Set</h3>
+              <p className="text-xs text-slate-400">
+                Read live from <code>staking.validators</code>
+                {' · '}
+                {systemInfo
+                  ? `block #${systemInfo.blockNumber.toLocaleString()}`
+                  : 'block height unavailable'}
+              </p>
             </div>
           </div>
           <Button
@@ -198,69 +210,59 @@ export default function NationalDashboard() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Node 1: Ceiba-Validator-01 */}
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-teal-500/30 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span className="text-sm font-black text-white">Ceiba-Validator-01</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                Authoring Primary
-              </span>
-            </div>
-            <div className="space-y-2 text-xs font-mono">
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-sans">Node Address:</span>
-                <span className="text-slate-200">100.119.97.38:30333 (Tailscale)</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-sans">Consensus Role:</span>
-                <span className="text-teal-300">BABE Block Producer / GRANDPA Finality</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-sans">Block Finality:</span>
-                <span className="text-emerald-400 font-bold">#{systemInfo?.blockNumber.toLocaleString() || '18,340'} (100%)</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400 font-sans">Peer Health:</span>
-                <span className="text-slate-300">0 Slashing events · 100% Uptime</span>
-              </div>
-            </div>
+        {stakingLoading ? (
+          <p className="text-xs text-slate-400">Reading the validator set from chain...</p>
+        ) : validators.length === 0 ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+            <p className="text-sm font-semibold text-amber-200">No validators registered</p>
+            <p className="mt-1 text-xs text-amber-200/80">
+              The staking pallet returned no validator records, so there is nothing to show here.
+              That is not an error -- it means no account has self-staked as a validator yet.
+            </p>
           </div>
-
-          {/* Node 2: Edge-Validator-2 */}
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-teal-500/30 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-                <span className="text-sm font-black text-white">Edge-Validator-2</span>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {validators.slice(0, 4).map((validator) => (
+              <div
+                key={validator.address}
+                className="p-5 rounded-2xl bg-slate-900/80 border border-teal-500/30"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-black text-white font-mono">
+                    {truncateAccount(validator.address)}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                      validator.status === 'Active'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                    }`}
+                  >
+                    {validator.status}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs font-mono">
+                  <div className="flex justify-between py-1 border-b border-white/5">
+                    <span className="text-slate-400 font-sans">Total Stake:</span>
+                    <span className="text-slate-200">{formatDALLA(validator.totalStake)} D</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-white/5">
+                    <span className="text-slate-400 font-sans">PoUW Quality:</span>
+                    <span className="text-slate-200">
+                      {validator.pouwScore === null ? 'Not published' : `${validator.pouwScore}/100`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-400 font-sans">Slashes:</span>
+                    <span className="text-slate-200">
+                      {validator.slashes === null ? 'Not tracked by pallet' : String(validator.slashes)}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-                Peer Sentry Synced
-              </span>
-            </div>
-            <div className="space-y-2 text-xs font-mono">
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-sans">Node Address:</span>
-                <span className="text-slate-200">100.119.97.38:30334 (Tailscale)</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-sans">Consensus Role:</span>
-                <span className="text-cyan-300">Byzantine Backup & Validator</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-sans">Sync Latency:</span>
-                <span className="text-cyan-400 font-bold">1.2ms (Zero Drift)</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400 font-sans">GRANDPA Votes:</span>
-                <span className="text-slate-300">Attesting 100% of rounds</span>
-              </div>
-            </div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Sovereign Safeguards & Civic Docket */}
@@ -290,12 +292,12 @@ export default function NationalDashboard() {
               </div>
               <ArrowSquareOut size={16} className="text-slate-400 group-hover:text-amber-300 transition-colors" />
             </div>
-            <p className="text-xl font-bold text-white mb-1">50,000 Ɗ Pool</p>
+            <p className="text-xl font-bold text-white mb-1">Escrowed Rewards</p>
             <p className="text-xs text-slate-400 leading-relaxed mb-3">
               Encrypted, zero-knowledge tip-off escrow. Protects citizen journalists and civil servants reporting corruption.
             </p>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
-              <CheckCircle size={14} weight="fill" /> 0 Security Breaches
+              <CheckCircle size={14} weight="fill" /> Escrow amount set per verified report
             </span>
           </div>
 
@@ -332,12 +334,13 @@ export default function NationalDashboard() {
               </div>
               <ArrowSquareOut size={16} className="text-slate-400 group-hover:text-cyan-300 transition-colors" />
             </div>
-            <p className="text-xl font-bold text-white mb-1">100.2% Peg Ratio</p>
+            <p className="text-xl font-bold text-white mb-1">bBZD Reserve Backing</p>
             <p className="text-xs text-slate-400 leading-relaxed mb-3">
-              bBZD stablecoin audited reserves backed by statutory depository cash and treasury assets.
+              bBZD stablecoin reserves backed by statutory depository cash and treasury assets. The live backing
+              figure is read per-request from the treasury pallet.
             </p>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cyan-300">
-              <CheckCircle size={14} weight="fill" /> Statutory Peg Attested
+              <CheckCircle size={14} weight="fill" /> Peg enforced by pallet-economy
             </span>
           </div>
         </div>

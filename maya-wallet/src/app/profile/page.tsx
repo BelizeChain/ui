@@ -17,10 +17,10 @@ import Link from 'next/link';
 export default function ProfilePage() {
   const { selectedAccount, isConnected, connect } = useWallet();
   const account = selectedAccount as any;
-  const [name, setName] = useState(account?.name || 'Belizean Citizen');
-  const [email, setEmail] = useState('citizen@belizechain.org');
-  const [phone, setPhone] = useState('+501 822-2222');
-  const [city, setCity] = useState('Belmopan');
+  const [name, setName] = useState(account?.name ?? '');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
   const [copied, setCopied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -221,26 +221,23 @@ export default function ProfilePage() {
         <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <IdentificationCard size={18} className="text-cyan-400" weight="bold" />
-            <span>Civic & On-Chain Statistics</span>
+            <span>On-Chain Account</span>
           </h3>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
-              <span className="text-slate-500 text-[10px] uppercase font-bold block">Member Since</span>
-              <span className="text-white font-bold font-mono text-sm">Jan 2025</span>
-            </div>
-            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
-              <span className="text-slate-500 text-[10px] uppercase font-bold block">Extrinsics</span>
-              <span className="text-cyan-300 font-bold font-mono text-sm">142</span>
-            </div>
-            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
-              <span className="text-slate-500 text-[10px] uppercase font-bold block">Rewards</span>
-              <span className="text-emerald-400 font-bold font-mono text-sm">87.50 Ɗ</span>
-            </div>
-            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1">
-              <span className="text-slate-500 text-[10px] uppercase font-bold block">Civic Votes</span>
-              <span className="text-purple-400 font-bold font-mono text-sm">8 Referenda</span>
-            </div>
+          <div className="flex justify-between gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-xs">
+            <span className="text-slate-500 text-[10px] uppercase font-bold">Address</span>
+            <span className="text-white font-mono break-all text-right">
+              {account?.address || 'Not connected'}
+            </span>
+          </div>
+
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-xs font-semibold text-amber-200">Activity statistics unavailable</p>
+            <p className="mt-1 text-[11px] text-amber-200/80">
+              Extrinsic counts, reward totals and vote history are not indexed on chain yet, so this
+              wallet cannot read them. They are left blank rather than shown as zero, because zero
+              would be a claim this wallet cannot make.
+            </p>
           </div>
         </div>
 

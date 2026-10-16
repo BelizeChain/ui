@@ -1,5 +1,23 @@
 # 🏗️ BelizeChain UI - Project Structure
 
+> ### ⚠️ CORRECTED 2026-10-15 — the tree below is stale
+>
+> An import-graph scan (per-package `@/` resolution, then confirmed by deleting the files
+> and passing `tsc --noEmit` plus `next build` for both apps) found **40 unreachable
+> files**, all now removed. The tree below still lists many of them:
+>
+> - `shared/src/components/ui/*` — the whole directory (barrel + 12 components) was a
+>   legacy duplicate set, **shadowed** by a sibling `components/ui.tsx` that
+>   `components/index.ts` itself labels "PRIMARY". All 12 were duplicated in both apps.
+> - `blue-hole-portal` — `components/Dashboard.tsx` (2,491 lines), `ErrorBoundary.tsx`,
+>   `LoadingStates.tsx`, `Pagination.tsx`, `SearchFilter.tsx`,
+>   `services/fsc-exporter.ts`.
+> - `maya-wallet` — `components/HomeScreen.tsx`, `QRScanner.tsx`, `I18nProvider.tsx`,
+>   `WelcomeScreen.tsx`, `CommentsModal.tsx`, `CreatePostModal.tsx`,
+>   `TransactionConfirmation.tsx`, `styles/design-tokens.ts` and others.
+>
+> See `docs/audits/AUDIT-UI-00-BASELINE.md` §2 for the full list and the evidence.
+
 ## 📂 Directory Tree
 
 ```
