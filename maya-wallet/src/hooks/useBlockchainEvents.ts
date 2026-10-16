@@ -299,7 +299,7 @@ export function useStakingRewardsSubscription(address: string | null) {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;
     const sub = async () => {
-      try { unsub = await subscribeToStakingRewards(address, (reward) => { setRewards(prev => [{...reward, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) {}
+      try { unsub = await subscribeToStakingRewards(address, (reward) => { setRewards(prev => [{...reward, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) { console.warn('Staking rewards subscription failed:', err); }
     };
     sub();
     return () => { if (unsub) unsub(); };
@@ -313,7 +313,7 @@ export function useTourismCashbackSubscription(address: string | null) {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;
     const sub = async () => {
-      try { unsub = await subscribeToTourismCashback(address, (cashback) => { setCashbacks(prev => [{...cashback, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) {}
+      try { unsub = await subscribeToTourismCashback(address, (cashback) => { setCashbacks(prev => [{...cashback, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) { console.warn('Tourism cashback subscription failed:', err); }
     };
     sub();
     return () => { if (unsub) unsub(); };
@@ -360,7 +360,7 @@ export function useComplianceAlertsSubscription(address: string | null) {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;
     const sub = async () => {
-      try { unsub = await subscribeToComplianceAlerts(address, (alert) => { setAlerts(prev => [alert, ...prev].slice(0, 5)); }); } catch (err) {}
+      try { unsub = await subscribeToComplianceAlerts(address, (alert) => { setAlerts(prev => [alert, ...prev].slice(0, 5)); }); } catch (err) { console.warn('Compliance alerts subscription failed:', err); }
     };
     sub();
     return () => { if (unsub) unsub(); };
@@ -374,7 +374,7 @@ export function useLandTransfersSubscription(address: string | null) {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;
     const sub = async () => {
-      try { unsub = await subscribeToLandTransfers(address, (transfer) => { setTransfers(prev => [{...transfer, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) {}
+      try { unsub = await subscribeToLandTransfers(address, (transfer) => { setTransfers(prev => [{...transfer, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) { console.warn('Land transfers subscription failed:', err); }
     };
     sub();
     return () => { if (unsub) unsub(); };
@@ -388,7 +388,7 @@ export function useDomainEventsSubscription(address: string | null) {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;
     const sub = async () => {
-      try { unsub = await subscribeToDomainEvents(address, (event) => { setEvents(prev => [{...event, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) {}
+      try { unsub = await subscribeToDomainEvents(address, (event) => { setEvents(prev => [{...event, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) { console.warn('Domain events subscription failed:', err); }
     };
     sub();
     return () => { if (unsub) unsub(); };
@@ -402,7 +402,7 @@ export function useDEXEventsSubscription(address: string | null) {
     if (!address || typeof window === 'undefined') return;
     let unsub: (() => void) | null = null;
     const sub = async () => {
-      try { unsub = await subscribeToDEXEvents(address, (event) => { setEvents(prev => [{...event, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) {}
+      try { unsub = await subscribeToDEXEvents(address, (event) => { setEvents(prev => [{...event, timestamp: Date.now()}, ...prev].slice(0, 10)); }); } catch (err) { console.warn('DEX events subscription failed:', err); }
     };
     sub();
     return () => { if (unsub) unsub(); };
