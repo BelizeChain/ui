@@ -104,7 +104,6 @@ export const useWalletStore = create<WalletState>()(
             void get().fetchBalances(selectedAccount.address);
           }
 
-          console.log(`[WALLET] Connected wallet: ${allAccounts.length} accounts found`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet';
           set({
@@ -130,13 +129,11 @@ export const useWalletStore = create<WalletState>()(
             reserved: '0.00',
           },
         });
-        console.log('[WALLET] Wallet disconnected');
       },
 
       // Select account
       selectAccount: (account: InjectedAccountWithMeta) => {
         set({ selectedAccount: account });
-        console.log(`[WALLET] Selected account: ${account.meta.name || account.address}`);
 
         // Reset and trigger refresh of balances for new account
         set({

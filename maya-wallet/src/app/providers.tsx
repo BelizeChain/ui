@@ -28,7 +28,6 @@ function I18nHydration({ children }: { children: React.ReactNode }) {
         try {
           const { state } = JSON.parse(stored);
           if (state?.locale && state.locale !== locale) {
-            console.log('Rehydrating locale from localStorage:', state.locale);
             setLocale(state.locale);
           }
         } catch (error) {

@@ -174,8 +174,9 @@ export default function GovernanceProposalsPage() {
     if (vote === 'Abstain') return;
     setSubmittingVoteFor(proposalId);
     try {
-      const { hash } = await voteOnProposal(selectedAccount.address, proposalId, vote);
-      console.log(`Vote ${vote} for proposal ${proposalId} in block`, hash);
+      // The returned block hash was only ever logged; the submission itself is
+      // what matters here.
+      await voteOnProposal(selectedAccount.address, proposalId, vote);
       // Optimistic refresh: pick up the new tally on the next poll tick.
       if (refetch) await refetch();
       setPendingVote(null);

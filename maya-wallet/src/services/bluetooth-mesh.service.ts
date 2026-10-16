@@ -106,11 +106,9 @@ class BluetoothMeshService {
         optionalServices: [this.SERVICE_UUID]
       });
 
-      console.log('[BLE-MESH] Bluetooth device selected:', this.device.name);
 
       // Connect to GATT server
       const server = await this.device.gatt!.connect();
-      console.log('[BLE-MESH] Connected to GATT server');
 
       // Get mesh service
       const service = await server.getPrimaryService(this.SERVICE_UUID);
@@ -132,7 +130,6 @@ class BluetoothMeshService {
         }, this.RETRY_INTERVAL);
       }
 
-      console.log('[BLE-MESH] Bluetooth Mesh initialized');
       return true;
     } catch (error) {
       console.error('[BLE-MESH] Bluetooth Mesh initialization failed:', error);
@@ -151,7 +148,6 @@ class BluetoothMeshService {
   }
 
   private async discoverPeers() {
-    console.log('[BLE-MESH] Discovering mesh peers via BLE service UUID 0000fff0-0000-1000-8000-00805f9b34fb...');
     // WebBluetooth exposes no scan API: a page cannot enumerate nearby
     // advertisers, it can only connect to a device the user selected. So there
     // is nothing to report here — inventing a peer would put a node that does
@@ -194,7 +190,6 @@ class BluetoothMeshService {
 
       // Check if message is for us
       if (message.to === this.getLocalAddress()) {
-        console.log('[BLE-MESH] Received mesh message:', message);
         this.deliverMessage(message);
       } else if (message.ttl > 0 && this.isRelayNode()) {
         // Relay message to next hop
@@ -258,7 +253,6 @@ class BluetoothMeshService {
 
       // Write to characteristic
       await this.characteristic!.writeValue(data);
-      console.log('[BLE-MESH] Message transmitted via Bluetooth mesh');
       return true;
     } catch (error) {
       console.error('[BLE-MESH] Transmission failed:', error);
@@ -279,7 +273,6 @@ class BluetoothMeshService {
       return; // Already relayed this message
     }
 
-    console.log(`[BLE-MESH] Relaying message (TTL: ${message.ttl})`);
     await this.transmitMessage(message);
   }
 
@@ -387,7 +380,6 @@ class BluetoothMeshService {
     this.device = null;
     this.characteristic = null;
     this.peers.clear();
-    console.log('[BLE-MESH] Bluetooth Mesh disconnected');
   }
 }
 

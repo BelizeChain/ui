@@ -51,7 +51,6 @@ class BlockchainProofService {
 
   async initialize(api: ApiPromise) {
     this.api = api;
-    console.log('[PROOF] BelizeMesh proof service initialized (pallet_belize_mesh)');
   }
 
   /**
@@ -103,7 +102,6 @@ class BlockchainProofService {
       );
 
       const hash = await extrinsic.signAndSend(account);
-      console.log('[PROOF] Emergency alert submitted via Mesh pallet:', hash.toHex());
 
       // Fan out locally for UI + browser notification
       const event = new CustomEvent('emergency-broadcast', {

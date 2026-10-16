@@ -44,16 +44,16 @@ export function useWallet(): UseWalletReturn {
       try {
         const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
         const api = await ApiPromise.create({ provider });
-        
+
         if (mounted) {
           setState(prev => ({ ...prev, api }));
         }
       } catch (error) {
         console.error('Failed to initialize API:', error);
         if (mounted) {
-          setState(prev => ({ 
-            ...prev, 
-            error: 'Failed to connect to blockchain node' 
+          setState(prev => ({
+            ...prev,
+            error: 'Failed to connect to blockchain node'
           }));
         }
       }
@@ -89,14 +89,14 @@ export function useWallet(): UseWalletReturn {
 
       // Request access to the extension
       const extensions = await web3Enable('BelizeChain');
-      
+
       if (extensions.length === 0) {
         throw new Error('No Polkadot extension found. Please install Polkadot.js extension.');
       }
 
       // Get all accounts
       const accounts = await web3Accounts();
-      
+
       if (accounts.length === 0) {
         throw new Error('No accounts found. Please create an account in your Polkadot.js extension.');
       }
@@ -160,9 +160,9 @@ export function useWallet(): UseWalletReturn {
       await extrinsic.signAndSend(
         state.selectedAccount.address,
         { signer: injector.signer },
-        callback || ((status: any) => {
-          console.log('Transaction status:', status.toHuman());
-        })
+        // The default used to console.log every status. Callers that want
+        // progress reporting pass their own callback; the default is a no-op.
+        callback || (() => {})
       );
     } catch (error: any) {
       console.error('Failed to sign and send:', error);
@@ -215,7 +215,7 @@ export function useBalance(address: string | null) {
 
     async function fetchBalance() {
       setIsLoading(true);
-      
+
       try {
         const provider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
         const api = await ApiPromise.create({ provider });

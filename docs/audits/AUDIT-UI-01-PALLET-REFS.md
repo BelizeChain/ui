@@ -173,6 +173,12 @@ replacement. A developer copying that sample got an unresolvable extrinsic.
 
 ### 5.2 `maya-wallet/src/app/domains/page.tsx` — wrong storage item
 
+> **SUPERSEDED 2026-10-16 — the page was removed entirely.** `/domains` was an
+> orphan: nothing linked to it, and the menu links to `/bns`, which already reads
+> BNS through the service layer and is maintained. The fix below was correct for
+> the code as it stood, but the page it fixed was a duplicate. See
+> `AUDIT-UI-05-EXPORTS-AND-LOGS.md` §3.1.
+
 ```diff
 -const hostingInfo = await api.query.bns.hostingConfigs(domainName);
 +const hostingInfo = await api.query.bns.hostedWebsites(domainName);
@@ -187,6 +193,15 @@ replacement. A developer copying that sample got an unresolvable extrinsic.
 `HostedWebsites` carries the fields the page needs (`contentHash`, `expiresAt`) and
 shares the same key type, so the read is a straight rename — behaviour unchanged,
 `undefined` removed.
+
+**What this audit missed:** the same page also read `recordData?.expiresAt` and
+`recordData?.verified` from `DomainRecord` — fields that **do not exist** on that
+struct (`owner`, `original_owner`, `registered_at`, `purchase_price`, `tier`,
+`locked_until`, `transfer_count`). The verification badge at line 241
+(`{domain.verified && …}`) could therefore only ever render falsy, and the expiry
+column always showed `0`. The pallet-reference audit checks that *storage items*
+resolve, not that the fields read off them exist. That is a known limit of this
+audit's scope, recorded here rather than papered over.
 
 ### 5.3 `shared/src/utils/fee-estimator.ts` — doc example
 

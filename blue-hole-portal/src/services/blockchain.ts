@@ -134,7 +134,6 @@ class BlockchainService {
       this.wsProvider = new modules.WsProvider(nodeEndpoint, 1000, {}, 30000);
 
       this.wsProvider.on('connected', () => {
-        console.info('[BLOCKCHAIN-SERVICE] Connected to BelizeChain node');
         this.reconnectAttempts = 0;
       });
 

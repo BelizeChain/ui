@@ -7,11 +7,7 @@ export * from './ui';
 // Shared portal components
 export * from './WalletConnect';
 export * from './RuntimeEnvironmentBadge';
-export * from './ShellReadinessPanel';
 export * from './NetworkStatusIndicator';
-
-// i18n Components
-export * from './LanguageSwitcher';
 
 // Hooks
 export * from '../hooks/useWallet';

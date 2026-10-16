@@ -15,6 +15,34 @@
 >
 > Also removed from this directory: `events.ts` and `pallets/mesh-gateway-onboarding.ts`.
 > See `docs/audits/AUDIT-UI-00-BASELINE.md` §2.
+>
+> ### ⚠️ ADDENDUM 2026-10-16 — the modules exist, but most of their functions have no caller
+>
+> A dependency audit (`docs/audits/AUDIT-UI-05-EXPORTS-AND-LOGS.md`) found that §1 and §2
+> document functions **nothing calls**. The example imports printed below are therefore
+> aspirational, not current usage:
+>
+> - **`contacts.ts`** — only `getContacts` is used (by `app/contacts/page.tsx`). The other
+>   ten functions, including `addContact` and `getFrequentContacts` as shown at line 39,
+>   have **zero callers**. The page has a `+` create button with no `onClick`.
+> - **`notifications.ts`** — 9 of its exports have **zero callers**, including
+>   `notifyPaymentReceived` and `getUnreadCount` as shown at line 69.
+> - **`budgeting.ts`** — worse than §1/§2, and in a way the test suite hides:
+>   `budgeting.test.ts` covers this module thoroughly, but a passing suite is not
+>   integration. **11 of its 13 exports have no application caller** — 2 have no caller at
+>   all (`resetMonthlyBudgets`, `updateBudgetFromTransactions`) and **9 are reached only
+>   by the test file** (`updateBudgetCategory`, `deleteBudgetCategory`, `recordSpending`,
+>   `getBudgetAlerts`, `acknowledgeBudgetAlert`, `clearAcknowledgedAlerts`,
+>   `getUnacknowledgedAlertsCount`, `getTotalLimits`, `getTotalSpent`). Only
+>   `getBudgetCategories` and `addBudgetCategory` are used by the app. Green tests here
+>   mean the logic is correct, **not** that the feature is live.
+>
+> These are coherent, working modules awaiting integration — **not** dead code, and
+> deliberately not deleted. Treat the lists below as the API that is *available*, not as
+> the API that is *in use*, and check before assuming a call exists.
+>
+> Also removed in that pass: `community-indexer.service.ts` (its only consumer was a
+> component deleted in UI-03).
 
 This directory contains 9 new service modules that enhance the Maya Wallet with advanced UX features.
 

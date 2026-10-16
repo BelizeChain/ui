@@ -47,7 +47,6 @@ class PakitBridgeService {
     const available = await this.checkPakitAvailability();
 
     if (available) {
-      console.log('[PAKIT] Pakit bridge initialized');
       this.startAutoSync();
     } else {
       console.warn('[PAKIT] Pakit service unavailable, messages will queue');
@@ -101,7 +100,6 @@ class PakitBridgeService {
   queueMessage(message: MeshMessage) {
     this.pendingMessages.push(message);
     this.persistQueue();
-    console.log(`[PAKIT] Queued message for Pakit upload (${this.pendingMessages.length} pending)`);
 
     // Try immediate upload if online
     if (navigator.onLine) {
@@ -141,7 +139,6 @@ class PakitBridgeService {
       }
 
       const result = await response.json();
-      console.log('[PAKIT] Message bundle uploaded to IPFS:', result.ipfsHash);
 
       return {
         ipfsHash: result.ipfsHash,
@@ -170,7 +167,6 @@ class PakitBridgeService {
       const data = await response.text();
       const bundle: MessageBundle = JSON.parse(data);
 
-      console.log('[PAKIT] Message bundle downloaded from IPFS:', ipfsHash);
       return bundle;
     } catch (error) {
       console.error('[PAKIT] Pakit download failed:', error);
@@ -212,7 +208,6 @@ class PakitBridgeService {
       // Best-effort automatic relay-proof submission per bundle
       await this.autoSubmitRelayProofs();
 
-      console.log(`[PAKIT] Synced ${bundles.length} bundle(s) to Pakit`);
       return true;
     } catch (error) {
       console.error('[PAKIT] Sync failed:', error);
@@ -320,7 +315,6 @@ class PakitBridgeService {
             }
             reject(new Error(message));
           } else {
-            console.log('[PAKIT] Relay proof anchored on-chain for bundle', ipfsHash);
             resolve();
           }
         }

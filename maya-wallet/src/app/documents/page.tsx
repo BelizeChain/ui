@@ -161,14 +161,6 @@ export default function DocumentsPage() {
             encrypted: 'false', // Future: Add encryption toggle in UI
           },
         });
-
-        console.log('[PAKIT] Document uploaded to Pakit:', {
-          name: file.name,
-          cid: uploadResult.cid,
-          size: uploadResult.size,
-          compressedSize: uploadResult.compressedSize,
-          storage: uploadResult.storage,
-        });
       }
 
       // Reload document list from Pakit
@@ -194,7 +186,6 @@ export default function DocumentsPage() {
       );
 
       await navigator.clipboard.writeText(shareResult.url);
-      console.log('[PAKIT] Share link generated via Pakit:', shareResult);
 
       const expiryDate = shareResult.expiresAt
         ? new Date(shareResult.expiresAt * 1000).toLocaleDateString()
@@ -223,7 +214,6 @@ export default function DocumentsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      console.log('[PAKIT] Document downloaded from Pakit:', { name: doc.name, cid: doc.hash });
     } catch (error) {
       console.error('Pakit download failed:', error);
       alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -241,7 +231,6 @@ export default function DocumentsPage() {
       const pakitClient = getPakitClient();
       await pakitClient.delete(doc.hash, account.address);
 
-      console.log('[PAKIT] Document deleted from Pakit cache:', { name: doc.name, cid: doc.hash });
 
       // Reload from Pakit to reflect changes
       const refreshed = await fetchDocuments().catch(() => []);

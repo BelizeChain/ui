@@ -20,15 +20,6 @@ export async function initializeApi(): Promise<ApiPromise> {
     wsProvider = new WsProvider(getRuntimeConfig().blockchainWsUrl);
     api = await ApiPromise.create({ provider: wsProvider });
 
-    const chain = await api.rpc.system.chain();
-    const version = await api.rpc.system.version();
-    const nodeName = await api.rpc.system.name();
-    console.log('Connected to BelizeChain', {
-      chain: chain.toString(),
-      version: version.toString(),
-      nodeName: nodeName.toString(),
-    });
-
     return api;
   } catch (error) {
     console.error('Failed to connect to BelizeChain node', error);
@@ -155,7 +146,6 @@ export async function submitTransfer(
     return new Promise((resolve, reject) => {
       tx.signAndSend(from, { signer: injector.signer }, ({ status, txHash, events }) => {
         if (status.isInBlock) {
-          console.log(`Transaction included in block: ${status.asInBlock}`);
 
           // Check for errors — a failed extrinsic must reject, never resolve
           let failureErrorMessage: string | null = null;
@@ -181,7 +171,6 @@ export async function submitTransfer(
             blockHash: status.asInBlock.toString(),
           });
         } else if (status.isFinalized) {
-          console.log(`Transaction finalized: ${status.asFinalized}`);
         }
       }).catch(reject);
     });

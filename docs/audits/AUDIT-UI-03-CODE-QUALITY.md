@@ -120,15 +120,34 @@ its own file:
 
 | Package | **DEAD** (no reference anywhere) | LOCAL (own file only) | Can be trimmed? |
 |---|---:|---:|---|
-| `shared` | 9 | 19 | **No — published package** |
+| `shared` | 9 | 19 | see the correction below |
 | `maya-wallet` | 45 | 41 | Yes (private app) |
 | `blue-hole-portal` | 11 | 35 | Yes (private app) |
 
-**`shared` is not private** (`package.json` has no `private: true`). An unused export
-there is still published API surface, so "unused in this repo" is not evidence for
-deletion. Those 9 are left alone deliberately.
+> ### ⚠️ CORRECTION 2026-10-16 — these counts were too LOW, and one premise was wrong
+>
+> Two errors, both found while acting on this inventory. Full detail in
+> `AUDIT-UI-05-EXPORTS-AND-LOGS.md`.
+>
+> **1. The scanner produced false negatives.** A file named `X.tsx` exporting `X`
+> was scored as "used" because barrels contain `export * from './X'` — the module
+> name in the re-export path matched the symbol name. The same hid every
+> `export { a, b } from './x'` forwarding line. A re-export is a **forwarding
+> declaration, not a use.** Excluding re-export lines from reference counting
+> raises the true totals to **`shared` 14, `maya-wallet` 84, `blue-hole-portal` 11
+> — 109 dead exports, not 65.**
+>
+> **2. "`shared` is a published package" was wrong.** `@belizechain/shared` is
+> **not on npm** (`npm view` → 404) and `shared-library.yml` only ever runs
+> `npm publish --dry-run`. The package has no `files` field and no `publishConfig`.
+> Its exports are internal to this monorepo, so "unused in this repo" **is**
+> evidence for deletion. The 9 exports left alone on that reasoning were re-triaged
+> in UI-05.
+>
+> The table above is retained as the state at the time of this audit; the corrected
+> figures are in UI-05.
 
-### 4.1 Why the other 56 were not mass-deleted
+### 4.1 Why the rest were not mass-deleted *at this point*
 
 They are not one thing. Two samples:
 
