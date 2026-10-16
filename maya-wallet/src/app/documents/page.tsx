@@ -5,11 +5,10 @@ import Link from 'next/link';
 import {
   useI18n,
   getPakitClient,
-  type PakitClient,
 } from '@belizechain/shared';
 import { useWallet } from '@/contexts/WalletContext';
 
-// Pakit DocumentMetadata type (from PakitClient)
+// Shape of the metadata this page stores for an uploaded document.
 interface PakitDocMetadata {
   cid: string;
   name: string;

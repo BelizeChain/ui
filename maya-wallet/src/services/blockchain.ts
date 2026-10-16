@@ -2,6 +2,7 @@
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { web3FromAddress } from '@polkadot/extension-dapp';
+import { decodeAddress } from '@polkadot/util-crypto';
 // Removed walletLogger to fix SSR issues
 import { getRuntimeConfig, type Balance, getUserFriendlyErrorMessage, estimateFee as sharedEstimateFee } from '@belizechain/shared';
 
@@ -440,11 +441,15 @@ export async function subscribeToTransactions(
 
 /**
  * Check if address is valid
+ *
+ * Decode-only: any SS58 prefix is accepted, because BelizeChain uses prefix
+ * 1981 (`r1…`) while Polkadot tooling defaults to 42. Re-encoding with the
+ * default prefix would reject every real address on this chain.
  */
 export function isValidAddress(address: string): boolean {
   try {
-    const { decodeAddress, encodeAddress } = require('@polkadot/util-crypto');
-    return encodeAddress(decodeAddress(address)) === address;
+    decodeAddress(address);
+    return true;
   } catch {
     return false;
   }

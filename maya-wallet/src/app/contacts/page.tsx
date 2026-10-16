@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { GlassCard } from '@/components/ui';
+import { useEffect, useState, type FormEvent } from 'react';
+import { GlassCard, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui';
 import Link from 'next/link';
-import { getContacts, type Contact } from '@/services/contacts';
+import { useRouter } from 'next/navigation';
+import { addContact, getContacts, updateContact, type Contact } from '@/services/contacts';
+import { isValidAddress } from '@/services/blockchain';
 import {
   ArrowLeft,
   UserList,
@@ -70,12 +72,20 @@ function toContactRow(contact: Contact): ContactRow {
 }
 
 export default function ContactsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'recent'>('all');
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   // Captured once with the data instead of calling Date.now() during render,
   // which react-hooks/purity rejects as an impure render-time call.
   const [loadedAt, setLoadedAt] = useState(0);
+
+  // Add-contact form.
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newCategory, setNewCategory] = useState<Contact['category']>('other');
+  const [addError, setAddError] = useState('');
 
   // Contacts are stored in local storage, so they can only be read on the client.
   useEffect(() => {
@@ -86,6 +96,61 @@ export default function ContactsPage() {
       setLoadedAt(Date.now());
     });
   }, []);
+
+  /** Re-read storage after a mutation, so the list always shows what is stored. */
+  const refreshContacts = () => {
+    setContacts(getContacts().map(toContactRow));
+    setLoadedAt(Date.now());
+  };
+
+  const handleToggleFavorite = (contact: ContactRow) => {
+    try {
+      updateContact(contact.id, { favorite: !contact.favorite });
+    } catch {
+      // The record can vanish underneath us (another tab, cleared storage).
+      // Fall through to the resync below instead of reporting a false success.
+    }
+    refreshContacts();
+  };
+
+  const handleSendTo = (contact: ContactRow) => {
+    router.push(`/send?to=${encodeURIComponent(contact.address)}`);
+  };
+
+  const openAddContact = () => {
+    setAddError('');
+    setIsAddOpen(true);
+  };
+
+  const handleAddContact = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = newName.trim();
+    const address = newAddress.trim();
+
+    if (!name) {
+      setAddError('Enter a name for this contact.');
+      return;
+    }
+    if (!isValidAddress(address)) {
+      setAddError('That is not a valid BelizeChain address.');
+      return;
+    }
+
+    try {
+      addContact({ name, address, category: newCategory, favorite: false });
+    } catch (error) {
+      // addContact rejects duplicate addresses — surface its message as-is.
+      setAddError(error instanceof Error ? error.message : 'Could not save this contact.');
+      return;
+    }
+
+    setNewName('');
+    setNewAddress('');
+    setNewCategory('other');
+    setAddError('');
+    setIsAddOpen(false);
+    refreshContacts();
+  };
 
   const filteredContacts = contacts.filter(contact => {
     const query = searchQuery.toLowerCase();
@@ -126,7 +191,11 @@ export default function ContactsPage() {
               <p className="text-xs text-gray-400">{contacts.length} connections</p>
             </div>
           </div>
-          <button className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-500 to-emerald-400 flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+          <button
+            onClick={openAddContact}
+            aria-label="Add contact"
+            className="w-10 h-10 rounded-full bg-gradient-to-br from-forest-500 to-emerald-400 flex items-center justify-center shadow-lg hover:shadow-xl transition-all"
+          >
             <Plus size={24} className="text-white" weight="bold" />
           </button>
         </div>
@@ -147,14 +216,14 @@ export default function ContactsPage() {
 
         {/* Filter Tabs */}
         <div className="flex px-4 gap-2 pb-2">
-          {[
+          {([
             { id: 'all', label: 'All', count: contacts.length },
             { id: 'favorites', label: 'Favorites', count: contacts.filter(c => c.favorite).length },
             { id: 'recent', label: 'Recent', count: contacts.filter(c => c.lastUsed && loadedAt - new Date(c.lastUsed).getTime() < RECENT_WINDOW_MS).length }
-          ].map((filter) => (
+          ] as const).map((filter) => (
             <button
               key={filter.id}
-              onClick={() => setActiveFilter(filter.id as any)}
+              onClick={() => setActiveFilter(filter.id)}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                 activeFilter === filter.id
                   ? 'bg-forest-500 text-white'
@@ -200,15 +269,17 @@ export default function ContactsPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+                  <button
+                    onClick={() => handleSendTo(contact)}
+                    aria-label={`Send to ${contact.name}`}
+                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                  >
                     <PaperPlaneTilt size={20} className="text-forest-400" weight="fill" />
                   </button>
                   <button
+                    onClick={() => handleToggleFavorite(contact)}
+                    aria-label={contact.favorite ? `Remove ${contact.name} from favorites` : `Add ${contact.name} to favorites`}
                     className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Toggle favorite
-                    }}
                   >
                     <Star size={20} className={contact.favorite ? 'text-amber-500' : 'text-gray-400'} weight={contact.favorite ? 'fill' : 'regular'} />
                   </button>
@@ -238,6 +309,85 @@ export default function ContactsPage() {
           </div>
         </GlassCard>
       </div>
+
+      {/* Add contact. Contacts live in local storage on this device only. */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add contact</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Saved on this device only — contacts are not written to the chain.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddContact} className="space-y-4">
+            <div>
+              <label htmlFor="contact-name" className="block text-sm text-gray-300 mb-1">
+                Name
+              </label>
+              <input
+                id="contact-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Maria Castillo"
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-forest-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="contact-address" className="block text-sm text-gray-300 mb-1">
+                Address
+              </label>
+              <input
+                id="contact-address"
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                placeholder="r1…"
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 font-mono text-sm focus:outline-none focus:border-forest-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="contact-category" className="block text-sm text-gray-300 mb-1">
+                Category
+              </label>
+              <select
+                id="contact-category"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value as Contact['category'])}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-forest-500"
+              >
+                <option value="family">Family</option>
+                <option value="friend">Friend</option>
+                <option value="business">Business</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {addError && (
+              <p role="alert" className="text-sm text-red-400">
+                {addError}
+              </p>
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(false)}
+                className="flex-1 px-4 py-2 rounded-lg font-semibold text-gray-200 bg-gray-700/60 hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 rounded-lg font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors"
+              >
+                Save contact
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

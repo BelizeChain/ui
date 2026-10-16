@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { submitTransfer, estimateFee } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
@@ -31,6 +31,15 @@ const sendMoneySchema = z.object({
 
 type SendMoneyForm = z.infer<typeof sendMoneySchema>;
 
+/** Clean recipient if DID was pasted (e.g. did:belize:r1... -> r1...). */
+function resolveAddress(raw: string): string {
+  if (!raw) return '';
+  if (raw.startsWith('did:belize:')) {
+    return raw.replace('did:belize:', '');
+  }
+  return raw.trim();
+}
+
 // CONFIG-002 fake-numerics sweep: The Former SOVEREIGN_DIRECTORY contained
 // fabricated addresses ('r1UWtr25o...' style, not valid ss58) presented as
 // official endpoints. Removed — users fund Real saved contacts (below) or
@@ -40,6 +49,7 @@ type SendMoneyForm = z.infer<typeof sendMoneySchema>;
 
 export default function SendPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { selectedAccount, balance } = useWallet();
   const { addNotification } = useUIStore();
   const [step, setStep] = useState<'select' | 'amount' | 'confirm' | 'success'>('select');
@@ -80,14 +90,21 @@ export default function SendPage() {
     }
   }, []);
 
-  // Clean recipient if DID was pasted (e.g. did:belize:r1... -> r1...)
-  const resolveAddress = (raw: string) => {
-    if (!raw) return '';
-    if (raw.startsWith('did:belize:')) {
-      return raw.replace('did:belize:', '');
-    }
-    return raw.trim();
-  };
+  // Deep link from the contacts screen: /send?to=<address> selects that contact,
+  // or prefills the address as a custom recipient, and skips to the amount step.
+  useEffect(() => {
+    const to = searchParams?.get('to');
+    if (!to) return;
+
+    // Deferred so the effect body doesn't call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(() => {
+      const saved = getContacts().find((contact) => contact.address === to);
+      setSelectedContact(saved ?? { name: 'Custom Recipient', address: to });
+      setValue('recipient', resolveAddress(to));
+      setStep('amount');
+    });
+  }, [searchParams, setValue]);
 
   const handleSelectContact = (contact: { name: string; address: string; badge?: string }) => {
     setSelectedContact(contact);
