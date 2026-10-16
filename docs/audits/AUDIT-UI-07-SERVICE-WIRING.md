@@ -115,6 +115,12 @@ what it actually means:
 This is the same defect class the series exists to catch: a confident, unsourced statement
 about live state, embedded in shipped source.
 
+**The rest of that family was fixed in the same follow-up.** Nine further sites asserted the
+same thing — see [AUDIT-UI-08](./AUDIT-UI-08-WIRING-PLAN.md) §5 for the full list and the
+`git merge-base` proof. The rule that came out of it: **describe the capability probe, never
+the chain's version** — a hardcoded version rots silently, a probe stays correct across
+every runtime upgrade.
+
 ---
 
 ## 4. Full triage: dead `services/pallets/*` exports
@@ -261,3 +267,7 @@ it is out of scope for an audit pass.
 **Recommended next step:** pick the clusters to build (staking leave-validator and BelizeID
 registration are the two with adjacent UI already describing the action), and wire them as
 individual deliverables.
+
+> 📋 **Next session starts here: [AUDIT-UI-08-WIRING-PLAN.md](./AUDIT-UI-08-WIRING-PLAN.md)**
+> — the per-export work list for all 25 REAL exports, ranked by value ÷ risk, with
+the capability read that unblocks them listed first.

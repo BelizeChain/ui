@@ -53,7 +53,8 @@ export interface RuntimeConfig {
 /**
  * Built-in Ceiba testnet deployment of GEM contracts.
  * Sourced from `gem/deployment-1791482394057.json`, deployed 2026-10-08 on
- * chain D ("Jade", runtime spec 110). The previous instances were wiped by the
+ * chain D ("Jade") at runtime spec 110 — that is the deployment-time spec, not
+ * the current one. The previous instances were wiped by the
  * 2026-09-29 re-genesis, so every address here post-dates it.
  *
  * Override any of these via `NEXT_PUBLIC_*_CONTRACT` env vars.

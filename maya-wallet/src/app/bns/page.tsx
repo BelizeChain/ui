@@ -233,8 +233,7 @@ export default function BNSPage() {
       });
   }, []);
 
-  // Reverse resolution is spec-110 only, so the action is only offered when the
-  // runtime actually exposes it.
+  // The action is only offered when the connected chain actually exposes it.
   useEffect(() => {
     let cancelled = false;
     supportsPrimaryDomain()
@@ -330,8 +329,7 @@ export default function BNSPage() {
     }
   };
 
-  // Reverse resolution requires the spec-110 runtime, which is not deployed yet —
-  // the capabilitity probe gates the button below rather than letting it fail.
+  // The capability probe gates the button below rather than letting it fail.
   const handleSetPrimary = async (index: number) => {
     const domain = myDomains[index];
     if (!domain || !selectedAccount?.address) return;
@@ -788,7 +786,7 @@ export default function BNSPage() {
                                 </button>
                               ) : (
                                 <span className="text-[10px] text-slate-500 font-mono">
-                                  Primary handle: needs runtime spec 110
+                                  Primary handle: unsupported by this chain
                                 </span>
                               )}
                             </div>

@@ -235,11 +235,11 @@ export async function setDomainResolution(
 /**
  * Set primary domain for an address (reverse resolution)
  *
- * `bns.setPrimaryDomain` was added in the spec-110 `aa2b6ab` commit and is
- * absent from the runtime live on Ceiba (spec 109). The call is feature-detected
- * rather than attempted, because `api.tx.bns.setPrimaryDomain` being undefined
- * throws a bare TypeError that reads like a wallet bug rather than a pending
- * runtime upgrade.
+ * `bns.setPrimaryDomain` was added in the `aa2b6ab` commit. The call is
+ * feature-detected rather than attempted, because `api.tx.bns.setPrimaryDomain`
+ * being undefined throws a bare TypeError that reads like a wallet bug rather
+ * than an unsupported operation. Support is probed live by
+ * `supportsPrimaryDomain`, so nothing here asserts a runtime version.
  */
 export async function setPrimaryDomain(
   address: string,
@@ -250,7 +250,7 @@ export async function setPrimaryDomain(
   try {
     if (!api.tx.bns?.setPrimaryDomain) {
       throw new Error(
-        'Setting a primary domain requires runtime spec 110, which is not deployed on this chain yet.',
+        'The connected chain does not expose bns.setPrimaryDomain, so a primary domain cannot be set here.',
       );
     }
 
@@ -272,7 +272,7 @@ export async function setPrimaryDomain(
 
 /**
  * Clear the caller's reverse-resolution domain.
- * Requires runtime spec 110 — see `setPrimaryDomain`.
+ * Feature-detected — see `setPrimaryDomain`.
  */
 export async function clearPrimaryDomain(address: string): Promise<{ hash: string }> {
   const api = await initializeApi();
@@ -303,9 +303,8 @@ export async function clearPrimaryDomain(address: string): Promise<{ hash: strin
 /**
  * Read the reverse-resolution domain registered for an address, if any.
  *
- * `bns.primaryDomain` was added in the spec-110 `aa2b6ab` commit, so it is
- * absent from the runtime live today; the optional call yields `null` until the
- * upgrade ships.
+ * `bns.primaryDomain` was added in the `aa2b6ab` commit. Feature-detected: the
+ * optional call yields `null` when the connected chain does not expose it.
  */
 export async function getPrimaryDomain(address: string): Promise<string | null> {
   const api = await initializeApi();
@@ -332,9 +331,10 @@ export async function getPrimaryDomain(address: string): Promise<string | null> 
  * Whether this runtime exposes reverse resolution at all.
  *
  * `setPrimaryDomain`/`clearPrimaryDomain` and the `primaryDomain` storage item
- * were added in the spec-110 `aa2b6ab` commit. Because the runtime live on Ceiba
- * is spec 109, the UI can only offer the action when this returns `true` —
- * otherwise the button would exist purely to fail.
+ * were added in the `aa2b6ab` commit. The UI can only offer the action when this
+ * returns `true` — otherwise the button would exist purely to fail. Probing the
+ * live chain keeps this correct across a runtime upgrade, where a hardcoded
+ * version would not.
  */
 export async function supportsPrimaryDomain(): Promise<boolean> {
   try {
@@ -350,7 +350,7 @@ export async function supportsPrimaryDomain(): Promise<boolean> {
  * Add or replace a text record on a domain you own.
  *
  * Real signature: setTextRecord(domainName, key, value). Keys are capped at 32
- * bytes and values at 128 bytes on chain. Requires runtime spec 110.
+ * bytes and values at 128 bytes on chain. Feature-detected.
  */
 export async function setTextRecord(
   address: string,
@@ -363,7 +363,7 @@ export async function setTextRecord(
   try {
     if (!api.tx.bns?.setTextRecord) {
       throw new Error(
-        'Text records require runtime spec 110, which is not deployed on this chain yet.',
+        'The connected chain does not expose bns.setTextRecord, so a text record cannot be set here.',
       );
     }
 
@@ -394,7 +394,7 @@ export async function removeTextRecord(
   try {
     if (!api.tx.bns?.removeTextRecord) {
       throw new Error(
-        'Text records require runtime spec 110, which is not deployed on this chain yet.',
+        'The connected chain does not expose bns.removeTextRecord, so a text record cannot be removed here.',
       );
     }
 

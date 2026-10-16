@@ -68,6 +68,41 @@ docker build --build-arg APP_NAME=blue-hole-portal --target portal -t belizechai
 docker build --build-arg APP_NAME=maya-wallet --target wallet -t belizechain/maya-wallet:local .
 ```
 
+## Code-Health Audit Series — read before touching `maya-wallet` or `blue-hole-portal`
+
+Eight audits (`UI-00` → `UI-08`) have been run against this repo. **All commits through
+`98717be` are pushed.** The documents in `docs/audits/` are the authority on what was
+checked, what was fixed, and what was deliberately left — read the relevant one before
+re-deriving a finding, and re-measure anything they state as a count.
+
+**Current work item: [`docs/audits/AUDIT-UI-08-WIRING-PLAN.md`](../docs/audits/AUDIT-UI-08-WIRING-PLAN.md)**
+— 25 dead exports in `services/pallets/*` that make real chain calls and have no caller.
+Each is listed with its signature, its chain call, its host page, and whether it needs
+wiring or building. Start with its §1 (a metadata read) before writing any wiring code.
+
+### Gates and baselines — run all five before every commit
+
+| Gate | Baseline at hand-off |
+|---|---|
+| `npx tsc --noEmit` in `shared`, `maya-wallet`, `blue-hole-portal` | 0 errors each |
+| `npm run lint` | maya **271**, portal **149**, shared **16** warnings; **0 errors** |
+| `npm run build` (`maya-wallet`) | exit 0, no warnings |
+| `npx vitest run` (repo root) | 3 files, 14 passed / 1 skipped |
+| `./belizechain/scripts/doc-claims/check-doc-claims.sh ui` | PASSED |
+
+### Before you build: check memory, ask before killing anything
+
+This workstation (~15 GB) has crashed VS Code **four times** under memory pressure during
+this series. Run `free -m` first; if available is below ~2 GB, **stop and report** rather
+than building. Stale Pylint LSP daemons pinned to `nawal-ai/.venv` are the usual consumer —
+**killing processes requires explicit owner approval.**
+
+**Ask before pushing** — this repo runs 5 active workflows and Actions credits are limited.
+
+**A scan that produces a deletion list must be validated against a known-good case first.**
+Four separate bugs in one such scanner were caught this series; the worst hid every `.tsx`
+page and inflated a dead count from 63 to 142. See `docs/audits/AUDIT-UI-07-SERVICE-WIRING.md` §5.
+
 ## Rules
 - Ceiba self-hosted is the active deployment target for BelizeChain rollout work.
 - Prefer adjacent local sibling repos and Ceiba docs over stale AKS, ACR, Vercel, or Kubernetes-era notes.
