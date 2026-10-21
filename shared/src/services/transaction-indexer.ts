@@ -105,7 +105,10 @@ export class TransactionIndexer {
     }
 
     // Fetch fresh data
-    const transactions = await this.fetchTransactions(accountAddress, filter);
+    // Read account history straight from chain state — the same direct-RPC
+    // approach the portal explorer uses. See `scanRecentBlocks` for why there is
+    // no longer an HTTP index attempt ahead of it.
+    const transactions = await this.scanRecentBlocks(accountAddress, filter);
 
     // Update cache
     if (this.cacheEnabled && typeof window !== 'undefined') {
@@ -121,85 +124,23 @@ export class TransactionIndexer {
   }
 
   /**
-   * Fetch transactions: tries an optional Subsquid GraphQL indexer
-   * (NEXT_PUBLIC_INDEXER_URL) and falls back to a direct RPC block scan —
-   * which is the primary path today, since no indexer runs on Ceiba.
-   */
-  private async fetchTransactions(
-    accountAddress: string,
-    filter: TransactionFilter
-  ): Promise<Transaction[]> {
-    const limit = filter.limit ?? 100;
-    const endpoint = process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:4350/graphql';
-
-    try {
-      const query = `
-        query GetAccountTransactions($address: String!, $limit: Int!) {
-          transactions(
-            where: {
-              OR: [
-                { signer_eq: $address },
-                { hash_contains: $address } # Simple heuristic; a real indexer would decode args
-              ]
-            },
-            limit: $limit,
-            orderBy: blockNumber_DESC
-          ) {
-            hash
-            blockNumber
-            method
-            signer
-            timestamp
-            success
-          }
-        }
-      `;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(3000),
-        body: JSON.stringify({
-          query,
-          variables: { address: accountAddress, limit }
-        })
-      });
-
-      if (!response.ok) throw new Error('Indexer request failed');
-      const { data } = await response.json();
-
-      if (data && data.transactions) {
-        return data.transactions.map((tx: any) => ({
-          hash: tx.hash,
-          blockNumber: tx.blockNumber,
-          timestamp: new Date(tx.timestamp).getTime(),
-          type: tx.method.includes('transfer') ? 'transfer' : 'unknown',
-          from: tx.signer || accountAddress,
-          to: tx.signer === accountAddress ? 'unknown' : accountAddress,
-          amount: '0', // Full decoding requires RPC or enriched indexer
-          asset: 'DALLA',
-          status: tx.success ? 'success' : 'failed',
-          fee: '0',
-          metadata: {
-            method: tx.method,
-            description: tx.method
-          }
-        }));
-      }
-    } catch (error) {
-      console.warn('Indexer unreachable, falling back to direct RPC scan:', error);
-    }
-
-    // No indexer runs on Ceiba, so read account history straight from chain
-    // state — the same direct-RPC approach the portal explorer uses.
-    return this.scanRecentBlocks(accountAddress, filter);
-  }
-
-  /**
    * Direct-RPC scan: walk back `scanBlocks` blocks from the head and decode the
    * signed extrinsics that belong to the account. Block timestamps are
    * approximated at ~6s per block — the chain carries wall clock via the
    * timestamp.set inherent, not in the header.
+   *
+   * This is the only path. An earlier version tried a Subsquid/Hasura GraphQL
+   * indexer first (`transactions(where: { signer_eq: ... })` on
+   * `localhost:4350`), but no such service exists in this architecture, so every
+   * call paid a connection timeout before reaching the scan below. That mapping
+   * also discarded the amount and counterparty, so even a successful response
+   * would have shown every row as a zero-value transfer.
+   *
+   * `api-gateway` now serves `GET /v1/accounts/:address/transactions`, but it
+   * reports only `blockNumber`/`section`/`method`/`args` — no timestamp, status,
+   * or fee. Inventing those for citizen wallet activity would be worse than the
+   * bounded scan, so re-adding it waits until the gateway carries the fields the
+   * activity feed renders.
    */
   private async scanRecentBlocks(
     accountAddress: string,

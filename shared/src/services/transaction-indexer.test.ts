@@ -176,10 +176,9 @@ describe('TransactionIndexer direct-RPC scan', () => {
     await expect(indexer.getAccountHistory('not-an-address')).resolves.toEqual([]);
   });
 
-  it('falls back to the RPC scan when the GraphQL indexer is unreachable', async () => {
+  it('reads account history from the chain without calling an HTTP index', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const api = makeApi({
       [HEAD]: {
         extrinsics: [
@@ -195,7 +194,9 @@ describe('TransactionIndexer direct-RPC scan', () => {
     const indexer = new TransactionIndexer(api, { scanBlocks: 1, cacheEnabled: false });
     const txs = await indexer.getAccountHistory(ACCOUNT.rendered, { limit: 5 });
 
-    expect(fetchMock).toHaveBeenCalled();
+    // The GraphQL indexer this used to call never existed on Ceiba, so the
+    // request could only fail. Reading chain state is the whole path now.
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(txs).toHaveLength(1);
     expect(txs[0].amount).toBe('1.0000');
   });

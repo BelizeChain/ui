@@ -5,7 +5,6 @@ import { ChartLine, Coin, Users, Cube, Warning } from 'phosphor-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { connectionManager } from '@/lib/blockchain/connection';
 import { getTreasuryBalance } from '@/services/pallets/treasury';
-// Note: @apollo/client will be used once SubSquid indexer is deployed for historical data
 import { ResponsiveContainer, LineChart, XAxis, YAxis, Tooltip, Line } from 'recharts';
 
 interface ChainSnapshot {
@@ -34,49 +33,25 @@ function planckToDalla(planck: string): string {
   }
 }
 
-async function loadSnapshot(): Promise<{ current: ChainSnapshot, history: any[] }> {
-  try {
-    const response = await fetch('http://localhost:4350/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query {
-            networkSnapshots(limit: 20, orderBy: timestamp_DESC) {
-              activeValidators
-              treasuryDalla
-              totalIssuanceDalla
-              blockNumber
-              timestamp
-            }
-          }
-        `,
-      }),
-    });
-    
-    if (response.ok) {
-      const result = await response.json();
-      const history = result.data?.networkSnapshots || [];
-      const data = history[0];
-      
-      if (data) {
-        return {
-          current: {
-            activeValidators: data.activeValidators,
-            treasuryDalla: planckToDalla(data.treasuryDalla),
-            totalIssuanceDalla: planckToDalla(data.totalIssuanceDalla),
-            latestBlock: data.blockNumber,
-            finalizedBlock: data.blockNumber,
-          },
-          history
-        };
-      }
-    }
-  } catch (error) {
-    console.warn('SubSquid indexer unavailable, falling back to direct node RPC:', error);
-  }
+/** Keep a quarter hour of 15s polls — the longest window this page can see. */
+const MAX_HISTORY_POINTS = 60;
 
-  // Live Node RPC Fallback
+interface TreasuryPoint {
+  at: number;
+  treasuryDalla: string;
+}
+
+/**
+ * Read the current chain snapshot from RPC.
+ *
+ * This used to query a SubSquid GraphQL indexer on `localhost:4350` first. No
+ * indexer runs in this architecture, and the request was issued from the
+ * browser, where `localhost` is the visitor's own machine — so it could never
+ * succeed, and each poll paid a failed request before reaching the RPC path
+ * below. Historical series are accumulated client-side from real observations
+ * instead of being read from a store that does not exist.
+ */
+async function loadSnapshot(): Promise<ChainSnapshot> {
   try {
     const api = await connectionManager.connect();
     const [validatorsRaw, totalIssuanceRaw, header, finHash, treasury] = await Promise.all([
@@ -96,29 +71,21 @@ async function loadSnapshot(): Promise<{ current: ChainSnapshot, history: any[] 
     const totalIssuanceDalla = planckToDalla(totalIssuanceRaw.toString());
 
     return {
-      current: {
-        activeValidators,
-        treasuryDalla: treasury.freeDalla,
-        totalIssuanceDalla,
-        latestBlock,
-        finalizedBlock,
-      },
-      history: [
-        { blockNumber: Math.max(0, latestBlock - 15), activeValidators, timestamp: new Date(Date.now() - 90000).toLocaleTimeString() },
-        { blockNumber: Math.max(0, latestBlock - 10), activeValidators, timestamp: new Date(Date.now() - 60000).toLocaleTimeString() },
-        { blockNumber: Math.max(0, latestBlock - 5), activeValidators, timestamp: new Date(Date.now() - 30000).toLocaleTimeString() },
-        { blockNumber: latestBlock, activeValidators, timestamp: new Date().toLocaleTimeString() },
-      ],
+      activeValidators,
+      treasuryDalla: treasury.freeDalla,
+      totalIssuanceDalla,
+      latestBlock,
+      finalizedBlock,
     };
   } catch (rpcErr) {
     console.error('Failed to query live node RPC:', rpcErr);
-    return { current: EMPTY, history: [] };
+    return EMPTY;
   }
 }
 
 export default function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<ChainSnapshot>(EMPTY);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<TreasuryPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,10 +94,15 @@ export default function AnalyticsPage() {
 
     async function tick() {
       try {
-        const { current, history: hist } = await loadSnapshot();
+        const current = await loadSnapshot();
         if (cancelled) return;
         setSnapshot(current);
-        setHistory(hist);
+        // Only observed values enter the series, so the chart shows what this
+        // page actually measured rather than an interpolated guess.
+        if (current.treasuryDalla !== null) {
+          const point = { at: Date.now(), treasuryDalla: current.treasuryDalla };
+          setHistory(prev => [...prev, point].slice(-MAX_HISTORY_POINTS));
+        }
         setError(null);
       } catch (err) {
         if (cancelled) return;
@@ -230,18 +202,24 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      {/* Indexer-backed dashboard: Treasury Balance chart */}
+      {/* Treasury series accumulated from this page's own polls */}
       <GlassCard variant="dark-medium" blur="lg" className="p-8">
-        <h2 className="text-lg font-semibold text-white mb-2">Treasury Balance (Historical)</h2>
+        <h2 className="text-lg font-semibold text-white mb-2">Treasury Balance</h2>
+        <p className="text-sm text-gray-400 mb-4">
+          Measured since this page opened. A longer series needs an off-chain
+          indexer, which is not yet wired.
+        </p>
         {loading ? (
           <p className="text-gray-400">Loading...</p>
         ) : error ? (
           <p className="text-red-300">Error loading data</p>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={[...history].reverse().map(h => ({
-              date: new Date(h.timestamp).toLocaleTimeString(),
-              treasury: Number(planckToDalla(h.treasuryDalla).replace(/,/g, '')) || 0
+            <LineChart data={history.map(h => ({
+              date: new Date(h.at).toLocaleTimeString(),
+              // `freeDalla` is already denominated in DALLA, so only the
+              // thousands separators need removing before charting it.
+              treasury: Number(h.treasuryDalla.replace(/,/g, '')) || 0
             }))}>
               <XAxis dataKey="date" />
               <YAxis />

@@ -5,33 +5,38 @@ interface ProbeTarget {
   urls: string[];
 }
 
+// Probe candidates are ordered by likelihood for the runtime this handler runs
+// in: a container in the Ceiba stack resolves siblings by service name, a dev
+// machine reaches them on localhost, and the public path is the last resort
+// because it leaves the network. Every failed candidate costs the full timeout.
 const TARGETS: ProbeTarget[] = [
   {
     id: 'pakit',
     urls: [
+      'http://pakit:8001/health',
       'http://127.0.0.1:8001/health',
       'http://localhost:8001/health',
       'https://belizechain.org/api/pakit/health',
-      'http://pakit:8001/health',
     ],
   },
   {
     id: 'nawal',
     urls: [
+      'http://nawal:8080/health',
       'http://127.0.0.1:8080/health',
       'http://localhost:8080/health',
       'https://belizechain.org/api/nawal/health',
-      'http://nawal:8080/health',
     ],
   },
   {
     id: 'kinich',
     urls: [
+      'http://kinich:8888/readyz',
+      'http://kinich:8888/health',
       'http://127.0.0.1:8888/readyz',
       'http://127.0.0.1:8888/health',
       'http://localhost:8888/health',
       'https://belizechain.org/api/kinich/health',
-      'http://kinich:8888/health',
     ],
   },
 ];

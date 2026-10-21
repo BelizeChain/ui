@@ -400,17 +400,15 @@ export interface ExplorerTx {
 /**
  * Recent blocks + transactions, sourced directly from chain RPC.
  *
- * Previous implementation polled a subsquid GraphQL indexer at
- * NEXT_PUBLIC_INDEXER_URL (default localhost:4350) — no indexer is running,
- * so the explorer stayed empty. This version walks back `limit` blocks from
- * the live head on the RPC connection the portal already maintains, and
- * tracks finality via the finalized head.
- */
-/**
- * Recent blocks + transactions, sourced directly from chain RPC.
- * Timestamp approximation: block time ~6s; head block uses current time,
- * each older block steps back 6s. The chain doesn't stamp wall-clock time
- * in the header without a timestamp pallet query, and this keeps the UI
+ * A previous implementation polled a SubSquid GraphQL indexer at
+ * NEXT_PUBLIC_INDEXER_URL (default localhost:4350); no indexer is running, so
+ * the explorer stayed empty. This walks back `limit` blocks from the live head
+ * on the RPC connection the portal already maintains, and tracks finality via
+ * the finalized head.
+ *
+ * Timestamp approximation: block time ~6s; the head block uses the current
+ * time and each older block steps back 6s. The chain does not stamp wall-clock
+ * time in the header without a timestamp pallet query, and this keeps the UI
  * ordering honest without extra RPC round-trips.
  */
 function approxTimestamp(blockNumber: number, headNumber: number): number {
