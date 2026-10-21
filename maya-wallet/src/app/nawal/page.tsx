@@ -186,7 +186,9 @@ export default function NawalPage() {
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Global Model Accuracy</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold text-purple-400">{systemMetrics ? `${systemMetrics.globalAccuracy}%` : '—'}</span>
+              {/* The coordinator reports no accuracy figure, so this reads “—”
+                  rather than rendering `undefined%`. */}
+              <span className="text-lg font-bold text-purple-400">{systemMetrics?.globalAccuracy != null ? `${systemMetrics.globalAccuracy}%` : '—'}</span>
             </div>
             <span className="text-[11px] text-slate-400 block">{systemMetrics?.total_models_trained ?? '—'} models converged</span>
           </div>

@@ -9,13 +9,19 @@ export default function DeveloperPage() {
   const router = useRouter();
   const runtimeConfig = getRuntimeConfig();
 
+  // Mirrors the routes actually registered in `infra/api-gateway/src/rest.ts`,
+  // mounted under `/v1`. The previous list documented `/blocks/{hash}` and two
+  // `/validators` routes that were never implemented — a developer following it
+  // got 404s. Block lookup is by height, and validators live under `/staking`.
   const apiEndpoints = [
-    { method: 'GET', endpoint: '/api/v1/blocks/latest', description: 'Get latest block' },
-    { method: 'GET', endpoint: '/api/v1/blocks/{hash}', description: 'Get block by hash' },
-    { method: 'GET', endpoint: '/api/v1/transactions/{hash}', description: 'Get transaction details' },
-    { method: 'POST', endpoint: '/api/v1/transactions/submit', description: 'Submit transaction' },
-    { method: 'GET', endpoint: '/api/v1/validators', description: 'List all validators' },
-    { method: 'GET', endpoint: '/api/v1/validators/{address}', description: 'Get validator details' },
+    { method: 'GET', endpoint: '/v1/blocks/latest', description: 'Get latest block' },
+    { method: 'GET', endpoint: '/v1/blocks/{number}', description: 'Get block by height' },
+    { method: 'GET', endpoint: '/v1/transactions/{hash}', description: 'Get transaction details' },
+    { method: 'POST', endpoint: '/v1/transactions/submit', description: 'Submit transaction' },
+    { method: 'GET', endpoint: '/v1/staking/validators', description: 'List all validators' },
+    { method: 'GET', endpoint: '/v1/staking/rewards/{address}', description: 'Get staking rewards for an account' },
+    { method: 'GET', endpoint: '/v1/accounts/{address}', description: 'Get account balances' },
+    { method: 'GET', endpoint: '/v1/accounts/{address}/transactions', description: 'Get account transaction history' },
   ];
 
   const sdkExamples = [

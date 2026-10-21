@@ -9,6 +9,11 @@ import { blake2AsHex } from '@polkadot/util-crypto';
 import type { MeshMessage } from './bluetooth-mesh.service';
 
 interface PakitUploadResponse {
+  /**
+   * Pakit content ID. Pakit's API calls this `cid`; the mesh UI and its stored
+   * queue already use `ipfsHash` as the identifier, so it is mapped on the way
+   * in rather than renamed across three files.
+   */
   ipfsHash: string;
   arweaveId?: string;
   size: number;
@@ -118,20 +123,24 @@ class PakitBridgeService {
     };
 
     try {
-      const response = await fetch(`${this.pakitApiUrl}/upload`, {
+      // Pakit takes a multipart body with a `file` part, not JSON — a JSON body
+      // is rejected before the handler runs. It answers with `cid`, and the
+      // owner it records comes from `x-substrate-account`, so a relay carrying
+      // an address can be attributed instead of stored as "anonymous".
+      const payload = JSON.stringify(bundle);
+      const formData = new FormData();
+      formData.append('file', new Blob([payload], { type: 'application/json' }), `${bundle.bundleId}.json`);
+      formData.append('tags', JSON.stringify(['mesh-message-bundle']));
+
+      const headers: Record<string, string> = {};
+      if (this.lastSyncAddress) {
+        headers['x-substrate-account'] = this.lastSyncAddress;
+      }
+
+      const response = await fetch(`${this.pakitApiUrl}/api/v1/upload`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: JSON.stringify(bundle),
-          metadata: {
-            type: 'mesh-message-bundle',
-            district: bundle.district,
-            messageCount: messages.length,
-            timestamp: bundle.timestamp.toISOString()
-          }
-        })
+        headers,
+        body: formData,
       });
 
       if (!response.ok) {
@@ -141,9 +150,8 @@ class PakitBridgeService {
       const result = await response.json();
 
       return {
-        ipfsHash: result.ipfsHash,
-        arweaveId: result.arweaveId,
-        size: bundle.totalSize,
+        ipfsHash: result.cid,
+        size: result.size ?? bundle.totalSize,
         timestamp: Date.now()
       };
     } catch (error) {
@@ -153,19 +161,19 @@ class PakitBridgeService {
   }
 
   // Retrieve message bundle from IPFS
-  async downloadBundle(ipfsHash: string): Promise<MessageBundle> {
+  async downloadBundle(cid: string): Promise<MessageBundle> {
     try {
-      const response = await fetch(`${this.pakitApiUrl}/retrieve/${ipfsHash}`, {
+      const response = await fetch(`${this.pakitApiUrl}/api/v1/download/${cid}`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
       });
 
       if (!response.ok) {
         throw new Error(`Pakit download failed: ${response.statusText}`);
       }
 
-      const data = await response.text();
-      const bundle: MessageBundle = JSON.parse(data);
+      // `download` streams the stored bytes, so the bundle comes back as the
+      // same JSON that was uploaded.
+      const bundle: MessageBundle = await response.json();
 
       return bundle;
     } catch (error) {
@@ -288,14 +296,22 @@ class PakitBridgeService {
     const bundleString = JSON.stringify(messages.map(m => ({ id: m.id, from: m.from, to: m.to })));
     const contentHash = blake2AsHex(new TextEncoder().encode(bundleString), 256) as `0x${string}`;
 
+    // The pallet requires RSSI/SNR as i16, but nothing in this browser stack
+    // measures radio signal — `MeshMessage` has no such fields and the Web
+    // Bluetooth layer does not expose them. These are reported as the API's
+    // "unknown" placeholders rather than as measurements; a real gateway with a
+    // radio can pass its own values when that path is built.
+    const UNMEASURED_RSSI = 0;
+    const UNMEASURED_SNR = 0;
+
     const tx = api.tx.mesh.submitRelayProof(
       ownedNodeId,                      // nodeId [u8;4] hex
       { transaction: null },            // RelayType::Transaction (bundle receipt)
       api.createType('H256', contentHash),
       ownedNodeId,                      // sourceNode = relayer itself
       { broadcast: null },              // RelayDestination::Broadcast
-      -75,                              // rssi (from last hop telemetry)
-      10,                               // snr
+      UNMEASURED_RSSI,
+      UNMEASURED_SNR,
     );
 
     return new Promise((resolve, reject) => {
@@ -346,28 +362,13 @@ class PakitBridgeService {
     }
   }
 
-  // Deprecated proof submission method retained for reference
-  private async submitProofToChain(ipfsHash: string, messages: MeshMessage[]) {
-    // Original implementation retained but not used
-  }
-
-  private hashBundle(messages: MeshMessage[]): string {
-    // Create deterministic hash of message bundle
-    const bundleString = JSON.stringify(messages.map(m => ({
-      id: m.id,
-      from: m.from,
-      to: m.to,
-      timestamp: m.timestamp
-    })));
-
-    // In production: use proper hash function (blake2b)
-    return `hash_${bundleString.length}_${Date.now()}`;
-  }
-
   private detectDistrict(messages: MeshMessage[]): string | undefined {
-    // Detect district from message metadata or peer addresses
-    // Used for organizing regional message bundles
-    return 'Unknown';
+    // `MeshMessage` carries no district — only id/from/to/content/timestamp/ttl/
+    // signature/route — so there is nothing to derive one from. This used to
+    // return the literal string "Unknown", which tagged every bundle with a
+    // district that no message had. Undefined says that honestly.
+    void messages;
+    return undefined;
   }
 
   private generateBundleId(): string {
@@ -382,13 +383,13 @@ class PakitBridgeService {
     }, this.SYNC_INTERVAL);
   }
 
- async getPendingCount(): Promise<number> {
+  async getPendingCount(): Promise<number> {
     return this.pendingMessages.length;
   }
 
-  /** Retrieve pending proof bundles that have been uploaded to IPFS but not yet submitted on‑chain */
   /**
-   * Retrieve pending proof bundles that have been uploaded to IPFS but not yet submitted on‑chain.
+   * Retrieve pending proof bundles that have been uploaded to Pakit but not yet
+   * submitted on-chain.
    */
   async getPendingProofs(): Promise<(PakitUploadResponse & { messages: MeshMessage[] })[]> {
     return this.pendingProofs as any;

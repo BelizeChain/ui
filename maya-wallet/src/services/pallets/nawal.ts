@@ -4,11 +4,33 @@
  * Reads the Nawal federated-learning coordinator (an off-chain FastAPI service).
  * Nothing here is invented: when the coordinator is unreachable these calls
  * return `null`/`[]` so callers can show an honest empty state.
+ *
+ * Two things make that empty state common, and neither is a bug in this file:
+ *
+ * 1. The base URL used to default to `http://localhost:8080`, which from a
+ *    browser means the visitor's own machine. It now comes from the shared
+ *    runtime config, which derives `<origin>/api/nawal` behind the reverse
+ *    proxy and only falls back to localhost when there is no browser origin.
+ * 2. Every `/api/v1/*` route on the coordinator requires an API key, and a
+ *    browser cannot hold one. Those requests answer 401 and are treated as
+ *    "no data". To populate these tiles for real, the coordinator has to be
+ *    reached from a server-side route that adds the key — the `/health` and
+ *    `/metrics` endpoints are the only unauthenticated ones.
  */
 
+import { getRuntimeConfig } from '@belizechain/shared';
 import { claimStakingRewards } from './staking';
 
-const NAWAL_API_URL = process.env.NEXT_PUBLIC_NAWAL_API_URL || 'http://localhost:8080/api/v1/fl';
+/**
+ * Base URL of the coordinator's federated-learning API.
+ *
+ * The proxy maps `/api/nawal/*` onto the service root, so the coordinator's own
+ * `/api/v1/fl/*` prefix is appended here rather than assumed to be part of the
+ * runtime-config value.
+ */
+function nawalApiBase(): string {
+  return `${getRuntimeConfig().nawalApiUrl}/api/v1/fl`;
+}
 
 export interface NawalParticipantStats {
   account_id: string;
@@ -17,8 +39,9 @@ export interface NawalParticipantStats {
   total_rewards: number;
   average_quality: number;
   last_submission: string | null;
-  honestyScore: number;
-  unclaimedRewardsDalla: string;
+  /** Not served by the coordinator; derived on-chain or shown as “—”. */
+  honestyScore?: number;
+  unclaimedRewardsDalla?: string;
 }
 
 export interface NawalSystemMetrics {
@@ -29,21 +52,27 @@ export interface NawalSystemMetrics {
   total_models_trained: number;
   average_round_time: number;
   blockchain_connected: boolean;
-  globalAccuracy: number;
+  /**
+   * The coordinator reports no accuracy figure — `SystemMetrics` has no such
+   * field. Optional so callers fall back to “—” instead of rendering
+   * `undefined%`.
+   */
+  globalAccuracy?: number;
 }
 
 export interface NawalRoundStatus {
   round_id: string;
-  task_name: string;
   status: 'pending' | 'active' | 'completed' | 'failed' | string;
   participants: number;
   submissions_received: number;
   current_accuracy: number | null;
-  loss: number;
   start_time: string;
   completion_time: string | null;
-  targetEpochs: number;
-  rewardPoolDalla: string;
+  /** Not served by the coordinator; optional so a missing value reads as “—”. */
+  task_name?: string;
+  loss?: number;
+  targetEpochs?: number;
+  rewardPoolDalla?: string;
 }
 
 export interface ModelGenome {
@@ -63,7 +92,7 @@ export interface ModelGenome {
  */
 export async function getParticipantStats(accountId: string): Promise<NawalParticipantStats | null> {
   try {
-    const response = await fetch(`${NAWAL_API_URL}/participants/${accountId}`, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(`${nawalApiBase()}/participants/${accountId}`, { signal: AbortSignal.timeout(1500) });
     if (response.ok) {
       return await response.json();
     }
@@ -81,7 +110,7 @@ export async function getParticipantStats(accountId: string): Promise<NawalParti
  */
 export async function getSystemMetrics(): Promise<NawalSystemMetrics | null> {
   try {
-    const response = await fetch(`${NAWAL_API_URL}/metrics`, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(`${nawalApiBase()}/metrics`, { signal: AbortSignal.timeout(1500) });
     if (response.ok) {
       return await response.json();
     }
@@ -93,36 +122,23 @@ export async function getSystemMetrics(): Promise<NawalSystemMetrics | null> {
 }
 
 /**
- * Get active FL rounds. Returns `[]` when the coordinator is unreachable.
+ * Get active FL rounds.
+ *
+ * The coordinator exposes rounds only as `POST /api/v1/fl/rounds` (create) and
+ * `GET /api/v1/fl/rounds/{round_id}` (one round). There is no list endpoint, so
+ * this always returns `[]` — that is a missing backend route, not empty state.
+ * `getRoundStatus` reads a specific round directly.
  */
 export async function getActiveRounds(): Promise<NawalRoundStatus[]> {
-  try {
-    const response = await fetch(`${NAWAL_API_URL}/rounds?status=active`, { signal: AbortSignal.timeout(1500) });
-    if (response.ok) {
-      return await response.json();
-    }
-  } catch {
-    // Coordinator unreachable.
-  }
-
   return [];
 }
 
 /**
- * Get round status by ID
+ * Get round status by ID, from the coordinator’s real per-round endpoint.
  */
 export async function getRoundStatus(roundId: string): Promise<NawalRoundStatus | null> {
-  const rounds = await getActiveRounds();
-  return rounds.find((r) => r.round_id === roundId) || rounds[0] || null;
-}
-
-/**
- * Get recently completed FL rounds. Returns `[]` when the coordinator is
- * unreachable.
- */
-export async function getRecentRounds(limit: number = 10): Promise<NawalRoundStatus[]> {
   try {
-    const response = await fetch(`${NAWAL_API_URL}/rounds?limit=${limit}`, {
+    const response = await fetch(`${nawalApiBase()}/rounds/${encodeURIComponent(roundId)}`, {
       signal: AbortSignal.timeout(1500),
     });
     if (response.ok) {
@@ -132,6 +148,17 @@ export async function getRecentRounds(limit: number = 10): Promise<NawalRoundSta
     // Coordinator unreachable.
   }
 
+  return null;
+}
+
+/**
+ * Get recently completed FL rounds.
+ *
+ * Same missing list endpoint as `getActiveRounds`, so this returns `[]` rather
+ * than pretending to page through rounds it cannot ask for.
+ */
+export async function getRecentRounds(limit: number = 10): Promise<NawalRoundStatus[]> {
+  void limit;
   return [];
 }
 
