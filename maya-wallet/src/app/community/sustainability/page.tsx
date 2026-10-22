@@ -7,6 +7,7 @@ import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   getGreenProjects,
+  getProjectContributors,
   contributeToGreenProject,
   getUserSRS,
   type GreenProject,
@@ -49,6 +50,12 @@ export default function SustainabilityPage() {
   const [gateway, setGateway] = useState<MeshGatewayStatus | null>(null);
   const [amounts, setAmounts] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
+  // Per-project contributor list, read on demand from
+  // `community.greenContributions` (keyed AccountId, projectId).
+  const [contributors, setContributors] = useState<
+    Record<number, Array<{ address: string; amount: string; timestamp: number }>>
+  >({});
+  const [contributorsBusyId, setContributorsBusyId] = useState<number | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -114,6 +121,25 @@ export default function SustainabilityPage() {
       });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  /**
+   * Load the contributor list for one project. The pallet keys contributions by
+   * (AccountId, projectId) and stores no timestamp, so none is shown.
+   */
+  const handleShowContributors = async (projectId: number) => {
+    setContributorsBusyId(projectId);
+    try {
+      const list = await getProjectContributors(projectId);
+      setContributors((prev) => ({ ...prev, [projectId]: list }));
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        message: `Could not read contributors: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setContributorsBusyId(null);
     }
   };
 
@@ -309,7 +335,15 @@ export default function SustainabilityPage() {
                     </div>
                     <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                       <span>{progress.toFixed(1)}% funded</span>
-                      <span>{project.contributorCount} contributor{project.contributorCount === 1 ? '' : 's'}</span>
+                      <button
+                        onClick={() => void handleShowContributors(project.projectId)}
+                        disabled={contributorsBusyId === project.projectId}
+                        className="hover:text-emerald-300 underline disabled:no-underline disabled:opacity-60 transition-colors"
+                      >
+                        {contributorsBusyId === project.projectId
+                          ? 'Reading contributions…'
+                          : `${project.contributorCount} contributor${project.contributorCount === 1 ? '' : 's'}`}
+                      </button>
                     </div>
                   </div>
 
@@ -326,6 +360,31 @@ export default function SustainabilityPage() {
                           </span>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {contributors[project.projectId] && (
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                        Contributors ({contributors[project.projectId].length})
+                      </span>
+                      {contributors[project.projectId].length === 0 ? (
+                        <span className="text-slate-500 text-[11px]">
+                          No contributions recorded for this project.
+                        </span>
+                      ) : (
+                        contributors[project.projectId].map((contributor) => (
+                          <div
+                            key={contributor.address}
+                            className="flex justify-between gap-3 font-mono text-[11px]"
+                          >
+                            <span className="text-slate-400 truncate">{contributor.address}</span>
+                            <span className="text-emerald-400 shrink-0">
+                              {contributor.amount} Ɗ
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   )}
 

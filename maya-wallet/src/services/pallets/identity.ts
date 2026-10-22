@@ -158,10 +158,11 @@ export async function getBelizeID(address: string): Promise<BelizeID | null> {
 /**
  * Resolve a human-readable display name for an address from the Identity pallet.
  *
- * Tries the BelizeID record (firstName + lastName) first, then falls back to the
- * standard Substrate identity (`identity.identityOf` display field). Returns
- * `undefined` when no on-chain identity exists so callers can fall back to a
- * shortened address.
+ * Reads the BelizeID record's `name`, which is a public display handle. Only the
+ * first line is returned: names are single-line by construction now, but a record
+ * written by an older or third-party client that packed extra fields into this
+ * field must not surface them. Returns `undefined` when no on-chain identity
+ * exists so callers can fall back to a shortened address.
  */
 export async function getDisplayName(address: string): Promise<string | undefined> {
   try {
@@ -173,7 +174,7 @@ export async function getDisplayName(address: string): Promise<string | undefine
     if (!raw || raw.isNone) return undefined;
 
     const name = bytesToString((raw.toJSON() as any)?.name);
-    return name || undefined;
+    return name?.split('\n')[0].trim() || undefined;
   } catch (error) {
     console.debug('getDisplayName lookup failed:', error);
     return undefined;
@@ -181,38 +182,44 @@ export async function getDisplayName(address: string): Promise<string | undefine
 }
 
 /**
- * Register a new BelizeID
+ * Register a BelizeID.
+ *
+ * `identity.register_identity(name)` takes **one** bounded display name
+ * (`MaxNameLen = 64`) and stores it publicly and permanently in
+ * `identity.identities`. It is a public handle, not a KYC record.
+ *
+ * This used to pack first name, middle name, last name, date of birth,
+ * nationality, residence address and district into that single field, joined by
+ * newlines. That was wrong twice over: the payload exceeded the 64-byte bound for
+ * most real names (measured 78–99 bytes), and it published PII to a world-readable
+ * map with no hashing.
+ *
+ * KYC does not need any of it. `KycLevel` is derived purely from attestations —
+ * L1 = SSN, L2 = SSN + Passport, L3 = + Biometrics — and an `Attestation` stores
+ * only `blake2_256(salt ++ plaintext)`, with the salt deliberately kept off chain.
+ * The issuer holds the PII; the chain holds a hash. Date of birth, nationality and
+ * address belong to that issuer's off-chain onboarding, never to this call.
  */
 export async function registerBelizeID(
   address: string,
-  data: {
-    firstName: string;
-    middleName?: string;
-    lastName: string;
-    dateOfBirth: string;
-    nationality: string;
-    residenceAddress: string;
-    district: string;
-  }
+  displayName: string
 ): Promise<{ hash: string; blockHash?: string }> {
   const api = await initializeApi();
 
+  const name = displayName.trim();
+  if (!name) {
+    throw new Error('A display name is required.');
+  }
+  // Measured in UTF-8 bytes, which is what the pallet bounds — not characters.
+  if (new TextEncoder().encode(name).length > 64) {
+    throw new Error(
+      'Display name must be 64 bytes or fewer. Keep it to a short public handle.'
+    );
+  }
+
   try {
     const injector = await web3FromAddress(address);
-
-    // Real signature: registerIdentity(name:Bytes). Pack the full PII tuple
-    // into a single newline-separated bytestring; richer fields are persisted
-    // off-chain by upcoming verification flows.
-    const namePayload = [
-      data.firstName,
-      data.middleName ?? '',
-      data.lastName,
-      data.dateOfBirth,
-      data.nationality,
-      data.residenceAddress,
-      data.district,
-    ].join('\n');
-    const tx = api.tx.identity.registerIdentity(namePayload);
+    const tx = api.tx.identity.registerIdentity(name);
 
     return new Promise((resolve, reject) => {
       tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {

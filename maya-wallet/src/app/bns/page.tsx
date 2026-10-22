@@ -8,11 +8,16 @@ import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   registerDomain,
   getUserDomains,
+  getDomain,
+  getPrimaryDomain,
+  getHostedWebsite,
+  getTextRecords,
   getMarketplaceListings,
   createSubdomain,
   purchaseDomain,
   setDomainResolution,
   setPrimaryDomain,
+  clearPrimaryDomain,
   setTextRecord,
   removeTextRecord,
   updateHostingContent,
@@ -20,6 +25,7 @@ import {
   isDomainAvailable,
   type Domain,
   type DomainListing,
+  type HostedWebsite,
 } from '@/services/pallets/bns';
 import {
   Globe,
@@ -66,7 +72,6 @@ interface DomainRecord {
   subdomains: string[];
   expires: string;
   records: DnsRecord[];
-  isPrimary?: boolean;
 }
 
 interface MarketListing {
@@ -81,6 +86,17 @@ interface MarketListing {
 }
 
 const DOMAIN_TLDS = ['.bz', '.caye', '.belize'] as const;
+
+/** Human-readable payload size for the hosting panel. */
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const exponent = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1
+  );
+  return `${(bytes / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
 
 /** Split a fully-qualified name like "shop.bz" into its label and TLD. */
 function splitDomain(full: string): { name: string; tld: MarketListing['tld'] } {
@@ -128,7 +144,6 @@ function toDomainRecord(domain: Domain): DomainRecord {
     // `lockedUntil` is a block number, not a date — reported as such.
     expires: domain.expiryDate ? `block ${domain.expiryDate}` : 'Perpetual',
     records,
-    isPrimary: false,
   };
 }
 
@@ -185,6 +200,18 @@ export default function BNSPage() {
 
   const [loadedDomains, setLoadedDomains] = useState<DomainRecord[]>([]);
   const [supportsPrimary, setSupportsPrimary] = useState(false);
+  // Reverse handle the account currently points at, read from `bns.primaryDomain`.
+  // Without this the "PRIMARY REVERSE HANDLE" badge had no way to be true.
+  const [primaryDomainName, setPrimaryDomainName] = useState<string | null>(null);
+  // Clearing the reverse handle removes it for every app that reads it, so it
+  // goes through a confirm rather than firing on one tap.
+  const [confirmClearPrimary, setConfirmClearPrimary] = useState(false);
+  const [isClearingPrimary, setIsClearingPrimary] = useState(false);
+  // Hosting detail per domain, from `bns.hostedWebsites`. `getUserDomains` only
+  // carries the content hash, so size and payment state are read separately.
+  const [hostingDetails, setHostingDetails] = useState<
+    Record<string, HostedWebsite | null>
+  >({});
 
   // Derived, not synced: when the wallet disconnects the portfolio empties out
   // without the effect having to setState.
@@ -248,7 +275,63 @@ export default function BNSPage() {
     };
   }, []);
 
+  // Which name this account answers to. Keyed on the portfolio so that a
+  // `set_primary_domain` write — which reloads the portfolio — also refreshes it.
+  // The disconnected case is derived at render (`activePrimaryDomain`), not reset
+  // here, so the effect never writes state synchronously.
+  useEffect(() => {
+    const address = selectedAccount?.address;
+    if (!address) return;
+
+    let cancelled = false;
+    getPrimaryDomain(address)
+      .then((name) => {
+        if (!cancelled) setPrimaryDomainName(name);
+      })
+      .catch((error) => {
+        console.error('Failed to read primary domain:', error);
+        if (!cancelled) setPrimaryDomainName(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccount?.address, loadedDomains]);
+
+  // Hosting subscription detail for every owned name. A domain with no entry has
+  // never paid for hosting, which is different from hosting that has lapsed.
+  // Stale entries are harmless: the map below only iterates owned domains.
+  useEffect(() => {
+    if (loadedDomains.length === 0) return;
+
+    let cancelled = false;
+    const names = loadedDomains.map((domain) => `${domain.name}${domain.tld}`);
+
+    Promise.all(names.map((name) => getHostedWebsite(name).catch(() => null)))
+      .then((results) => {
+        if (cancelled) return;
+        setHostingDetails(
+          Object.fromEntries(names.map((name, index) => [name, results[index]]))
+        );
+      })
+      .catch((error) => {
+        console.error('Failed to read hosting detail:', error);
+        if (!cancelled) setHostingDetails({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedDomains]);
+
   const currentDomain = myDomains[selectedDomainIndex] || myDomains[0];
+
+  // Derived, not synced: dropping the wallet must not leave a stale reverse handle.
+  const activePrimaryDomain = selectedAccount?.address ? primaryDomainName : null;
+
+  /** Whether a portfolio entry is the reverse handle the account points at. */
+  const isPrimaryDomain = (domain: DomainRecord): boolean =>
+    activePrimaryDomain === `${domain.name}${domain.tld}`;
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -261,6 +344,13 @@ export default function BNSPage() {
   // authority on whether a name is free: checking only the user's own domains and
   // the loaded marketplace listings reported every other registered name as available.
   const [registryAnswer, setRegistryAnswer] = useState<{ domain: string; free: boolean } | null>(null);
+  const [takenDomain, setTakenDomain] = useState<Domain | null>(null);
+  // Public text records for a name the searcher does not own. `getDomain` reads
+  // the registry record, which carries no records; they live in `domainResolution`.
+  const [takenDomainRecords, setTakenDomainRecords] = useState<Array<{
+    key: string;
+    value: string;
+  }>>([]);
 
   useEffect(() => {
     const clean = searchName.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -280,6 +370,36 @@ export default function BNSPage() {
       cancelled = true;
     };
   }, [searchName, selectedTld]);
+
+  // Ownership detail for a name the registry reports as taken. The availability
+  // probe only answers free/taken, so without this the UI can say a name is gone
+  // but never who holds it or until when. The fetched record is matched against
+  // the searched name at render, so no reset is needed when the name changes.
+  useEffect(() => {
+    if (!registryAnswer || registryAnswer.free) return;
+
+    let cancelled = false;
+    Promise.all([
+      getDomain(registryAnswer.domain),
+      getTextRecords(registryAnswer.domain).catch(() => []),
+    ])
+      .then(([domain, records]) => {
+        if (cancelled) return;
+        setTakenDomain(domain);
+        setTakenDomainRecords(records);
+      })
+      .catch((error) => {
+        console.error('Failed to read domain detail:', error);
+        if (!cancelled) {
+          setTakenDomain(null);
+          setTakenDomainRecords([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [registryAnswer]);
 
   const searchAvailability = useMemo(() => {
     const clean = searchName.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -303,6 +423,11 @@ export default function BNSPage() {
       category: clean.length <= 3 ? 'Super Premium' : clean.length <= 5 ? 'Premium' : 'Standard',
     };
   }, [searchName, selectedTld, marketListings, registryAnswer]);
+
+  // Ownership detail, only when it describes the name currently searched. The
+  // fetch is async, so a stale record from the previous query must not be shown.
+  const searchedDomainDetail =
+    takenDomain && takenDomain.name === registryAnswer?.domain ? takenDomain : null;
 
   // Handle Domain Registration
   const handleRegister = async (e: React.FormEvent) => {
@@ -449,12 +574,37 @@ export default function BNSPage() {
     }
   };
 
+  /** Remove the account's reverse handle. Destructive: every reader loses it. */
+  const handleClearPrimaryDomain = async () => {
+    if (!selectedAccount?.address) return;
+    setIsClearingPrimary(true);
+    try {
+      await clearPrimaryDomain(selectedAccount.address);
+      addNotification({
+        type: 'success',
+        message: 'Cleared the primary reverse handle on chain.',
+      });
+      setConfirmClearPrimary(false);
+      await loadDomains();
+    } catch (error) {
+      // A rejected extrinsic is never reported as cleared.
+      addNotification({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to clear the primary reverse handle.',
+      });
+    } finally {
+      setIsClearingPrimary(false);
+    }
+  };
+
   // Handle hosted-content update.
   //
   // `update_hosting_content` takes a raw 32-byte digest, not a CID string, so the
   // field accepts a 0x-prefixed hex hash and is labelled as such.
-  const handleUpdateIpfsCid = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateIpfsCid = async (e: React.FormEvent) => {    e.preventDefault();
     if (!currentDomain || !selectedAccount?.address) return;
 
     const raw = newIpfsCid.trim();
@@ -639,16 +789,49 @@ export default function BNSPage() {
             </div>
             <div>
               <span className="text-2xl sm:text-3xl font-black font-mono text-purple-300 tracking-tight">
-                {myDomains.find((d) => d.isPrimary)?.name || 'None'}
-                <span className="text-purple-400 text-lg">{myDomains.find((d) => d.isPrimary)?.tld || ''}</span>
+                {activePrimaryDomain ? splitDomain(activePrimaryDomain).name : 'None'}
+                <span className="text-purple-400 text-lg">
+                  {activePrimaryDomain ? splitDomain(activePrimaryDomain).tld : ''}
+                </span>
               </span>
             </div>
             <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-800/80">
               <span>Reverse DID:</span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <CheckCircle size={13} weight="fill" /> Active Resolution
-              </span>
+              {activePrimaryDomain ? (
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <CheckCircle size={13} weight="fill" /> Active Resolution
+                </span>
+              ) : (
+                <span className="text-slate-500 flex items-center gap-1">
+                  <X size={13} /> No handle set
+                </span>
+              )}
             </div>
+
+            {confirmClearPrimary && activePrimaryDomain && (
+              <div className="p-3 bg-slate-950 border border-rose-500/30 rounded-2xl space-y-2 text-[11px]">
+                <p className="text-rose-200">
+                  Clear {activePrimaryDomain}? Anything that resolves your address to a
+                  name will stop working until you set a new one.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmClearPrimary(false)}
+                    disabled={isClearingPrimary}
+                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleClearPrimaryDomain()}
+                    disabled={isClearingPrimary}
+                    className="flex-1 py-2 bg-rose-500 hover:bg-rose-400 text-slate-950 font-black rounded-xl transition-colors disabled:opacity-60"
+                  >
+                    {isClearingPrimary ? 'Clearing…' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Card 3: Decentralized IPFS Web Apps */}
@@ -754,7 +937,7 @@ export default function BNSPage() {
                 <div
                   key={`${d.name}${d.tld}`}
                   className={`bg-slate-900/60 border ${
-                    d.isPrimary
+                    isPrimaryDomain(d)
                       ? 'border-cyan-500/40 shadow-xl shadow-cyan-950/30'
                       : 'border-slate-800 hover:border-cyan-500/30'
                   } rounded-3xl p-6 space-y-5 backdrop-blur-xl flex flex-col justify-between transition-all group`}
@@ -773,9 +956,18 @@ export default function BNSPage() {
                               <span className="text-cyan-400">{d.tld}</span>
                             </span>
                             <div className="flex items-center gap-2 mt-0.5">
-                              {d.isPrimary ? (
-                                <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 border border-purple-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-                                  <Sparkle size={12} weight="fill" /> PRIMARY REVERSE HANDLE
+                              {isPrimaryDomain(d) ? (
+                                <span className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 border border-purple-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                                    <Sparkle size={12} weight="fill" /> PRIMARY REVERSE HANDLE
+                                  </span>
+                                  <button
+                                    onClick={() => setConfirmClearPrimary(true)}
+                                    disabled={isClearingPrimary}
+                                    className="text-[10px] text-slate-400 hover:text-rose-300 underline font-mono transition-colors disabled:opacity-60"
+                                  >
+                                    {isClearingPrimary ? 'Clearing…' : 'Clear'}
+                                  </button>
                                 </span>
                               ) : supportsPrimary ? (
                                 <button
@@ -1015,6 +1207,61 @@ export default function BNSPage() {
                     <div className="flex justify-between items-center text-[11px] text-slate-300 pt-1 border-t border-emerald-500/20">
                       <span>Tier: <strong className="text-white">{searchAvailability.category}</strong></span>
                       <span>Standard rate: <strong className="text-emerald-300">{searchAvailability.pricePerYearDalla}.00 Ɗ</strong> (~{(searchAvailability.pricePerYearDalla * 5).toFixed(2)} bBZD) / year</span>
+                    </div>
+                  )}
+                  {!searchAvailability.available && searchedDomainDetail && (
+                    <div className="space-y-1.5 text-[11px] text-slate-300 pt-1 border-t border-rose-500/20">
+                      <div className="flex justify-between items-center gap-3">
+                        <span>Holder</span>
+                        <span className="font-mono text-rose-200 break-all text-right">
+                          {searchedDomainDetail.owner}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span>Registered at block</span>
+                        <span className="font-mono text-white">
+                          {searchedDomainDetail.registrationDate
+                            ? `#${searchedDomainDetail.registrationDate.toLocaleString()}`
+                            : 'Unknown'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span>Held until</span>
+                        <span className="font-mono text-white">
+                          {/* `lockedUntil` is a block number; unset means perpetual. */}
+                          {searchedDomainDetail.expiryDate
+                            ? `#${searchedDomainDetail.expiryDate.toLocaleString()}`
+                            : 'Perpetual'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span>Resolves to</span>
+                        <span className="font-mono text-cyan-300 break-all text-right">
+                          {searchedDomainDetail.resolvedAddress ?? 'No resolution set'}
+                        </span>
+                      </div>
+                      <div className="pt-1.5 border-t border-rose-500/10 space-y-1">
+                        <span className="text-slate-400 block">Public records</span>
+                        {takenDomainRecords.length === 0 ? (
+                          <span className="text-slate-500 font-mono">
+                            The holder has published none.
+                          </span>
+                        ) : (
+                          takenDomainRecords.map((record) => (
+                            <div
+                              key={`${record.key}:${record.value}`}
+                              className="flex justify-between gap-3"
+                            >
+                              <span className="text-slate-400 font-mono shrink-0">
+                                {record.key}
+                              </span>
+                              <span className="text-cyan-300 font-mono break-all text-right">
+                                {record.value}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1336,7 +1583,9 @@ export default function BNSPage() {
             </div>
 
             <div className="space-y-4">
-              {myDomains.map((d, i) => (
+              {myDomains.map((d, i) => {
+                const hosting = hostingDetails[`${d.name}${d.tld}`];
+                return (
                 <div
                   key={`${d.name}${d.tld}`}
                   className="bg-[#030914] p-5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-emerald-500/30 transition-colors"
@@ -1364,6 +1613,15 @@ export default function BNSPage() {
                         <span className="text-cyan-300 break-all">{d.hostedContentHash}</span>
                       </p>
                     )}
+                    {hosting && (
+                      <p className="text-slate-500 text-[11px] font-mono">
+                        {/* `sizeBytes` is the stored payload the node will serve. */}
+                        {formatBytes(hosting.sizeBytes)} stored
+                        {hosting.updatedAt > 0 && (
+                          <> · paid at block #{hosting.updatedAt.toLocaleString()}</>
+                        )}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -1378,7 +1636,8 @@ export default function BNSPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Update hosted content form */}

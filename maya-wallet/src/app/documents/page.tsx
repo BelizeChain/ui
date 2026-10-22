@@ -149,7 +149,7 @@ export default function DocumentsPage() {
       const pakitClient = getPakitClient();
 
       for (const file of Array.from(files)) {
-        const uploadResult = await pakitClient.upload(file, {
+        await pakitClient.upload(file, {
           compress: true,
           deduplicate: true,
           storage: 'ipfs', // Use IPFS for document storage

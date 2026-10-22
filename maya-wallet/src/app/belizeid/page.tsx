@@ -10,6 +10,7 @@ import {
   getKYCStatus,
   getSSNRecord,
   getPassportRecord,
+  registerBelizeID,
   type BelizeID,
   type KYCStatus,
   type PassportRecord,
@@ -66,6 +67,12 @@ export default function BelizeIDPage() {
   const [passportRecord, setPassportRecord] = useState<PassportRecord | null>(null);
   const [landTitles, setLandTitles] = useState<LandTitle[]>([]);
 
+  // Display-handle registration. Only reachable when no identity exists, because
+  // `register_identity` fails with `IdentityExists` otherwise.
+  const [displayName, setDisplayName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+
   // Hoisted so the callback deps match the compiler-inferred dependency
   // (react-hooks/preserve-manual-memoization).
   const address = selectedAccount?.address;
@@ -105,7 +112,40 @@ export default function BelizeIDPage() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, reloadToken]);
+
+  /**
+   * Register a public display handle.
+   *
+   * This sends only a name. KYC does not travel through this call: `KycLevel` is
+   * derived from issuer attestations (L1 = SSN, L2 = + Passport, L3 = + Biometrics)
+   * and each attestation stores only a salted hash, with the salt kept off chain.
+   * Date of birth, nationality and address belong to the issuer's onboarding flow.
+   */
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!address) return;
+
+    setIsRegistering(true);
+    try {
+      const { hash } = await registerBelizeID(address, displayName);
+      addNotification({
+        type: 'success',
+        message: `BelizeID display handle registered on chain (tx ${hash.slice(0, 10)}…).`,
+      });
+      setDisplayName('');
+      // Re-read so the banner disappears only when the chain agrees.
+      setReloadToken((token) => token + 1);
+    } catch (err) {
+      // Never report success on a rejected extrinsic.
+      addNotification({
+        type: 'error',
+        message: `Registration failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsRegistering(false);
+    }
+  };
 
   /**
    * Verifiable credentials derived from chain state.
@@ -409,10 +449,35 @@ export default function BelizeIDPage() {
               </div>
             )}
             {!belizeID && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
-                No BelizeID is registered for this address on chain. Any credentials shown below come
-                from other pallets (compliance KYC, landLedger titles); issuer attestations require a
-                registered issuer account.
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-3 text-xs">
+                <div className="space-y-1">
+                  <p className="text-amber-300 font-bold">
+                    No BelizeID is registered for this address on chain.
+                  </p>
+                  <p className="text-amber-200/70">
+                    Register a public display handle below. This is a name, not a KYC
+                    record — verification levels come from issuer attestations and are
+                    issued separately, so nothing personal is published here.
+                  </p>
+                </div>
+
+                <form onSubmit={handleRegister} className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Public display name (max 64 bytes)"
+                    className="flex-1 bg-slate-950 border border-amber-500/30 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isRegistering || !displayName.trim()}
+                    className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition-colors disabled:opacity-60"
+                  >
+                    {isRegistering ? 'Registering…' : 'Register Handle'}
+                  </button>
+                </form>
               </div>
             )}
             {credentials.length === 0 && (

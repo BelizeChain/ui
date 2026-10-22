@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
+import { getDisplayName, getAccountType } from '@/services/pallets/identity';
+import { isMerchantVerified } from '@/services/pallets/oracle';
 import {
   ArrowLeft,
   UserCircle,
@@ -23,6 +25,45 @@ export default function ProfilePage() {
   const [city, setCity] = useState('');
   const [copied, setCopied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Read from chain: this page previously asserted "BelizeID Active" and
+  // "Verified Citizen" for every connected wallet, registered or not.
+  const [chainName, setChainName] = useState<string | null>(null);
+  const [accountType, setAccountType] = useState<'Citizen' | 'Business' | null>(null);
+  // A registered merchant and a *verified* merchant are different states on chain;
+  // `getAccountType` only reports the former.
+  const [merchantVerified, setMerchantVerified] = useState(false);
+
+  useEffect(() => {
+    const address = selectedAccount?.address;
+    if (!address) return;
+
+    let cancelled = false;
+    Promise.all([
+      getDisplayName(address),
+      getAccountType(address),
+      isMerchantVerified(address),
+    ])
+      .then(([name, type, verified]) => {
+        if (cancelled) return;
+        // The `name` field may carry a multi-part registration payload; the
+        // first line is the name, so that is what a profile header shows.
+        setChainName(name?.split('\n')[0].trim() || null);
+        setAccountType(type);
+        setMerchantVerified(verified);
+      })
+      .catch((error) => {
+        console.error('Failed to read on-chain identity:', error);
+        if (!cancelled) {
+          setChainName(null);
+          setAccountType(null);
+          setMerchantVerified(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccount?.address]);
 
   const handleCopyAddress = () => {
     if (account?.address) {
@@ -74,8 +115,14 @@ export default function ProfilePage() {
               <p className="text-xs text-slate-400">Manage your sovereign identity & credentials</p>
             </div>
           </div>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-            BelizeID Active
+          <span
+            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+              chainName
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}
+          >
+            {chainName ? 'BelizeID Active' : 'No BelizeID on chain'}
           </span>
         </div>
       </div>
@@ -110,12 +157,25 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-3 space-y-1">
-              <h2 className="text-xl font-bold text-white tracking-tight">{name || 'Belizean Citizen'}</h2>
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                {chainName || name || 'Belizean Citizen'}
+              </h2>
               <div className="flex items-center justify-center gap-2 pt-1">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <CheckCircle size={12} weight="fill" />
-                  Verified Citizen
-                </span>
+                {accountType ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <CheckCircle size={12} weight="fill" />
+                    {accountType === 'Business' ? 'Business Account' : 'Citizen Account'}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                    Account type unknown
+                  </span>
+                )}
+                {merchantVerified && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <ShieldCheck size={12} weight="fill" /> Verified Merchant
+                  </span>
+                )}
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                   SRS Quorum Active
                 </span>

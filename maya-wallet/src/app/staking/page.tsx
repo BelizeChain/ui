@@ -8,6 +8,8 @@ import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   stakeDalla,
+  unstakeDalla,
+  withdrawUnbonded,
   claimStakingRewards,
   getActiveValidators,
   getStakingInfo,
@@ -42,6 +44,10 @@ export default function StakingPage() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [stakingLedger, setStakingLedger] = useState<StakingInfo | null>(null);
   const [validators, setValidators] = useState<Validator[]>([]);
+  // Leaving the set is irreversible and withdraw is one-shot, so both go through
+  // an explicit confirm rather than firing on a single tap.
+  const [pendingExit, setPendingExit] = useState<'leave' | 'withdraw' | null>(null);
+  const [isExiting, setIsExiting] = useState(false);
 
   const loadStaking = async () => {
     if (!selectedAccount?.address) return;
@@ -110,6 +116,44 @@ export default function StakingPage() {
     }
   };
 
+  /**
+   * Leave the validator set, or release an already-pending unbond.
+   *
+   * `leaveValidators` takes no amount — the pallet has no partial unbond — and
+   * `withdrawUnbonded` fails with `UnbondingNotReady` until the period elapses.
+   * Both are surfaced honestly instead of being reported as instant unstaking.
+   */
+  const handleExit = async (action: 'leave' | 'withdraw') => {
+    setIsExiting(true);
+    try {
+      const res =
+        action === 'leave'
+          ? await unstakeDalla(selectedAccount!.address)
+          : await withdrawUnbonded(selectedAccount!.address);
+
+      addNotification({
+        type: 'success',
+        message:
+          action === 'leave'
+            ? `Left the validator set. Stake unlocks after ${UNBONDING_PERIOD_BLOCKS.toLocaleString()} blocks (~24 hours). tx ${res.hash.slice(0, 10)}…`
+            : `Released unbonded stake back to your free balance. tx ${res.hash.slice(0, 10)}…`,
+      });
+      setPendingExit(null);
+      await refreshStaking();
+    } catch (err) {
+      // A rejected extrinsic is never a success, including "too early".
+      addNotification({
+        type: 'error',
+        message:
+          action === 'leave'
+            ? `Leave failed: ${err instanceof Error ? err.message : String(err)}`
+            : `Withdraw failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsExiting(false);
+    }
+  };
+
   if (!isConnected || !selectedAccount) {
     return (
       <ConnectWalletPrompt
@@ -118,7 +162,6 @@ export default function StakingPage() {
       />
     );
   }
-
   const activeValidatorData =
     validators.find((v) => v.address === selectedAccount?.address) ?? null;
 
@@ -428,6 +471,57 @@ export default function StakingPage() {
                   Leaving the validator set schedules the full stake for withdrawal after{' '}
                   {UNBONDING_PERIOD_BLOCKS.toLocaleString()} blocks (~24 hours). Partial unbond is not supported.
                 </div>
+
+                {/* Exit actions. Both are gated on the real validator status, so a
+                    button is only offered when the extrinsic can actually succeed. */}
+                {stakingLedger?.validatorStatus === 'Active' && (
+                  <button
+                    onClick={() => setPendingExit('leave')}
+                    disabled={isExiting}
+                    className="w-full py-3 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-500/30 font-bold rounded-xl text-xs transition-colors disabled:opacity-60"
+                  >
+                    Leave Validator Set
+                  </button>
+                )}
+
+                {stakingLedger?.validatorStatus === 'Inactive' && (
+                  <button
+                    onClick={() => setPendingExit('withdraw')}
+                    disabled={isExiting}
+                    className="w-full py-3 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 border border-amber-500/30 font-bold rounded-xl text-xs transition-colors disabled:opacity-60"
+                  >
+                    Withdraw Unbonded Stake
+                    {stakingLedger.unbonding && stakingLedger.unbonding !== '0.00'
+                      ? ` (${stakingLedger.unbonding} Ɗ)`
+                      : ''}
+                  </button>
+                )}
+
+                {pendingExit && (
+                  <div className="p-4 bg-slate-950 border border-rose-500/30 rounded-2xl space-y-3 text-[11px]">
+                    <p className="text-rose-200 font-bold">
+                      {pendingExit === 'leave'
+                        ? `Leave the validator set? Your whole stake stays locked for ${UNBONDING_PERIOD_BLOCKS.toLocaleString()} blocks (~24 hours) and cannot be partially withdrawn.`
+                        : 'Release the pending unbond? This succeeds only once the unbonding period has elapsed.'}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPendingExit(null)}
+                        disabled={isExiting}
+                        className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-colors disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => void handleExit(pendingExit)}
+                        disabled={isExiting}
+                        className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-400 text-slate-950 font-black rounded-xl text-xs transition-colors disabled:opacity-60"
+                      >
+                        {isExiting ? 'Submitting…' : 'Confirm'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-teal-500/10">

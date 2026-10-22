@@ -6,6 +6,7 @@ import { submitTransfer, estimateFee } from '@/services/blockchain';
 import { useWallet } from '@/contexts/WalletContext';
 import { useUIStore } from '@/store/ui';
 import { getContacts, type Contact } from '@/services/contacts';
+import { resolveDomain } from '@/services/pallets/bns';
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,7 +21,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 const sendMoneySchema = z.object({
-  recipient: z.string().min(5, 'Recipient address is required'),
+  // 4 is the shortest valid BNS label + TLD (`a.bz`), so the field accepts a name
+  // as well as an address.
+  recipient: z.string().min(4, 'Recipient address or BNS name is required'),
   amount: z.string().min(1, 'Amount is required').refine(
     (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
     'Amount must be greater than 0'
@@ -38,6 +41,37 @@ function resolveAddress(raw: string): string {
     return raw.replace('did:belize:', '');
   }
   return raw.trim();
+}
+
+/** TLDs the BNS pallet registers. */
+const BNS_TLDS = ['.bz', '.caye', '.belize'] as const;
+
+/** Whether a typed recipient is a BNS name rather than an address. */
+function looksLikeBnsName(raw: string): boolean {
+  const value = raw.trim().toLowerCase();
+  return BNS_TLDS.some((tld) => value.endsWith(tld) && value.length > tld.length);
+}
+
+/**
+ * Turn whatever the user typed into the address that will actually be sent to.
+ *
+ * A BNS name is resolved on chain. An unresolved name is an error — it must never
+ * fall through as the literal string, which would burn the transfer.
+ */
+async function resolveRecipient(
+  raw: string
+): Promise<{ address: string; domain?: string }> {
+  const cleaned = resolveAddress(raw);
+  if (!cleaned) throw new Error('Recipient address is required');
+  if (!looksLikeBnsName(cleaned)) return { address: cleaned };
+
+  const resolved = await resolveDomain(cleaned);
+  if (!resolved) {
+    throw new Error(
+      `${cleaned} has no on-chain resolution, so it cannot receive funds.`
+    );
+  }
+  return { address: resolved, domain: cleaned };
 }
 
 // CONFIG-002 fake-numerics sweep: The Former SOVEREIGN_DIRECTORY contained
@@ -60,6 +94,13 @@ export default function SendPage() {
   const [isSending, setIsSending] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [contactsList, setContactsList] = useState<Contact[]>([]);
+  // The address a BNS name resolved to, captured at review time. The confirm step
+  // shows it and sends only to it, so a name cannot change destination silently.
+  const [resolvedRecipient, setResolvedRecipient] = useState<{
+    input: string;
+    address: string;
+    domain?: string;
+  } | null>(null);
 
   const {
     register,
@@ -122,15 +163,18 @@ export default function SendPage() {
     try {
       if (!selectedAccount?.address) throw new Error('No account connected');
 
-      const targetAddress = resolveAddress(selectedContact?.address || data.recipient);
-      if (!targetAddress) throw new Error('Recipient address is required');
+      // Resolve first: a BNS name that does not resolve must block the review
+      // rather than reach the confirmation step as an unusable string.
+      const typedRecipient = selectedContact?.address || data.recipient;
+      const resolved = await resolveRecipient(typedRecipient);
+      setResolvedRecipient({ input: typedRecipient, ...resolved });
 
       setEstimatedFee('Calculating...');
       setShowConfirmModal(true);
 
       const fee = await estimateFee(
         selectedAccount.address,
-        targetAddress,
+        resolved.address,
         data.amount,
         data.currency.toLowerCase() as 'dalla' | 'bBZD'
       );
@@ -159,9 +203,15 @@ export default function SendPage() {
         throw new Error('No account connected');
       }
 
-      const recipientAddress = resolveAddress(selectedContact?.address || watchRecipient);
+      const recipientAddress = resolvedRecipient?.address;
       if (!recipientAddress) {
-        throw new Error('No recipient address provided');
+        throw new Error('Recipient is not resolved. Review the transfer again.');
+      }
+      // The recipient field may have changed after review; sending to the stale
+      // resolution would be wrong.
+      const typedRecipient = selectedContact?.address || watchRecipient;
+      if (resolvedRecipient.input !== typedRecipient) {
+        throw new Error('Recipient changed since review. Review the transfer again.');
       }
 
       const result = await submitTransfer(
@@ -367,11 +417,11 @@ export default function SendPage() {
             {selectedContact?.name === 'Custom Recipient' && (
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Recipient Address or W3C DID
+                  Recipient Address, BNS Name or W3C DID
                 </label>
                 <input
                   type="text"
-                  placeholder="r1... or did:belize:r1... or 5..."
+                  placeholder="r1... or shop.bz or did:belize:r1..."
                   {...register('recipient')}
                   className="w-full bg-slate-900/90 border border-teal-500/30 rounded-2xl px-4 py-3.5 text-sm font-mono text-white focus:outline-none focus:border-teal-400 transition-colors"
                 />
@@ -537,6 +587,19 @@ export default function SendPage() {
                   {selectedContact?.name || (watchRecipient ? watchRecipient.slice(0, 12) + '...' : '')}
                 </span>
               </div>
+              {resolvedRecipient && (
+                <div className="flex justify-between items-start gap-3 text-slate-400 border-t border-slate-800 pt-2.5">
+                  <span className="shrink-0">Sends to</span>
+                  <span className="font-mono text-[11px] text-cyan-300 break-all text-right">
+                    {resolvedRecipient.domain && (
+                      <span className="block text-teal-300">
+                        {resolvedRecipient.domain} resolves to
+                      </span>
+                    )}
+                    {resolvedRecipient.address}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-slate-400">
                 <span>Transfer Amount</span>
                 <span className="font-black text-teal-300 text-lg font-mono">

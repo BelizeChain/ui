@@ -7,7 +7,10 @@ import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   getActiveReferenda,
+  getDistrictCouncil,
+  submitProposal,
   voteOnProposal,
+  type DistrictCouncil,
   type Referendum as ChainReferendum,
 } from '@/services/pallets/governance';
 import { getTreasuryBalance, type TreasuryBalance } from '@/services/pallets/treasury';
@@ -19,6 +22,16 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'phosphor-react';
+
+/** The six districts `governance.districtRepresentation` is keyed by. */
+const DISTRICT_NAMES = [
+  'Belize',
+  'Cayo',
+  'Corozal',
+  'Orange Walk',
+  'Stann Creek',
+  'Toledo',
+] as const;
 
 export default function GovernancePage() {
   const { selectedAccount, isConnected } = useWallet();
@@ -33,6 +46,20 @@ export default function GovernancePage() {
   const [, setGovError] = useState('');
   // Real balance of the treasury account, from `system.account`.
   const [treasury, setTreasury] = useState<TreasuryBalance | null>(null);
+
+  // Real district representation. This tab used to render a hardcoded list of
+  // invented councilors, seat counts and districts; the pallet stores only a
+  // membership list per district (`governance.districtRepresentation`).
+  const [districtCouncils, setDistrictCouncils] = useState<DistrictCouncil[]>([]);
+
+  // Create-proposal form. Submitting spends treasury funds, so every field is
+  // controlled and the button stays disabled until the input is usable.
+  const [proposalTitle, setProposalTitle] = useState('');
+  const [proposalDescription, setProposalDescription] = useState('');
+  const [proposalBeneficiary, setProposalBeneficiary] = useState('');
+  const [proposalValue, setProposalValue] = useState('');
+  const [proposalCategory, setProposalCategory] = useState('District Infrastructure');
+  const [isSubmittingProposal, setIsSubmittingProposal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +78,20 @@ export default function GovernancePage() {
         if (!cancelled) setTreasury(balance);
       } catch {
         if (!cancelled) setTreasury(null);
+      }
+      try {
+        // Every district is read, including ones with no representative yet, so
+        // an empty seat is visible rather than simply absent from the list.
+        const councils = await Promise.all(
+          DISTRICT_NAMES.map((district) => getDistrictCouncil(district))
+        );
+        if (!cancelled) {
+          setDistrictCouncils(
+            councils.filter((council): council is DistrictCouncil => council !== null)
+          );
+        }
+      } catch {
+        if (!cancelled) setDistrictCouncils([]);
       }
     };
     fetchData();
@@ -73,10 +114,73 @@ export default function GovernancePage() {
     }
   };
 
+  /**
+   * Submit a treasury-spend proposal.
+   *
+   * This form previously reported "Proposal submitted! Bonded 100 Ɗ" without
+   * sending anything — a success message for an action that never happened.
+   * `governance.proposeTreasurySpend` is the real extrinsic: it takes the
+   * recipient, the amount and a description, and charges the pallet's own
+   * deposit. The amount is not guessed; it comes from the form.
+   */
+  const handleSubmitProposal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccount?.address) return;
+
+    const amount = Number(proposalValue);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      addNotification({
+        type: 'error',
+        message: 'Enter the treasury amount in DALLA, greater than zero.',
+      });
+      return;
+    }
+    if (!proposalBeneficiary.trim()) {
+      addNotification({
+        type: 'error',
+        message: 'Enter the beneficiary account that would receive the funds.',
+      });
+      return;
+    }
+
+    setIsSubmittingProposal(true);
+    try {
+      const { hash, proposalIndex } = await submitProposal(selectedAccount.address, {
+        value: String(amount),
+        beneficiary: proposalBeneficiary.trim(),
+        title: proposalTitle.trim(),
+        description: proposalDescription.trim(),
+        category: proposalCategory,
+      });
+
+      addNotification({
+        type: 'success',
+        message:
+          proposalIndex >= 0
+            ? `Proposal #${proposalIndex} submitted on chain (tx ${hash.slice(0, 10)}…).`
+            : `Proposal submitted on chain (tx ${hash.slice(0, 10)}…).`,
+      });
+      setProposalTitle('');
+      setProposalDescription('');
+      setProposalBeneficiary('');
+      setProposalValue('');
+
+      const refe = await getActiveReferenda();
+      setReferendums(refe);
+    } catch (err) {
+      // Never report success on a rejected extrinsic.
+      addNotification({
+        type: 'error',
+        message: `Proposal failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsSubmittingProposal(false);
+    }
+  };
+
   if (!isConnected || !selectedAccount) {
     return <ConnectWalletPrompt message="Connect your Maya Wallet to vote on BelizeChain sovereign governance referendums." fullScreen />;
   }
-
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-24">
       {/* Header */}
@@ -286,24 +390,51 @@ export default function GovernancePage() {
                 <Users size={22} className="text-purple-400" />
                 Belize 6-District Sovereign Council
               </h3>
-              <p className="text-slate-400 mt-1">Elected representatives overseeing fast-track emergency and infrastructure proposals.</p>
+              <p className="text-slate-400 mt-1">
+                District representatives as recorded in governance.districtRepresentation. The
+                pallet stores the membership list per district only — no prime, seat count or
+                motion history.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[
-                { district: 'Ambergris Caye & Cayes', seats: 2, councilor: 'Wicked (Founder Node)', status: 'Active' },
-                { district: 'Belmopan Capital', seats: 2, councilor: 'Ministry Technical Lead', status: 'Active' },
-                { district: 'Stann Creek / Placencia', seats: 2, councilor: 'Eco-Tourism Chamber', status: 'Active' },
-                { district: 'Cayo / San Ignacio', seats: 1, councilor: 'Agricultural Cooperative', status: 'Active' },
-              ].map((d) => (
-                <div key={d.district} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-white text-sm">{d.district}</span>
-                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-full">{d.status}</span>
+              {DISTRICT_NAMES.map((district) => {
+                const council = districtCouncils.find((c) => c.district === district);
+                const members = council?.members ?? [];
+                return (
+                  <div
+                    key={district}
+                    className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-white text-sm">{district}</span>
+                      <span
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                          members.length > 0
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {members.length > 0 ? `${members.length} Seated` : 'Vacant'}
+                      </span>
+                    </div>
+                    {members.length > 0 ? (
+                      members.map((member) => (
+                        <span
+                          key={member}
+                          className="text-slate-400 text-[11px] font-mono block truncate"
+                        >
+                          {member}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 text-[11px] block">
+                        No representative recorded on chain.
+                      </span>
+                    )}
                   </div>
-                  <span className="text-slate-400 text-[11px] block">Councilor: {d.councilor} ({d.seats} Seats)</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -352,31 +483,60 @@ export default function GovernancePage() {
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Plus size={22} className="text-emerald-400" />
-                Submit Sovereign Proposal to Parliament
+                Submit Treasury Spend Proposal
               </h3>
-              <p className="text-slate-400 mt-1">Deposit 100 Ɗ bond to initiate national referendum.</p>
+              <p className="text-slate-400 mt-1">
+                Calls governance.proposeTreasurySpend. No deposit is charged; the
+                proposal then needs Foundation Board approval — 1 signature under
+                10K Ɗ, 3-of-7 under 100K Ɗ, 4-of-7 above.
+              </p>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                addNotification({ type: 'success', message: 'Proposal submitted! Bonded 100 Ɗ to initiate referendum.' });
-              }}
-              className="space-y-4"
-            >
+            <form onSubmit={handleSubmitProposal} className="space-y-4">
               <div>
                 <label className="text-slate-400 uppercase font-semibold mb-1 block">Proposal Title</label>
                 <input
                   type="text"
                   required
+                  value={proposalTitle}
+                  onChange={(e) => setProposalTitle(e.target.value)}
                   placeholder="e.g. BIP-15: Placencia Solar-Powered Mesh Relay Node"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
                 />
               </div>
 
               <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Beneficiary Account</label>
+                <input
+                  type="text"
+                  required
+                  value={proposalBeneficiary}
+                  onChange={(e) => setProposalBeneficiary(e.target.value)}
+                  placeholder="r1... (the account that would receive the funds)"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-mono text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 uppercase font-semibold mb-1 block">Treasury Amount (Ɗ)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  required
+                  value={proposalValue}
+                  onChange={(e) => setProposalValue(e.target.value)}
+                  placeholder="e.g. 5000"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-mono text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
                 <label className="text-slate-400 uppercase font-semibold mb-1 block">Category</label>
-                <select className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                <select
+                  value={proposalCategory}
+                  onChange={(e) => setProposalCategory(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                >
                   <option value="District Infrastructure">District Infrastructure</option>
                   <option value="Treasury Grant">Treasury Grant</option>
                   <option value="National Policy">National Policy</option>
@@ -389,6 +549,8 @@ export default function GovernancePage() {
                 <textarea
                   rows={4}
                   required
+                  value={proposalDescription}
+                  onChange={(e) => setProposalDescription(e.target.value)}
                   placeholder="Provide rationale, technical specifications, and delivery milestones..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
                 />
@@ -396,9 +558,10 @@ export default function GovernancePage() {
 
               <button
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl shadow-lg transition-all"
+                disabled={isSubmittingProposal}
+                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl shadow-lg transition-all disabled:opacity-60"
               >
-                Submit Proposal (100 Ɗ Bond)
+                {isSubmittingProposal ? 'Submitting on chain…' : 'Submit Treasury Proposal'}
               </button>
             </form>
           </div>

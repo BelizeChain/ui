@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Audit ID** | AUDIT-UI-08 |
-| **Status** | **PLAN — NOT STARTED.** This document is the starting point for the next session |
+| **Status** | **All 25 resolved (2026-10-22).** 18 wired, 2 removed, 5 deferred with a measured reason. See §0.2–§0.6 |
 | **Predecessor** | [AUDIT-UI-07](./AUDIT-UI-07-SERVICE-WIRING.md) — triage that produced this list |
 | **Date written** | 2026-10-16 |
 | **Goal (owner's words)** | *"Those are supposed to be wired and built if missing and useful."* |
@@ -18,7 +18,8 @@ Nothing is outstanding from UI-00 → UI-07.
 | | |
 |---|---|
 | Live chain | `Jade` (Chain D), **runtime spec 116** |
-| Deployed node | `belizechain/ceiba-node:ff74ee9-stable2609-20261012` |
+| Deployed node | `belizechain/ceiba-node:76dea3f-stable2609-20261019` |
+| Last verified | 2026-10-22 — chain `Jade`, spec 116, head 225,422, 18 containers |
 | Workspace | `/home/wicked/Projects/Belizechain/BelizeChain.code-workspace` |
 | UI repo | `/home/wicked/Projects/Belizechain/ui`, branch `main` — check `git status` for whether the hand-off commit has been pushed |
 | Audit docs | `ui/docs/audits/AUDIT-UI-00..08` |
@@ -31,6 +32,187 @@ Nothing is outstanding from UI-00 → UI-07.
 
 **Counts at hand-off:** 65 dead exports remain in `ui/*/src/services/pallets/` —
 **25 REAL** (this plan), 34 no-chain-call, 5 stubs, 1 unverified.
+
+---
+
+## 0.1 VERDICT — every chain call verified against live metadata (2026-10-22)
+
+**All 28 chain calls behind the 25 exports resolve against live runtime metadata (spec 116).
+None is fabricated. Nothing here should be deleted for being fake.**
+
+That reframes the whole plan: the remaining question is *product value*, not correctness.
+Verified by asking the chain (`SubstrateInterface.get_metadata()`), not by reading the
+source tree.
+
+| Verdict | Exports | Why |
+|---|---|---|
+| **WIRE — page/affordance exists** | `getDisplayName`, `resolveDomain`, `getPrimaryDomain`, `getTextRecords`, `getDomain`, `getHostedWebsite`, `getAccountType`, `isMerchantVerified`, `calculateEffectiveFee`, `getProjectContributors`, `getDistrictCouncil`, `getLandTitle`, `getPropertyTransferHistory`, `getSalarySlip`, `verifySalaryPayment`, `clearPrimaryDomain` | The storage item exists and the host page already renders the surrounding UI |
+| **WIRE with a caveat** | `unstakeDalla` | See the correction below — the UI signature lies about the chain |
+| **WIRE, reclassified** | `registerBelizeID` | Was "product decision" — it is **self-service**, see below |
+| **BUILD — no UI exists** | `getVerifiedMerchants`, `getVerifiedMerchant`, `hostWebsite`, `listDomainForSale`, `submitProposal` | Requires a new surface, not a call swap |
+| **NOT A UI WIRE** | `reportTrainingContribution` | Belongs to the Nawal client; the shipped placeholder always errors (fails closed) |
+
+### ⚠️ Two corrections to this document's own §2
+
+## 0.2 WIRED 2026-10-22 — 18 of the 25
+
+Each row was verified with the four gates (`tsc` ×3, `lint`, `build`, `vitest`) after the edit.
+No export was wired just to make a count go up.
+
+| Export | Host | What changed |
+|---|---|---|
+| `getPrimaryDomain` | `/bns` | **Unblocked dead UI.** `DomainRecord.isPrimary` was hardcoded `false`, so the "PRIMARY REVERSE HANDLE" badge and the "Primary Citizen Handle" card could never render — that card always said `None` / "Active Resolution". Now reads `bns.primaryDomain`; the card says "No handle set" when there is none. |
+| `getDomain` | `/bns` | The availability banner could say a name was taken but never who held it. Now shows holder, registration block, `lockedUntil` and the resolution target. |
+| `getTextRecords` | `/bns` | Same banner, new "Public records" section. **This is the only reader for a name the searcher does not own** — `getDomain` returns the registry record, which carries no text records; they live in `domainResolution`. |
+| `getHostedWebsite` | `/bns` | The hosting tab showed only the content hash. Now also shows stored size and last-payment block. |
+| `getDisplayName` | `/profile` | Replaced a hardcoded "BelizeID Active" badge and the local-nickname header. Uses the first line of `identity.identities.name`, which can carry a multi-part payload. |
+| `getAccountType` | `/profile` | Replaced a hardcoded "Verified Citizen" badge with the real derived type, or "Account type unknown". |
+| `isMerchantVerified` | `/profile` | New "Verified Merchant" badge. No page imported the oracle service at all; this distinguishes a *registered* merchant from a *verified* one, which `getAccountType` cannot. |
+| `getDistrictCouncil` | `/governance` | **Removed fabricated data.** The council tab hardcoded four invented districts ("Ambergris Caye & Cayes", "Belmopan Capital"), invented councilors ("Wicked (Founder Node)"), invented seat counts and a hardcoded "Active". Now reads `governance.districtRepresentation` for the six real districts and says "Vacant" when a seat is empty. |
+| `getLandTitle` | `/landledger` | The deed modal now re-reads the property from the register when opened, instead of trusting a possibly stale list copy. |
+| `getPropertyTransferHistory` | `/landledger` | **New section.** A land deed modal had no chain of title. Now lists every transfer from `landLedger.transferRecords` with price, parties, block and approval state. |
+| `verifySalaryPayment` | `/payroll` | **New action.** The page claimed every record carries a blake2_256 commitment but never let you check it. A per-payslip "Verify Commitment" button now re-reads the pallet and reports match / mismatch / no-record. |
+| `getSalarySlip` | `/payroll` | The page built the download blob inline and never called its own service. Now goes through `downloadSalarySlip`, so the document is the **canonical on-chain record** re-read from the pallet. `SalarySlip` gained the `date` field `SalaryPayment` already had, so the download does not lose the date the page shows. |
+| `resolveDomain` | `/send` | **Moves money — reviewed as such.** The recipient field now accepts a BNS name. Resolution happens once at review, the confirm modal states `shop.bz resolves to r1…`, and the send uses that captured address. An unresolved name is a hard error, never a pass-through. A recipient edited after review is rejected rather than sent to a stale resolution. |
+| `submitProposal` | `/governance` | **Replaced a fake success on a treasury action.** The create tab's `onSubmit` called `e.preventDefault()` and then reported *"Proposal submitted! Bonded 100 Ɗ to initiate referendum."* — no transaction, no bond. Now calls `governance.proposeTreasurySpend` with controlled inputs. **Two further defects found while wiring:** the pallet charges **no deposit** (the copy claimed one), and the service read `governance.Proposed` while this extrinsic emits `TreasurySpendProposed`, so the returned proposal id was always `-1`. Both fixed. |
+| `unstakeDalla` | `/staking` | **The page explained how to leave and offered no way to.** Now a "Leave Validator Set" button, gated on `validatorStatus === 'Active'`, with a confirm step. The `amount` param was dropped — the chain has no partial unbond, so it was `void`ed anyway. |
+| `withdrawUnbonded` (new) | `/staking` | Added and wired: the second half of leaving. Gated on `validatorStatus === 'Inactive'`, shows the pending amount, and surfaces `UnbondingNotReady` honestly rather than implying instant release. |
+| `clearPrimaryDomain` | `/bns` | Small "Clear" next to the primary badge, behind a confirm. Destructive: every reader of the reverse handle loses it. |
+| `registerBelizeID` | `/belizeid` | **Rewritten, then wired.** It used to pack 7 PII fields into a 64-byte public field; now sends one display handle. See §0.5 for why the KYC fields never belonged there. |
+
+## 0.3 REMOVED — two exports that could never be correct
+
+### `calculateEffectiveFee`
+
+**The chain never applies this discount, so the export was deleted rather than wired.**
+
+`pallet_belize_community::FeeCalculator` was implemented and `runtime/src/lib.rs` defined
+`CommunityFeeCalculatorProvider` for it — but **nothing consumed the trait**, so no transfer
+was ever discounted. Quoting it would have told citizens they pay less than they do. Two
+further breakages confirmed the feature was never live:
+
+- `FeeExemptionMonthlyLimit = ConstU32<100>` landed in `BalanceOf` as **100 planck**
+  (0.0000001 dBZD at 12 decimals), not the "100 dBZD" its comment claimed — the first
+  discounted fee would exceed it and fall back to full price.
+- `FeeExemptionApplied` / `FeeExemptionLimitReached` had already been deleted as *"orphaned,
+  never emitted"* (`community/src/lib.rs`), and `FeeExemptionUsage` was written only from the
+  uncalled path, so that map was provably always empty.
+
+Removed on both sides: the UI export and its tier map, and the chain path (`FeeCalculator` +
+impl, `calculate_effective_fee`, `apply_fee_discount`, `calculate_fee_discount`,
+`check_fee_exemption_limit`, `apply_fee_exemption`, `FeeExemptionData`, `FeeExemptionTier`,
+`FeeExemptionUsage`, `FeeExemptionMonthlyLimit`, the `FeeExemptionReset` event, the
+`FeeExemptionLimitExceeded` error, the runtime provider, and 11 tests). Verified:
+`cargo check -p pallet-belize-community --tests`, `cargo test -p pallet-belize-community`
+(**86 passed**), `cargo check -p belizechain-runtime`, `cargo fmt --all -- --check`.
+
+⚠️ **This changes the runtime WASM.** It takes effect only on a runtime upgrade, and a
+`spec_version` bump is required when that happens. No storage migration is needed: the only
+storage item removed was provably empty, and Substrate derives storage keys per item name, so
+no other item's keys shift.
+
+## 0.4 Remaining 5 — DEFERRED, each with a measured reason
+
+Measured against the live chain at head **226,827** on 2026-10-22. **These are not "undecided" —
+they are correct code with nothing to show or nothing safe to call yet.**
+
+| Export | Blocker (measured) | Unblocks when |
+|---|---|---|
+| `hostWebsite` | Works, but hardcodes `tier: 1` and `Bns.HostedWebsites` holds **0** entries. | A hosting tier selector exists and at least one domain is registered. |
+| `listDomainForSale` | `Bns.DomainRegistry` holds **0** domains — there is nothing to list. | Domains are registered on Ceiba. |
+| `getVerifiedMerchant` | `Oracle.MerchantCategories` holds **0** merchants. | The oracle registers merchants. |
+| `getVerifiedMerchants` | Same, and it scans all `entries()` — an unbounded read with no data today. | Same, plus pagination. |
+| `getVerifiedMerchants` / BNS surface generally | `Bns.PrimaryDomain`, `Bns.HostedWebsites`, `Bns.DomainRegistry` all **0**; `Governance.DistrictRepresentation` also **0**, so the newly-wired council tab correctly renders six "Vacant" seats. | Real registrations on Ceiba. |
+
+`reportTrainingContribution` was **deleted** (see §0.3). It could never succeed and its real
+caller is the Nawal client.
+
+## 0.5 `registerBelizeID` — WIRED as a display handle (option A, 2026-10-22)
+
+The plan called this "wireable once the signature is fixed". As written it was **not** wireable,
+for two independent reasons:
+
+**1. It failed for most real Belizean names.** `MaxNameLen = ConstU32<64>`
+(`runtime/src/lib.rs:1475`), and the service joined **seven fields with newlines** before
+submitting. Measured payload sizes:
+
+| Input | Payload | Result |
+|---|---|---|
+| Short name, short address | 61 B | fits, barely |
+| María Josefa Hernández Vásquez, real address | **87 B** | `BoundedVec` rejects |
+| Christopher Alexander Montgomery, real address | **78 B** | `BoundedVec` rejects |
+
+**2. It published PII permanently.** `IdentityRecord.name` is a plaintext `BoundedVec` in
+`Identities`, a public `StorageMap` — no hashing, no encryption. The payload carried
+first/middle/last name, date of birth, nationality, residence address and district.
+
+### Why the fields were there at all — the plan was right, the placement was wrong
+
+The tiered KYC plan is real and already implemented
+(`docs/tutorials/kyc-verification.md`): L1 25K bBZD/day needs SSN, L2 100K needs SSN +
+Passport, L3 unlimited adds Biometrics. The KYC onboarding form in that doc **does** collect
+first name, last name, DOB (for the over-18 check) and address (optional at L1, required at L2).
+
+**But the chain never needed any of it.** `KycLevel` is derived purely from attestations
+(`identity/src/lib.rs:1393-1425`), and an `Attestation` stores **only a hash**:
+
+```rust
+/// Salted hash of normalized attribute value (blake2_256(salt ++ plaintext))
+pub hash: H256,
+/// DEPRECATED: Salt removed (P0-01 fix). Hash must be computed off-chain with
+/// a strong KDF (Argon2id) and secret salt that never touches the chain.
+pub salt: Option<...>,
+```
+
+A grep for `date_of_birth|nationality|residence|age_verify` across `pallets/` and `runtime/`
+returns **zero** non-test hits — the compliance pallet does not reference them either. The
+design was always: **issuer holds the PII, chain holds a hash.** `docs/tutorials/README.md:203`
+even promises *"Age verification without revealing birthdate"*, which is the ZK path.
+
+So the defect was one of **placement**: the KYC form's fields were packed into a parameter the
+pallet documents as *"Display name (not PII-critical but bounded)"*.
+
+### What shipped
+
+`registerBelizeID(address, displayName)` now sends **one** name, matching the extrinsic. It
+validates length in **UTF-8 bytes** (what the pallet bounds, not characters) and says so.
+`/belizeid` renders a registration form in the "no BelizeID" state, and re-reads the chain
+before hiding the banner — so it only disappears when the chain agrees.
+
+`getDisplayName` returns **only the first line**, so a record written by an older or
+third-party client that packed extra fields into this field cannot surface them.
+
+**Verified: no cleanup needed.** `Identity.Identities` holds 4 records at head 226,827 —
+`Nawal AI Validator` and three `Bridge Validator …` entries. All single-line, no PII. The bad
+path was never exercised with real citizen data.
+
+## 0.6 The older notes — corrected 2026-10-22
+
+Two of the three notes below were **overtaken by the wiring pass** and are kept only as a
+record of what was believed. Read §0.2 for what actually shipped.
+
+**1. `registerBelizeID` — SUPERSEDED by §0.5.** The old note was right that the pallet allows
+self-registration and that the service signature is what does not match. It missed two harder
+blockers: the 64-byte `MaxNameLen` cap and permanent plaintext PII.
+
+**2. `unstakeDalla` — DONE.** The old note said *"treat this as a copy + flow fix, not a wire."*
+That was half right: the copy at `staking/page.tsx` was already accurate (`UnbondingPeriod =
+14_400` matches the runtime exactly), and what was missing was the flow. Both halves are now
+wired (`unstakeDalla` + a new `withdrawUnbonded`), gated on the real `validatorStatus`.
+
+**3. `reportTrainingContribution` — DELETED.** Deleted from `staking.ts` and the barrel in
+§0.3. Its real caller is the Nawal client, per `nawal-ai/docs/architecture/INTENT.md`.
+
+### 🪤 The checker was wrong three times before it was trustworthy
+
+All three produced confident, wrong output — the same class as the UI-07 scanner:
+
+1. `storage` is `{prefix, entries: [...]}`, not a bare list → **0/28**.
+2. `calls` is `{ty: N}`, resolving to `def.variant.variants`, not a list → **8 falsely missing**.
+3. Metadata names are **snake_case** (`register_domain`); the polkadot-js surface is
+   **camelCase** (`registerDomain`) → comparing literally flags everything.
+
+Final result: **28/28**. A scan reporting "everything is missing" is a broken scan.
 
 ---
 

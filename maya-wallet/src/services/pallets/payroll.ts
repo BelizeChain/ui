@@ -62,6 +62,8 @@ export interface SalarySlip {
   blockNumber: number;
   timestamp: number;
   paymentCommitment: string;
+  /** Formatted payment date, derived the same way as `SalaryPayment.date`. */
+  date?: string;
 }
 
 export interface PayrollStats {
@@ -277,6 +279,8 @@ export async function getSalarySlip(paymentId: string): Promise<SalarySlip | nul
       blockNumber: payment.blockNumber,
       timestamp: payment.timestamp,
       paymentCommitment: payment.paymentCommitment,
+      // Carried over so a downloaded slip states the same date the page shows.
+      date: payment.date,
     };
   } catch (error) {
     console.error('Failed to fetch salary slip:', error);

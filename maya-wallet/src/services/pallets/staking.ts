@@ -192,19 +192,18 @@ export async function stakeDalla(
 }
 
 /**
- * Unstake DALLA tokens
+ * Leave the validator set.
+ *
+ * The pallet has no partial unbond: `leaveValidators()` takes no amount, is
+ * validator-only, removes the validator from the active set, and schedules the
+ * whole stake for release after `UnbondingPeriod`. Use `withdrawUnbonded` once
+ * that period has elapsed to release the lock.
  */
-export async function unstakeDalla(
-  address: string,
-  amount: string
-): Promise<{ hash: string }> {
+export async function unstakeDalla(address: string): Promise<{ hash: string }> {
   const api = await initializeApi();
 
   try {
     const injector = await web3FromAddress(address);
-    // Real chain has no partial unbond; leaveValidators schedules the full
-    // stake for withdrawal after the unbonding period.
-    void amount;
     const tx = api.tx.staking.leaveValidators();
 
     return new Promise((resolve, reject) => {
@@ -216,6 +215,32 @@ export async function unstakeDalla(
     });
   } catch (error) {
     console.error('Unstaking failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Release a pending unbond once the unbonding period has elapsed.
+ *
+ * Fails on chain with `UnbondingNotReady` if called too early, and with
+ * `NoPendingUnbond` if `unstakeDalla` was never called.
+ */
+export async function withdrawUnbonded(address: string): Promise<{ hash: string }> {
+  const api = await initializeApi();
+
+  try {
+    const injector = await web3FromAddress(address);
+    const tx = api.tx.staking.withdrawUnbonded();
+
+    return new Promise((resolve, reject) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
+        if (status.isInBlock) {
+          resolve({ hash: txHash.toString() });
+        }
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.error('Withdraw unbonded failed:', error);
     throw error;
   }
 }
@@ -323,46 +348,6 @@ export async function getActiveValidators(): Promise<Validator[]> {
   } catch (error) {
     console.error('Failed to fetch on-chain validators:', error);
     return [];
-  }
-}
-
-/**
- * Report training contribution (called by Nawal federated learning client)
- */
-export async function reportTrainingContribution(
-  address: string,
-  modelHash: string,
-  qualityScore: number,
-  timelinessScore: number,
-  honestyScore: number
-): Promise<{ hash: string }> {
-  const api = await initializeApi();
-
-  try {
-    const injector = await web3FromAddress(address);
-    // Real signature: submitModelDelta(taskId, encryptedDelta, computationCommitment, computationLog).
-    // UI doesn't carry taskId/log yet, so we encode the model hash into commitment
-    // and pass empty delta/log placeholders. Nawal client should drive this directly
-    // with the full payload when wired.
-    void qualityScore; void timelinessScore; void honestyScore;
-    const taskId = 0;
-    const tx = api.tx.staking.submitModelDelta(
-      taskId,
-      '0x',
-      modelHash,
-      modelHash,
-    );
-
-    return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash }) => {
-        if (status.isInBlock) {
-          resolve({ hash: txHash.toString() });
-        }
-      }).catch(reject);
-    });
-  } catch (error) {
-    console.error('Report training failed:', error);
-    throw error;
   }
 }
 

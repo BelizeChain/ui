@@ -223,11 +223,12 @@ export async function submitProposal(
         if (status.isInBlock) {
           let proposalIndex = -1;
 
-          // Extract proposal index from events
+          // `proposeTreasurySpend` emits `TreasurySpendProposed { proposal_id, .. }`
+          // — not `Proposed`, which belongs to `submitProposal`.
           events.forEach(({ event }) => {
-            if (api.events.governance?.Proposed?.is(event)) {
-              const [index] = event.data;
-              proposalIndex = Number((index as any).toString());
+            if (api.events.governance?.TreasurySpendProposed?.is(event)) {
+              const [id] = event.data;
+              proposalIndex = Number((id as any).toString());
             }
           });
 

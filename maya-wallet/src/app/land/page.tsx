@@ -180,12 +180,10 @@ export default function LandPage() {
             <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Recorded Encumbrances</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-bold text-teal-400">
-                {loading
-                  ? '…'
-                  : properties.reduce((n, p) => n + (p.encumbrances?.length ?? 0), 0)}
+                {properties.reduce((n, p) => n + (p.encumbrances?.length ?? 0), 0)}
               </span>
               <span className="text-xs text-slate-400">
-                across {loading ? '…' : properties.length} registered parcel{properties.length === 1 ? '' : 's'}
+                across {properties.length} registered parcel{properties.length === 1 ? '' : 's'}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-2">

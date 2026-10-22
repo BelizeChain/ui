@@ -29,7 +29,7 @@ export type { AssetSymbol, TradingPair, SwapQuote, SwapResult, TradeHistory } fr
 export { getActiveProposals, getProposalById, submitProposal, voteOnProposal, getActiveReferenda, getDistrictCouncil, getVotingHistory, secondProposal } from './governance';
 
 // Staking & Rewards
-export { getStakingInfo, stakeDalla, unstakeDalla, claimStakingRewards, getModelSubmission, getActiveValidators, reportTrainingContribution } from './staking';
+export { getStakingInfo, stakeDalla, unstakeDalla, withdrawUnbonded, claimStakingRewards, getModelSubmission, getActiveValidators } from './staking';
 
 // Land Registry & Documents
 export { getLandTitle, getUserLandTitles, getAllProperties, getPropertyDocuments, registerDocument, initiatePropertyTransfer, getPropertyTransferHistory, searchLandByLocation, getDocumentDownloadUrl } from './landledger';

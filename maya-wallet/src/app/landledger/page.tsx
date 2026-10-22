@@ -10,8 +10,11 @@ import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   getUserLandTitles,
   getAllProperties,
+  getLandTitle,
+  getPropertyTransferHistory,
   initiatePropertyTransfer,
   type LandTitle,
+  type PropertyTransfer,
 } from '@/services/pallets/landledger';
 import {
   House,
@@ -99,6 +102,13 @@ export default function LandLedgerPage() {
 
   // Title Deed Inspector Modal
   const [inspectedDeed, setInspectedDeed] = useState<LandTitle | null>(null);
+  // Chain-of-title for the inspected property. The register keeps every transfer
+  // in `landLedger.transferRecords`, which the deed modal never showed. The title
+  // id travels with the list so the modal cannot show another property's history.
+  const [transferHistory, setTransferHistory] = useState<{
+    titleId: string;
+    transfers: PropertyTransfer[];
+  } | null>(null);
 
   // Hoisted so the callback's deps match the compiler-inferred dependency
   // (react-hooks/preserve-manual-memoization).
@@ -127,6 +137,29 @@ export default function LandLedgerPage() {
     // (react-hooks/set-state-in-effect).
     Promise.resolve().then(loadProperties);
   }, [loadProperties]);
+
+  // Re-read the inspected property from the register when the deed is opened.
+  // The list copy may predate a transfer, and the modal is the authoritative view.
+  useEffect(() => {
+    const titleId = inspectedDeed?.titleId;
+    if (!titleId) return;
+
+    let cancelled = false;
+    Promise.all([getLandTitle(titleId), getPropertyTransferHistory(titleId)])
+      .then(([fresh, transfers]) => {
+        if (cancelled) return;
+        if (fresh) setInspectedDeed(fresh);
+        setTransferHistory({ titleId, transfers });
+      })
+      .catch((error) => {
+        console.error('Failed to read deed detail:', error);
+        if (!cancelled) setTransferHistory(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inspectedDeed?.titleId]);
 
   const filteredProperties = useMemo(() => {
     if (typeFilter === 'ALL') return allProperties;
@@ -781,6 +814,51 @@ export default function LandLedgerPage() {
                       </span>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {transferHistory?.titleId === inspectedDeed.titleId && (
+                <div className="bg-slate-950 p-4 rounded-2xl border border-cyan-500/20 space-y-2 text-[11px]">
+                  <span className="text-cyan-300 font-bold uppercase text-[10px] block">
+                    Chain of Title ({transferHistory.transfers.length})
+                  </span>
+                  {transferHistory.transfers.length === 0 ? (
+                    <p className="text-slate-500 font-mono">
+                      No transfers recorded — this is the original registration.
+                    </p>
+                  ) : (
+                    transferHistory.transfers.map((transfer) => (
+                      <div
+                        key={transfer.transferId}
+                        className="space-y-0.5 font-mono text-slate-400 border-t border-slate-800/80 pt-1.5"
+                      >
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-300">{transfer.transferType}</span>
+                          <span className="text-cyan-300 shrink-0">
+                            {transfer.price} bBZD
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="truncate">{transfer.from || '—'}</span>
+                          <span className="truncate text-right">{transfer.to || '—'}</span>
+                        </div>
+                        <div className="flex justify-between gap-3 text-[10px]">
+                          <span>
+                            {transfer.transferredAt
+                              ? `block #${transfer.transferredAt.toLocaleString()}`
+                              : 'block unknown'}
+                          </span>
+                          <span
+                            className={
+                              transfer.governmentApproved ? 'text-emerald-400' : 'text-amber-400'
+                            }
+                          >
+                            {transfer.governmentApproved ? 'approved' : 'unapproved'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
 

@@ -10,6 +10,8 @@ import {
   getSalaryPayments,
   getEmployeeRoster,
   getEmployerPayments,
+  downloadSalarySlip,
+  verifySalaryPayment,
   type EmployeeRosterEntry,
   type PayrollRecord,
   type SalaryPayment,
@@ -43,6 +45,17 @@ export default function PayrollPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  // Result of re-reading a payment's commitment straight from the pallet. The page
+  // already told the reader every record carries a blake2_256 commitment, but
+  // never let them check it against the chain.
+  const [verifications, setVerifications] = useState<
+    Record<
+      string,
+      { status: 'checking' } | { status: 'missing' } | { status: 'match' } | { status: 'mismatch'; onChain: string }
+    >
+  >({});
 
   // Hoisted so the callback's deps match the compiler-inferred dependency
   // (react-hooks/preserve-manual-memoization).
@@ -96,6 +109,72 @@ export default function PayrollPage() {
       type: 'info',
       message: 'Batch disbursement is employer-signed (payroll.batchPayment) and has no portal in this wallet yet. The roster below is read-only.',
     });
+  };
+
+  /**
+   * Download the payslip through the service layer, so the document is the
+   * canonical on-chain record re-read from the pallet rather than whatever
+   * this page happens to be holding.
+   */
+  const handleDownloadSlip = async (payment: SalaryPayment) => {
+    setDownloadingId(payment.paymentId);
+    try {
+      const blob = await downloadSalarySlip(payment.paymentId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Payslip_${payment.paymentId}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      addNotification({
+        type: 'success',
+        message: `Downloaded the on-chain payslip for ${payment.paymentId}.`,
+      });
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        message:
+          err instanceof Error ? err.message : 'Could not download this payslip.',
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  /**
+   * Re-read a payment's commitment from the pallet and compare it with the copy
+   * this page is displaying. A mismatch means the record changed since it loaded.
+   */
+  const handleVerifyPayment = async (payment: SalaryPayment) => {
+    const { paymentId, paymentCommitment } = payment;
+    setVerifications((prev) => ({ ...prev, [paymentId]: { status: 'checking' } }));
+
+    try {
+      const result = await verifySalaryPayment(paymentId);
+      if (!result.verified) {
+        setVerifications((prev) => ({ ...prev, [paymentId]: { status: 'missing' } }));
+        return;
+      }
+
+      const onChain = result.commitment ?? '';
+      setVerifications((prev) => ({
+        ...prev,
+        [paymentId]:
+          onChain === paymentCommitment
+            ? { status: 'match' }
+            : { status: 'mismatch', onChain },
+      }));
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Could not verify this payment.',
+      });
+      setVerifications((prev) => {
+        const next = { ...prev };
+        delete next[paymentId];
+        return next;
+      });
+    }
   };
 
   if (!isConnected || !selectedAccount) {
@@ -308,21 +387,52 @@ export default function PayrollPage() {
                     </div>
                   </div>
 
-                  <div className="pt-2 flex justify-end gap-2">
+                  <div className="pt-2 flex flex-wrap justify-end items-center gap-2">
+                    {(() => {
+                      const check = verifications[p.paymentId];
+                      if (!check) return null;
+                      if (check.status === 'checking') {
+                        return (
+                          <span className="text-slate-400 text-[11px] font-mono">
+                            Reading commitment…
+                          </span>
+                        );
+                      }
+                      if (check.status === 'missing') {
+                        return (
+                          <span className="text-amber-300 text-[11px] font-mono">
+                            No record for {p.paymentId} on chain
+                          </span>
+                        );
+                      }
+                      if (check.status === 'match') {
+                        return (
+                          <span className="text-emerald-300 text-[11px] font-mono flex items-center gap-1">
+                            <ShieldCheck size={13} weight="fill" /> Commitment matches chain
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-rose-300 text-[11px] font-mono break-all text-right">
+                          Mismatch — chain holds {check.onChain || 'an empty commitment'}
+                        </span>
+                      );
+                    })()}
                     <button
-                      onClick={() => {
-                        const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Payslip_${p.paymentId}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        addNotification({ type: 'success', message: `Downloaded Payslip JSON for ${p.paymentId}!` });
-                      }}
+                      onClick={() => void handleVerifyPayment(p)}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-700/50"
                     >
-                      <DownloadSimple size={14} /> Download Payslip (.json)
+                      <ShieldCheck size={14} /> Verify Commitment
+                    </button>
+                    <button
+                      onClick={() => void handleDownloadSlip(p)}
+                      disabled={downloadingId === p.paymentId}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-700/50 disabled:opacity-60"
+                    >
+                      <DownloadSimple size={14} />
+                      {downloadingId === p.paymentId
+                        ? 'Preparing…'
+                        : 'Download Payslip (.json)'}
                     </button>
                   </div>
                 </div>
