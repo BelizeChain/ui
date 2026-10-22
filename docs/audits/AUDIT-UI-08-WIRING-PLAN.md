@@ -102,7 +102,7 @@ Removed on both sides: the UI export and its tier map, and the chain path (`FeeC
 impl, `calculate_effective_fee`, `apply_fee_discount`, `calculate_fee_discount`,
 `check_fee_exemption_limit`, `apply_fee_exemption`, `FeeExemptionData`, `FeeExemptionTier`,
 `FeeExemptionUsage`, `FeeExemptionMonthlyLimit`, the `FeeExemptionReset` event, the
-`FeeExemptionLimitExceeded` error, the runtime provider, and 11 tests). Verified:
+`FeeExemptionLimitExceeded` error, the runtime provider, and 13 tests). Verified:
 `cargo check -p pallet-belize-community --tests`, `cargo test -p pallet-belize-community`
 (**86 passed**), `cargo check -p belizechain-runtime`, `cargo fmt --all -- --check`.
 
