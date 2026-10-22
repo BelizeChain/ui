@@ -43,9 +43,13 @@ export { useI18n, getTranslations, localeInfo, type Locale, type Translations } 
 
 // API Clients (export only client classes/functions to avoid type conflicts)
 export { KinichClient, getKinichClient, type QuantumJob } from './api/kinich-client';
-export { NawalClient, getNawalClient, type FLTask, type GenomeInfo } from './api/nawal-client';
-export { 
-  PakitClient, 
+// A `NawalClient` lived here and targeted ten `/api/v1/{tasks,contributions,
+// scores,genomes,models}` routes. None of them exist on the coordinator — its
+// real surface is `/api/v1/fl/*` — so every method could only fail. It had no
+// importers, so it is gone rather than rewritten. The routes that do exist are
+// used through `maya-wallet/src/services/pallets/nawal.ts`.
+export {
+  PakitClient,
   getPakitClient,
   type PakitConfig,
   type UploadOptions,
@@ -54,7 +58,7 @@ export {
 } from './api/pakit-client';
 
 // Services
-export { 
+export {
   TransactionIndexer,
   type Transaction,
   type TransactionFilter,

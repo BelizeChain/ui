@@ -5,31 +5,29 @@
  * Nothing here is invented: when the coordinator is unreachable these calls
  * return `null`/`[]` so callers can show an honest empty state.
  *
- * Two things make that empty state common, and neither is a bug in this file:
+ * Requests go to this app's own `/api/fl/*` route, which forwards them
+ * server-side with the API key the coordinator requires. Two earlier shapes
+ * could not work:
  *
- * 1. The base URL used to default to `http://localhost:8080`, which from a
- *    browser means the visitor's own machine. It now comes from the shared
- *    runtime config, which derives `<origin>/api/nawal` behind the reverse
- *    proxy and only falls back to localhost when there is no browser origin.
- * 2. Every `/api/v1/*` route on the coordinator requires an API key, and a
- *    browser cannot hold one. Those requests answer 401 and are treated as
- *    "no data". To populate these tiles for real, the coordinator has to be
- *    reached from a server-side route that adds the key — the `/health` and
- *    `/metrics` endpoints are the only unauthenticated ones.
+ * - a base URL defaulting to `http://localhost:8080`, which from a browser means
+ *   the visitor's own machine;
+ * - calling `/api/nawal/*` directly, which nginx forwards to the coordinator
+ *   without a key, so every read answered 401 and the page showed empty tiles.
+ *
+ * The credential stays on the server — see `app/api/fl/[...path]/route.ts`.
  */
 
-import { getRuntimeConfig } from '@belizechain/shared';
 import { claimStakingRewards } from './staking';
 
 /**
- * Base URL of the coordinator's federated-learning API.
+ * Path of this app's Nawal proxy, relative to the current origin.
  *
- * The proxy maps `/api/nawal/*` onto the service root, so the coordinator's own
- * `/api/v1/fl/*` prefix is appended here rather than assumed to be part of the
- * runtime-config value.
+ * These helpers are only called from client components, so the origin is
+ * always available; the bare path is a safe fallback for a same-origin fetch.
  */
-function nawalApiBase(): string {
-  return `${getRuntimeConfig().nawalApiUrl}/api/v1/fl`;
+function nawalFlUrl(path: string): string {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  return `${origin}/api/fl/${path}`;
 }
 
 export interface NawalParticipantStats {
@@ -92,7 +90,9 @@ export interface ModelGenome {
  */
 export async function getParticipantStats(accountId: string): Promise<NawalParticipantStats | null> {
   try {
-    const response = await fetch(`${nawalApiBase()}/participants/${accountId}`, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(nawalFlUrl(`participants/${encodeURIComponent(accountId)}`), {
+      signal: AbortSignal.timeout(1500),
+    });
     if (response.ok) {
       return await response.json();
     }
@@ -110,7 +110,7 @@ export async function getParticipantStats(accountId: string): Promise<NawalParti
  */
 export async function getSystemMetrics(): Promise<NawalSystemMetrics | null> {
   try {
-    const response = await fetch(`${nawalApiBase()}/metrics`, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(nawalFlUrl('metrics'), { signal: AbortSignal.timeout(1500) });
     if (response.ok) {
       return await response.json();
     }
@@ -138,7 +138,7 @@ export async function getActiveRounds(): Promise<NawalRoundStatus[]> {
  */
 export async function getRoundStatus(roundId: string): Promise<NawalRoundStatus | null> {
   try {
-    const response = await fetch(`${nawalApiBase()}/rounds/${encodeURIComponent(roundId)}`, {
+    const response = await fetch(nawalFlUrl(`rounds/${encodeURIComponent(roundId)}`), {
       signal: AbortSignal.timeout(1500),
     });
     if (response.ok) {
