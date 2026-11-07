@@ -114,7 +114,7 @@ jobs:
         run: |
           echo "🔍 Checking for outdated packages..."
           npm outdated || true
-          
+
           echo "📊 Turborepo workspaces:"
           npm outdated --workspace=maya-wallet || true
           npm outdated --workspace=blue-hole-portal || true
@@ -131,14 +131,14 @@ jobs:
       - name: Check Next.js security headers
         run: |
           echo "🔒 Checking security headers configuration..."
-          
+
           # Check maya-wallet next.config.js
           if grep -q "Content-Security-Policy\|X-Frame-Options\|X-Content-Type-Options" maya-wallet/next.config.js; then
             echo "✅ Maya Wallet has security headers configured"
           else
             echo "⚠️ Maya Wallet missing security headers"
           fi
-          
+
           # Check blue-hole-portal next.config.js
           if grep -q "Content-Security-Policy\|X-Frame-Options\|X-Content-Type-Options" blue-hole-portal/next.config.js; then
             echo "✅ Blue Hole Portal has security headers configured"
@@ -156,9 +156,22 @@ jobs:
       - name: Check for hardcoded secrets
         run: |
           echo "🔍 Checking for hardcoded secrets..."
-          
-          # Check for common secret patterns
-          if grep -r "PRIVATE_KEY\|SECRET_KEY\|API_KEY" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" . | grep -v "NEXT_PUBLIC" | grep -v "process.env" | grep -v "node_modules" | grep -v ".next"; then
+
+          # Flag an actual ASSIGNMENT of a secret-shaped name to a literal value.
+          #
+          # The previous pattern was `grep -r "PRIVATE_KEY\|SECRET_KEY\|API_KEY"`
+          # over every source file, which matches the *name* of an environment
+          # variable wherever it is mentioned. It went red on 2026-11-02 because
+          # `maya-wallet/src/app/api/fl/[...path]/route.ts` lists missing config in
+          # an error message:
+          #     const missing = [!base && 'NAWAL_INTERNAL_URL', !apiKey && 'NAWAL_API_KEY']
+          # That string is what the operator is told to set — the opposite of a leak.
+          #
+          # Requiring `[:=]` plus a quoted literal of >= 16 characters keeps the
+          # real detection (a committed key) and drops the identifier-only noise.
+          if grep -rnE "(PRIVATE_KEY|SECRET_KEY|API_KEY)[\"']?[[:space:]]*[:=][[:space:]]*[\"'][^\"']{16,}[\"']" \
+               --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" . \
+             | grep -v "NEXT_PUBLIC" | grep -v "process.env" | grep -v "node_modules" | grep -v ".next"; then
             echo "⚠️ Potential hardcoded secrets found!"
             exit 1
           else
@@ -172,13 +185,13 @@ jobs:
           else
             echo "⚠️ Root .env.example missing"
           fi
-          
+
           if [ -f maya-wallet/.env.example ]; then
             echo "✅ Maya Wallet .env.example exists"
           else
             echo "⚠️ Maya Wallet .env.example missing"
           fi
-          
+
           if [ -f blue-hole-portal/.env.example ]; then
             echo "✅ Blue Hole Portal .env.example exists"
           else
