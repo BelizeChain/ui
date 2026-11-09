@@ -67,7 +67,10 @@ const CEIBA_GEM_DEPLOYMENT = {
   dalla: 'r1SqoNCdgah6zWqzPJSNmKcknW2KaCvruSz6Mg8jBTd6jqtyL',
   beliNft: 'r1UxXWdW89AQ9ewvdRUthaEPR4vvWrgxn3VeHKVMB2rYsUUvv',
   dao: 'r1ScgRVx963TurkyzkTNLQbmhBfzhaj5x8YCHgM7yLFkmx8eh',
-  faucet: 'r1Wcf2YSzSeziDHG82ku9zRbaLNqfQG3A3c6mbTsnJPGxKqCG',
+  // Redeployed 2026-11-09 (block 483807) to pick up `claim_for`. The previous
+  // instance `r1Wcf2YSzSeziDHG82ku9zRbaLNqfQG3A3c6mbTsnJPGxKqCG` is drained and
+  // abandoned; it was owned by the compromised `//Alice` until 2026-11-08.
+  faucet: 'r1WxhL7BkS3g6LopMgncAQEzDqLFZmo1UK96mn2MqBwZTfk9g',
   psp37: 'r1Vc9kffhRY2K5gTFdwMagLbGGSzwfhoH71EkZpTMpR9t6Dei',
   dexFactory: 'r1WhHW5jeHRRn2H3JFnLi9ek8MKQi1rtxamcSASKXjkDs1yTw',
   dexRouter: 'r1SwipZJQbrTvrUutUsUv7ZhLvp3Cb2dwpFW6gSKUks1poUPm',
