@@ -8,6 +8,8 @@ import { useUIStore } from '@/store/ui';
 import { ConnectWalletPrompt } from '@/components/ui/ConnectWalletPrompt';
 import {
   ArrowLeft,
+  ArrowRight,
+  BookOpen,
   CheckCircle,
   CircleNotch,
   Clock,
@@ -16,6 +18,7 @@ import {
   Sparkle,
   Trophy,
   X,
+  XCircle,
 } from 'phosphor-react';
 import {
   completeEducationModule,
@@ -23,6 +26,13 @@ import {
   getUserEducationProgress,
   type EducationModule,
 } from '@/services/pallets/community';
+import { fetchBalance } from '@/services/blockchain';
+import {
+  ASSESSMENT_DISCLOSURE,
+  getAcademyModule,
+  requiredCorrect,
+  type AcademyModule,
+} from '@/content/academy';
 
 /** An on-chain module joined with the connected account's completion state. */
 interface ModuleView extends EducationModule {
@@ -35,6 +45,243 @@ function clip(value: string, max = 240): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
+/**
+ * Lesson reader and knowledge check for one module.
+ *
+ * Deliberately a separate component: the study flow has its own state machine
+ * (lesson index → quiz → result) and keeping it out of the page component means
+ * the page's own state stays about the module list, not about what page of a
+ * lesson somebody is on.
+ */
+function StudyPanel({
+  module,
+  onClose,
+  onPass,
+  submitting,
+}: {
+  module: ModuleView;
+  onClose: () => void;
+  onPass: (module: ModuleView) => void;
+  submitting: boolean;
+}) {
+  const content: AcademyModule | undefined = getAcademyModule(module.moduleId);
+  const lessons = content?.lessons ?? [];
+  const quiz = content?.quiz ?? [];
+
+  const [lessonIndex, setLessonIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [result, setResult] = useState<{ score: number; required: number; passed: boolean } | null>(
+    null,
+  );
+
+  // No content for this module id: say so rather than showing an empty reader.
+  if (lessons.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 relative">
+          <button
+            onClick={onClose}
+            className="absolute top-5 right-5 p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+          <h3 className="text-lg font-bold text-white pr-10">{module.title}</h3>
+          <p className="text-sm text-slate-300 leading-relaxed">{clip(module.description, 600)}</p>
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+            <Info size={18} weight="fill" className="mt-0.5 flex-shrink-0 text-amber-400" />
+            <p className="text-xs text-amber-200">
+              This module has no written lesson or knowledge check yet, so the description above is
+              the whole of the available material. You can still record completion, but you would be
+              attesting to study the chain cannot show you.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs"
+            >
+              Back
+            </button>
+            <button
+              onClick={() => onPass(module)}
+              disabled={submitting}
+              className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs"
+            >
+              {submitting ? 'Submitting…' : 'Record completion'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const onQuizStep = lessonIndex >= lessons.length;
+  const allAnswered = quiz.length > 0 && quiz.every((_, index) => answers[index] !== undefined);
+
+  const submitQuiz = () => {
+    const score = quiz.reduce(
+      (total, question, index) => (answers[index] === question.correctIndex ? total + 1 : total),
+      0,
+    );
+    const required = requiredCorrect(quiz.length);
+    setResult({ score, required, passed: score >= required });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full max-h-[88vh] flex flex-col relative">
+        <div className="p-5 sm:p-6 border-b border-slate-800 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-purple-300 font-mono">
+              Module #{module.moduleId} · {onQuizStep ? 'Knowledge check' : `Lesson ${lessonIndex + 1} of ${lessons.length}`}
+            </p>
+            <h3 className="text-base font-bold text-white truncate">
+              {onQuizStep ? module.title : lessons[lessonIndex].title}
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white flex-shrink-0"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
+          {!onQuizStep &&
+            lessons[lessonIndex].body.map((paragraph) => (
+              <p key={paragraph.slice(0, 40)} className="text-sm text-slate-300 leading-relaxed">
+                {paragraph}
+              </p>
+            ))}
+
+          {onQuizStep && (
+            <>
+              <p className="text-xs text-slate-400">
+                {quiz.length} questions. {requiredCorrect(quiz.length)} correct answers needed to
+                pass. You can retry as many times as you like.
+              </p>
+
+              {quiz.map((question, index) => {
+                const chosen = answers[index];
+                return (
+                  <div key={question.question} className="space-y-2 pt-2">
+                    <p className="text-sm font-semibold text-white">
+                      {index + 1}. {question.question}
+                    </p>
+                    <div className="space-y-1.5">
+                      {question.options.map((option, optionIndex) => {
+                        const isChosen = chosen === optionIndex;
+                        const showCorrect = result !== null && optionIndex === question.correctIndex;
+                        const showWrong = result !== null && isChosen && !showCorrect;
+                        return (
+                          <button
+                            key={option}
+                            onClick={() =>
+                              result === null &&
+                              setAnswers((previous) => ({ ...previous, [index]: optionIndex }))
+                            }
+                            disabled={result !== null}
+                            className={[
+                              'w-full text-left px-3 py-2 rounded-xl text-xs border transition-all',
+                              showCorrect
+                                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                                : showWrong
+                                  ? 'border-rose-500/50 bg-rose-500/10 text-rose-200'
+                                  : isChosen
+                                    ? 'border-purple-500/50 bg-purple-500/10 text-white'
+                                    : 'border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700',
+                            ].join(' ')}
+                          >
+                            {option}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {result !== null && (
+                      <p className="text-[11px] text-slate-400 leading-relaxed pl-1">
+                        {question.explanation}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+
+        <div className="p-4 sm:p-5 border-t border-slate-800 space-y-3">
+          {result !== null && (
+            <div
+              className={[
+                'flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold',
+                result.passed
+                  ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-500/10 border border-rose-500/40 text-rose-300',
+              ].join(' ')}
+            >
+              {result.passed ? <CheckCircle size={16} weight="fill" /> : <XCircle size={16} weight="fill" />}
+              {result.score} of {quiz.length} correct —{' '}
+              {result.passed ? 'passed' : `need ${result.required} to pass`}
+            </div>
+          )}
+
+          <p className="text-[10px] text-slate-500 leading-relaxed">{ASSESSMENT_DISCLOSURE}</p>
+
+          <div className="flex gap-2">
+            {!onQuizStep ? (
+              <>
+                <button
+                  onClick={() => setLessonIndex((index) => Math.max(0, index - 1))}
+                  disabled={lessonIndex === 0}
+                  className="px-4 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-200 font-bold rounded-xl text-xs"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setLessonIndex((index) => index + 1)}
+                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
+                >
+                  <BookOpen size={16} weight="bold" />
+                  Continue
+                </button>
+              </>
+            ) : result === null ? (
+              <button
+                onClick={submitQuiz}
+                disabled={!allAnswered}
+                className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs"
+              >
+                {allAnswered ? 'Check answers' : `Answer all ${quiz.length} questions`}
+              </button>
+            ) : result.passed ? (
+              <button
+                onClick={() => onPass(module)}
+                disabled={submitting}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
+              >
+                {submitting ? <CircleNotch size={16} className="animate-spin" /> : <Sparkle size={16} weight="bold" />}
+                {submitting ? 'Submitting…' : `Claim +${module.rewardAmount} Ɗ`}
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setAnswers({});
+                  setResult(null);
+                }}
+                className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
+              >
+                <ArrowRight size={16} weight="bold" />
+                Try again
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EducationModulesPage() {
   const { selectedAccount, isConnected } = useWallet();
   const { addNotification } = useUIStore();
@@ -42,9 +289,14 @@ export default function EducationModulesPage() {
   const [modules, setModules] = useState<ModuleView[]>([]);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'unreachable'>('loading');
   const [submittingModuleId, setSubmittingModuleId] = useState<number | null>(null);
-  const [receipt, setReceipt] = useState<{ moduleId: number; title: string; amount: string } | null>(
-    null,
-  );
+  const [studyingModule, setStudyingModule] = useState<ModuleView | null>(null);
+  const [receipt, setReceipt] = useState<{
+    moduleId: number;
+    title: string;
+    amount: string;
+    /** True when the credited amount came from a balance delta, not the event. */
+    measured: boolean;
+  } | null>(null);
 
   const address = selectedAccount?.address;
 
@@ -94,6 +346,13 @@ export default function EducationModulesPage() {
       if (!address) return;
       setSubmittingModuleId(module.moduleId);
       try {
+        // The pallet caps the minted reward at `EducationRewardAmount` but emits
+        // the module's *advertised* amount in the completion event, so the event
+        // cannot be trusted to report what actually arrived. Read the free
+        // balance before and after and report the measured delta instead.
+        const balanceBefore = await fetchBalance(address).catch(() => null);
+        const freeBefore = balanceBefore ? Number.parseFloat(balanceBefore.free) : null;
+
         // `complete_education_module` records this payload without verifying it,
         // so completion is self-attested. Include enough context to be auditable
         // off-chain; the pallet rejects an empty proof.
@@ -106,10 +365,28 @@ export default function EducationModulesPage() {
         });
 
         const { rewardAmount } = await completeEducationModule(address, module.moduleId, proof);
-        setReceipt({ moduleId: module.moduleId, title: module.title, amount: rewardAmount });
+
+        let amount = rewardAmount;
+        let measured = false;
+        if (freeBefore !== null) {
+          const balanceAfter = await fetchBalance(address).catch(() => null);
+          if (balanceAfter) {
+            const delta = Number.parseFloat(balanceAfter.free) - freeBefore;
+            // The fee for the call comes out of the same balance, so the delta is
+            // the reward minus a small fee. Only treat it as measured when it is
+            // positive, otherwise fall back to the chain's reported figure.
+            if (delta > 0) {
+              amount = delta.toFixed(4).replace(/\.?0+$/, '');
+              measured = true;
+            }
+          }
+        }
+
+        setReceipt({ moduleId: module.moduleId, title: module.title, amount, measured });
+        setStudyingModule(null);
         addNotification({
           type: 'success',
-          message: `“${module.title}” recorded on chain. Reward: +${rewardAmount} DALLA.`,
+          message: `“${module.title}” recorded on chain. Reward: +${amount} DALLA.`,
         });
         await loadModules();
       } catch (error) {
@@ -316,7 +593,7 @@ export default function EducationModulesPage() {
                       </span>
                     ) : (
                       <button
-                        onClick={() => handleComplete(module)}
+                        onClick={() => setStudyingModule(module)}
                         disabled={disabled}
                         className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-purple-500/20"
                       >
@@ -331,8 +608,8 @@ export default function EducationModulesPage() {
                           'Capacity reached'
                         ) : (
                           <>
-                            <Sparkle size={16} weight="bold" />
-                            Complete &amp; Claim
+                            <BookOpen size={16} weight="bold" />
+                            Study &amp; Claim
                           </>
                         )}
                       </button>
@@ -344,6 +621,16 @@ export default function EducationModulesPage() {
           </div>
         )}
       </main>
+
+      {/* Lesson reader + knowledge check */}
+      {studyingModule && (
+        <StudyPanel
+          module={studyingModule}
+          onClose={() => setStudyingModule(null)}
+          onPass={handleComplete}
+          submitting={submittingModuleId === studyingModule.moduleId}
+        />
+      )}
 
       {/* Reward Receipt Modal */}
       <AnimatePresence>
@@ -380,10 +667,19 @@ export default function EducationModulesPage() {
                   <span className="text-cyan-300">{address?.slice(0, 12)}…</span>
                 </div>
                 <div className="flex justify-between gap-4 text-slate-400">
-                  <span className="flex-shrink-0">Reward Minted:</span>
+                  <span className="flex-shrink-0">
+                    {receipt.measured ? 'Credited to balance:' : 'Reward announced:'}
+                  </span>
                   <span className="text-emerald-400 font-bold">+{receipt.amount} DALLA</span>
                 </div>
               </div>
+
+              {!receipt.measured && (
+                <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                  This figure is what the chain announced, not a balance reading. The pallet caps
+                  the minted reward, so the amount that actually arrived may be lower.
+                </p>
+              )}
 
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 This records a self-attested completion on chain. It is not a verified
