@@ -99,7 +99,9 @@ education, scanner, messages.
 
 ## Remaining real work to reach 100% (all blocked on missing backends, not UI)
 1. ✅ **GEM suite deployed** — 7/7 contracts live on the current chain (redeployed 2026-10-08); the wallet `gem` page is wired to the real contracts.
-2. Community education / participation — `community.complete_education_module` and `community.attest_participation` **exist on chain** but the wallet pages still hold client-side progress. This is UI work, not a missing backend.
+2. ~~Community education / participation — `community.complete_education_module` and `community.attest_participation` **exist on chain** but the wallet pages still hold client-side progress. This is UI work, not a missing backend.~~ **Education is wired — re-verified 2026-11-18.** `app/community/education` reads `community.educationModules`, `completedEducation` and `educationAttestations` from chain, teaches each module from `src/content/academy.ts`, gates the claim on a 75% quiz, and reports the credited amount as a measured balance delta. Spec 128 added `attest_education_completion`, so the claim no longer pays out on a caller-supplied byte string.
+   **What remains:** `record_participation` is offered nowhere in the wallet. That is deliberate for now — the two attested activity codes (2, 3) are gated on `attest_participation`, which only a seated council member can call, so wiring them into a citizen wallet would produce a button that always fails with `BadOrigin`.
+   Operator runbook: `belizechain/docs/operations/MAYA_ACADEMY_OPERATIONS.md`.
 3. Pakit browser gateway → unlock pakit upload/vault for real DAG storage.
 4. Nawal FL server live on Ceiba → unlock FL pages and real PoUW activity.
 5. Bridge relayer infra → replace "Awaiting" states with real completion events.
