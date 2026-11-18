@@ -481,6 +481,35 @@ export async function getUserEducationProgress(
 }
 
 /**
+ * Module ids the learner has been certified for but not yet claimed.
+ *
+ * `completeEducationModule` refuses to mint without one of these, so reading it
+ * lets the page say "awaiting certification" instead of offering a button that
+ * the chain will reject. An entry is deleted when the claim consumes it, so this
+ * is exactly the set of claimable modules.
+ */
+export async function getEducationAttestations(address: string): Promise<number[]> {
+  const api = await initializeApi();
+
+  try {
+    // StorageMap keyed by the composite (AccountId, u32), so it is read per
+    // account with `entries(address)` — same shape as completedEducation.
+    const entries: any = await api.query.community.educationAttestations.entries(address);
+
+    if (!entries || entries.length === 0) {
+      return [];
+    }
+
+    return entries
+      .filter(([, value]: [any, any]) => value.valueOf() === true)
+      .map(([key]: [any]) => key.args[1].toNumber());
+  } catch (error) {
+    console.error('Failed to fetch education attestations:', error);
+    return [];
+  }
+}
+
+/**
  * Complete education module and claim reward
  *
  * The pallet will not mint unless an authorised attester has already recorded

@@ -22,6 +22,7 @@ import {
 } from 'phosphor-react';
 import {
   completeEducationModule,
+  getEducationAttestations,
   getEducationModules,
   getUserEducationProgress,
   type EducationModule,
@@ -38,6 +39,12 @@ import {
 interface ModuleView extends EducationModule {
   completed: boolean;
   completedAtBlock?: number;
+  /**
+   * An attester has certified this learner's completion and the reward is
+   * unclaimed. The chain refuses to mint without it, so the card shows
+   * "awaiting certification" rather than a button that would fail.
+   */
+  attested: boolean;
 }
 
 /** Cap long on-chain strings so they cannot break the layout. */
@@ -301,9 +308,10 @@ export default function EducationModulesPage() {
   const address = selectedAccount?.address;
 
   const loadModules = useCallback(async () => {
-    const [modulesResult, progressResult] = await Promise.allSettled([
+    const [modulesResult, progressResult, attestationResult] = await Promise.allSettled([
       getEducationModules(),
       address ? getUserEducationProgress(address) : Promise.resolve([]),
+      address ? getEducationAttestations(address) : Promise.resolve([]),
     ]);
 
     if (modulesResult.status === 'rejected') {
@@ -313,6 +321,9 @@ export default function EducationModulesPage() {
 
     const progress = progressResult.status === 'fulfilled' ? progressResult.value : [];
     const progressByModule = new Map(progress.map((entry) => [entry.moduleId, entry]));
+    const attested = new Set(
+      attestationResult.status === 'fulfilled' ? attestationResult.value : [],
+    );
 
     setModules(
       modulesResult.value.map((module) => {
@@ -321,6 +332,7 @@ export default function EducationModulesPage() {
           ...module,
           completed: Boolean(completion),
           completedAtBlock: completion?.completedAt,
+          attested: attested.has(module.moduleId),
         };
       }),
     );
@@ -577,6 +589,11 @@ export default function EducationModulesPage() {
                     <p className="text-xs text-slate-400 leading-relaxed">
                       {clip(module.description) || 'No description provided on chain.'}
                     </p>
+                    {module.attested && !module.completed && (
+                      <p className="text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2.5 py-1.5">
+                        Certified by a learning provider. Claim your reward.
+                      </p>
+                    )}
                   </div>
 
                   <div className="border-t border-slate-800 pt-4 flex items-center justify-between gap-2">
@@ -592,6 +609,24 @@ export default function EducationModulesPage() {
                         <CheckCircle size={16} weight="fill" />
                         Completed
                       </span>
+                    ) : module.attested ? (
+                      <button
+                        onClick={() => handleComplete(module)}
+                        disabled={isSubmitting}
+                        className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-emerald-500/20"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <CircleNotch size={16} className="animate-spin" />
+                            Claiming…
+                          </>
+                        ) : (
+                          <>
+                            <Sparkle size={16} weight="bold" />
+                            Claim reward
+                          </>
+                        )}
+                      </button>
                     ) : (
                       <button
                         onClick={() => setStudyingModule(module)}
