@@ -483,9 +483,10 @@ export async function getUserEducationProgress(
 /**
  * Complete education module and claim reward
  *
- * The pallet requires a NON-EMPTY `completion_proof` (an empty payload is
- * rejected with `ModuleNotFound`), so the caller must supply a real payload
- * describing the completed work. The pallet records it without verifying it.
+ * The pallet will not mint unless an authorised attester has already recorded
+ * that this learner passed `moduleId`; a claim without one is rejected with
+ * `AttestationRequired`. The `completion_proof` payload is stored, never read, so
+ * it is evidence for off-chain review - it is not the gate.
  */
 export async function completeEducationModule(
   address: string,
@@ -507,8 +508,22 @@ export async function completeEducationModule(
     const tx = api.tx.community.completeEducationModule(moduleId, proofBytes);
 
     return new Promise((resolve, reject) => {
-      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, events }) => {
+      tx.signAndSend(address, { signer: injector.signer }, ({ status, txHash, dispatchError, events }) => {
         if (status.isInBlock) {
+          // A rejected extrinsic is still included in a block, so without this
+          // check the promise resolved with `rewardAmount: '0'` and the caller
+          // reported a successful claim that paid nothing.
+          const failure =
+            dispatchError ??
+            events
+              .find(({ event }) => api.events.system.ExtrinsicFailed.is(event))
+              ?.event.data[0];
+
+          if (failure) {
+            reject(new Error(describeCommunityError(api, failure)));
+            return;
+          }
+
           let rewardAmount = '0';
 
           events.forEach(({ event }) => {
@@ -529,6 +544,35 @@ export async function completeEducationModule(
     console.error('Complete education module failed:', error);
     throw error;
   }
+}
+
+/**
+ * Turn a `DispatchError` into something a learner can act on.
+ *
+ * polkadot-js can match a module error against the pallet's registry, so the
+ * variant name (`AttestationRequired`, `AlreadyCompleted`, ...) is recoverable
+ * rather than being a hex string nobody can read.
+ */
+function describeCommunityError(
+  api: Awaited<ReturnType<typeof initializeApi>>,
+  dispatchError: unknown
+): string {
+  const asModule = (dispatchError as { isModule?: boolean; asModule?: unknown }).asModule;
+
+  if ((dispatchError as { isModule?: boolean }).isModule && asModule) {
+    const communityErrors = api.errors?.community ?? {};
+    for (const [name, variant] of Object.entries(communityErrors)) {
+      if ((variant as { is?: (error: unknown) => boolean })?.is?.(asModule)) {
+        if (name === 'AttestationRequired') {
+          return 'This module needs a completion certificate from an approved learning provider before it can pay out.';
+        }
+        return `Rejected by the chain: ${name}`;
+      }
+    }
+    return 'Rejected by the chain (unrecognised module error).';
+  }
+
+  return `Transaction failed: ${String(dispatchError)}`;
 }
 
 /**

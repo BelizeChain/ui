@@ -62,7 +62,7 @@ export const ACADEMY_MODULES: AcademyModule[] = [
       {
         title: 'Two currencies, one country',
         body: [
-          'Belize uses the Belize dollar, written BZD and often shown as $. It has been fixed at two Belize dollars to one US dollar since 1976. That fixed rate is the anchor for almost every price in the country: when people say a price is "stable", they usually mean stable against the US dollar.',
+          'Belize uses the Belize dollar, written BZD and often shown as $. It has been fixed at two Belize dollars to one US dollar for decades. That fixed rate is the anchor for almost every price in the country: when people say a price is "stable", they usually mean stable against the US dollar.',
           'BelizeChain carries two digital units. DALLA is the network\'s own token: its supply is set by the chain, and its price is not fixed to anything. bBZD is designed to hold the same value as a physical Belize dollar, one for one.',
           'The difference matters. If you are saving for next month\'s rent, a unit designed to stay level with the Belize dollar removes the risk that your savings shrink. If you are paying network fees, you use DALLA. Mixing the two up is the single most common mistake new users make.',
         ],
@@ -90,7 +90,7 @@ export const ACADEMY_MODULES: AcademyModule[] = [
         options: ['1 BZD = 1 USD', '2 BZD = 1 USD', 'It floats daily', 'It is set by BelizeChain'],
         correctIndex: 1,
         explanation:
-          'The Belize dollar has been pegged at two BZD to one USD since 1976. BelizeChain does not set it — the peg is a national monetary arrangement.',
+          'The Belize dollar has been pegged at two BZD to one USD for decades. BelizeChain does not set it — the peg is a national monetary arrangement.',
       },
       {
         question: 'You are saving for rent due next month. Which unit is designed to hold a steady value?',

@@ -353,9 +353,10 @@ export default function EducationModulesPage() {
         const balanceBefore = await fetchBalance(address).catch(() => null);
         const freeBefore = balanceBefore ? Number.parseFloat(balanceBefore.free) : null;
 
-        // `complete_education_module` records this payload without verifying it,
-        // so completion is self-attested. Include enough context to be auditable
-        // off-chain; the pallet rejects an empty proof.
+        // `complete_education_module` no longer pays out on a self-reported
+        // completion: the chain requires a prior attestation from the configured
+        // learning provider. This payload is the evidence that provider reviews,
+        // so keep it specific enough to be checked off-chain.
         const proof = JSON.stringify({
           v: 1,
           kind: 'maya-academy-module-completion',
