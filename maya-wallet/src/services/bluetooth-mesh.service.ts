@@ -6,6 +6,13 @@
 
 import { web3FromAddress } from '@polkadot/extension-dapp';
 
+import { connectMeshLink, type BleLink } from './ble-transport';
+import { detectMeshSupport, isAcceptableSignature, type MeshSupport } from './mesh-protocol';
+
+// Re-exported so existing callers (`mesh/page.tsx`) keep their import path.
+export { detectMeshSupport, isAcceptableSignature };
+export type { MeshSupport };
+
 // Web Bluetooth API type declarations
 declare global {
   interface Navigator {
@@ -71,13 +78,14 @@ interface QueuedMessage {
 }
 
 class BluetoothMeshService {
-  private device: BluetoothDevice | null = null;
-  private characteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private link: BleLink | null = null;
   private peers: Map<string, MeshPeer> = new Map();
   private messageQueue: QueuedMessage[] = [];
   private relayNodes: Set<string> = new Set();
   private seenMessageIds: Set<string> = new Set();
   private retryTimer: ReturnType<typeof setInterval> | null = null;
+  private discoveryTimer: ReturnType<typeof setInterval> | null = null;
+  private hasLoggedNoScanApi = false;
 
   // BelizeChain Mesh Protocol UUIDs
   private readonly SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
@@ -88,62 +96,66 @@ class BluetoothMeshService {
   private readonly DISCOVERY_INTERVAL = 30000; // 30 seconds
   private readonly RETRY_INTERVAL = 15000; // 15 seconds
   private readonly MAX_SEEN_MESSAGES = 500;
+  private readonly MAX_QUEUE_SIZE = 200;
+  private readonly MAX_SEND_ATTEMPTS = 3;
 
   async initialize(): Promise<boolean> {
-    if (!navigator.bluetooth) {
-      // Web Bluetooth is an optional Tier-2 capability (desktop Chromium with
-      // the flag, or the native app). Its absence is expected, not an error —
-      // logging it as console.error trips the Next.js dev overlay and makes
-      // the whole wallet unusable on unsupported browsers.
-      console.info('[BLE-MESH] Web Bluetooth API not available — mesh tier disabled');
+    const support = detectMeshSupport();
+    if (!support.supported) {
+      // Web Bluetooth is an optional Tier-2 capability. Its absence is expected
+      // on iOS and Firefox, not an error — logging it as console.error trips the
+      // Next.js dev overlay and makes the whole wallet unusable there.
+      console.info(`[BLE-MESH] Mesh tier disabled — ${support.detail}`);
       return false;
     }
 
-    try {
-      // Request Bluetooth device
-      this.device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [this.SERVICE_UUID] }],
-        optionalServices: [this.SERVICE_UUID]
-      });
-
-
-      // Connect to GATT server
-      const server = await this.device.gatt!.connect();
-
-      // Get mesh service
-      const service = await server.getPrimaryService(this.SERVICE_UUID);
-
-      // Get characteristic for messaging
-      this.characteristic = await service.getCharacteristic(this.CHARACTERISTIC_UUID);
-
-      // Start listening for messages
-      await this.characteristic.startNotifications();
-      this.characteristic.addEventListener('characteristicvaluechanged', this.handleIncomingMessage.bind(this));
-
-      // Start peer discovery
-      this.startPeerDiscovery();
-
-      // Schedule the retry loop for unsent queued messages
-      if (!this.retryTimer) {
-        this.retryTimer = setInterval(() => {
-          void this.processQueue();
-        }, this.RETRY_INTERVAL);
-      }
-
+    // Re-initialising an already-connected session would prompt the user for a
+    // device a second time, which looks like a bug.
+    if (this.link?.connected) {
       return true;
-    } catch (error) {
-      console.error('[BLE-MESH] Bluetooth Mesh initialization failed:', error);
+    }
+
+    // `connectMeshLink` picks Web Bluetooth in a browser and the Capacitor BLE
+    // plugin in the native iOS/Android shell — see ble-transport.ts.
+    const result = await connectMeshLink({
+      serviceUuid: this.SERVICE_UUID,
+      characteristicUuid: this.CHARACTERISTIC_UUID,
+    });
+
+    if (!result.ok) {
+      if (result.reason === 'cancelled') {
+        console.info('[BLE-MESH] Pairing cancelled by user.');
+      } else {
+        console.error(`[BLE-MESH] Bluetooth Mesh initialization failed: ${result.detail}`);
+      }
       return false;
     }
+
+    this.link = result.link;
+    this.link.onNotify((bytes) => this.handleIncomingMessage(bytes));
+
+    this.startPeerDiscovery();
+
+    // Schedule the retry loop for unsent queued messages
+    if (!this.retryTimer) {
+      this.retryTimer = setInterval(() => {
+        void this.processQueue();
+      }, this.RETRY_INTERVAL);
+    }
+
+    return true;
   }
 
   private async startPeerDiscovery() {
-    setInterval(async () => {
-      try {
-        await this.discoverPeers();
-      } catch (error) {
+    // One interval per service instance. `initialize()` can be called again
+    // after a reconnect, and an untracked interval would accumulate a new
+    // timer on every call and outlive `disconnect()`.
+    if (this.discoveryTimer) return;
+
+    this.discoveryTimer = setInterval(() => {
+      void this.discoverPeers().catch((error) => {
         console.error('Peer discovery error:', error);
-      }
+      });
     }, this.DISCOVERY_INTERVAL);
   }
 
@@ -152,21 +164,20 @@ class BluetoothMeshService {
     // advertisers, it can only connect to a device the user selected. So there
     // is nothing to report here — inventing a peer would put a node that does
     // not exist into the relay list.
-    if (typeof navigator !== 'undefined' && navigator.bluetooth) {
-      console.log('[BLE-MESH] No peers discovered — WebBluetooth cannot scan for advertisers.');
+    //
+    // Logged once rather than every DISCOVERY_INTERVAL; a repeating line every
+    // 30s floods the console for the entire session and buries real errors.
+    if (!this.hasLoggedNoScanApi) {
+      this.hasLoggedNoScanApi = true;
+      console.info('[BLE-MESH] No peers discovered — WebBluetooth cannot scan for advertisers.');
     }
   }
 
-  private handleIncomingMessage(event: Event) {
-    const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
-    const value = target.value;
-
-    if (!value) return;
-
+  private handleIncomingMessage(bytes: Uint8Array) {
     try {
       // Decode message
       const decoder = new TextDecoder();
-      const messageData = decoder.decode(value);
+      const messageData = decoder.decode(bytes);
       const message: MeshMessage = JSON.parse(messageData);
 
       // Validate signature
@@ -201,7 +212,7 @@ class BluetoothMeshService {
   }
 
   async sendMessage(to: string, content: string): Promise<boolean> {
-    if (!this.characteristic) {
+    if (!this.link) {
       console.error('[BLE-MESH] Bluetooth not initialized');
       return false;
     }
@@ -231,6 +242,13 @@ class BluetoothMeshService {
         attempts: 0
       });
 
+      // Bound the queue. Without a cap a long offline session grows it without
+      // limit; the oldest entries are the least likely to still be useful.
+      if (this.messageQueue.length > this.MAX_QUEUE_SIZE) {
+        const overflow = this.messageQueue.length - this.MAX_QUEUE_SIZE;
+        this.messageQueue.splice(0, overflow);
+      }
+
       // Try to send immediately
       return await this.transmitMessage(message);
     } catch (error) {
@@ -251,8 +269,8 @@ class BluetoothMeshService {
         return false;
       }
 
-      // Write to characteristic
-      await this.characteristic!.writeValue(data);
+      // Write to the mesh characteristic
+      await this.link!.write(data);
       return true;
     } catch (error) {
       console.error('[BLE-MESH] Transmission failed:', error);
@@ -277,13 +295,8 @@ class BluetoothMeshService {
   }
 
   private validateMessage(message: MeshMessage): boolean {
-    if (!message || !message.from || !message.signature) return false;
-    // '0x00' is the explicit unsigned marker from signMessage — reject.
-    // A real SR25519 signature from the extension is 64 bytes (hex encoded
-    // 0x + 128 chars); any other short prefix is unverified.
-    if (message.signature === '0x00') return false;
-    return /^0x[0-9a-f]{130}$/i.test(message.signature) || // sr25519 ecdsa hex
-           message.signature.startsWith('0x'); // extension may return base58-like strings; pass through for now
+    if (!message || !message.from) return false;
+    return isAcceptableSignature(message.signature);
   }
 
   private async signMessage(content: string): Promise<string> {
@@ -295,7 +308,10 @@ class BluetoothMeshService {
     if (!from) return '0x00'; // no account to sign with
     try {
       const injector = await web3FromAddress(from);
-      const signer = injector?.signer as any;
+      // `InjectedSigner` types `signRaw` as optional because a signer may only
+      // expose `signPayload`. Narrowing here avoids `any` without assuming the
+      // method is present.
+      const signer = injector?.signer;
       if (signer?.signRaw) {
         const payload = new TextEncoder().encode(content);
         const result = await signer.signRaw({
@@ -303,7 +319,7 @@ class BluetoothMeshService {
           type: 'bytes',
           data: `0x${Buffer.from(payload).toString('hex')}`,
         });
-        return result.signature as string;
+        return result.signature;
       }
     } catch (error) {
       console.warn('[BLE-MESH] signRaw unavailable, message will be unsigned:', error);
@@ -347,15 +363,29 @@ class BluetoothMeshService {
 
   // Process message queue (retry failed messages)
   async processQueue() {
-    const pending = this.messageQueue.filter(q => q.status === 'pending' && q.attempts < 3);
+    const pending = this.messageQueue.filter(
+      q => q.status === 'pending' && q.attempts < this.MAX_SEND_ATTEMPTS
+    );
 
     for (const queued of pending) {
       queued.attempts++;
       queued.lastAttempt = new Date();
 
       const success = await this.transmitMessage(queued.message);
-      queued.status = success ? 'sent' : 'pending';
+      if (success) {
+        queued.status = 'sent';
+      } else if (queued.attempts >= this.MAX_SEND_ATTEMPTS) {
+        // Without this branch an exhausted entry stays 'pending' forever: it is
+        // filtered out of every future pass but never leaves the queue, so the
+        // queue only ever grows and the UI can never report the failure.
+        queued.status = 'failed';
+      }
     }
+  }
+
+  /** Snapshot of the send queue, for status display and tests. */
+  getQueue(): ReadonlyArray<QueuedMessage> {
+    return this.messageQueue;
   }
 
   // Get nearby peers
@@ -365,20 +395,24 @@ class BluetoothMeshService {
 
   // Check if mesh is available
   isAvailable(): boolean {
-    return this.device !== null && this.device.gatt?.connected === true;
+    return this.link?.connected === true;
   }
 
   // Disconnect
   async disconnect() {
-    if (this.device?.gatt?.connected) {
-      await this.device.gatt.disconnect();
+    if (this.link) {
+      await this.link.disconnect();
+      this.link = null;
     }
     if (this.retryTimer) {
       clearInterval(this.retryTimer);
       this.retryTimer = null;
     }
-    this.device = null;
-    this.characteristic = null;
+    if (this.discoveryTimer) {
+      clearInterval(this.discoveryTimer);
+      this.discoveryTimer = null;
+    }
+    this.hasLoggedNoScanApi = false;
     this.peers.clear();
   }
 }

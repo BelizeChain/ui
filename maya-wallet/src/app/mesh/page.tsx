@@ -117,10 +117,20 @@ export default function MeshPage() {
   const handlePairBluetooth = async () => {
     setIsPairingBle(true);
     try {
-      const { bluetoothMeshService } = await import('@/services/bluetooth-mesh.service');
-      const ok = await bluetoothMeshService.initialize?.();
+      const { bluetoothMeshService, detectMeshSupport } = await import('@/services/bluetooth-mesh.service');
+
+      // Check support before prompting. Without this an iPhone user gets the
+      // same "adapter unavailable" message as someone who simply cancelled the
+      // picker, and retries a button that can never work on that device.
+      const support = detectMeshSupport();
+      if (!support.supported) {
+        addNotification({ type: 'info', message: support.detail });
+        return;
+      }
+
+      const ok = await bluetoothMeshService.initialize();
       if (ok === false) {
-        addNotification({ type: 'info', message: 'Bluetooth adapter unavailable — mesh pairing needs a WebBluetooth-capable browser and nearby LoRa/BLE gateways.' });
+        addNotification({ type: 'info', message: 'No Bluetooth device selected — mesh pairing needs a nearby LoRa/BLE gateway.' });
       } else {
         addNotification({ type: 'success', message: 'Bluetooth mesh interface ready. Peer discovery runs only when nearby mesh nodes advertise.' });
       }
